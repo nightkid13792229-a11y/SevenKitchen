@@ -17,6 +17,7 @@ import {
   FeedAdditiveCatalogService,
   type CatalogMatch,
 } from '../../domain/ingredient/feed-additive-catalog.service';
+import { FeedMaterialCatalogService } from '../../domain/ingredient/feed-material-catalog.service';
 import {
   buildAnalysisPrompt,
   parseAnalysisJson,
@@ -88,6 +89,7 @@ export class SupplementLabelIntakeService {
   constructor(
     private readonly vision: SupplementLabelVisionService,
     private readonly catalog: FeedAdditiveCatalogService,
+    private readonly materialCatalog: FeedMaterialCatalogService,
   ) {}
 
   async read(input: {
@@ -139,6 +141,15 @@ export class SupplementLabelIntakeService {
         name: entry.name,
         dogAllowed: entry.dogAllowed,
       })),
+      // 原料目录：先在原文里找已有条目（「鱼油」这种），再按营养素名查一轮
+      materialNames: [
+        ...this.materialCatalog.findMentioned(`${frontText}\n${labelText}`, 5),
+        ...(suggestedName ? this.materialCatalog.lookup(suggestedName, 5) : []),
+      ]
+        .filter(
+          (entry, index, list) => list.findIndex((item) => item.name === entry.name) === index
+        )
+        .map((entry) => ({ name: entry.name, category: entry.category })),
       nutrientLabel: suggestedName,
       saltNameZh: detectSaltNameZh(labelText),
       parsedNutrients: parsed.nutrients,

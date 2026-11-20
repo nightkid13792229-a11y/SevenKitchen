@@ -244,6 +244,7 @@ import { IngredientCreationCommitService } from './application/ingredient-creati
 import { SupplementIngredientService } from './application/ingredient-creation/supplement-ingredient.service';
 import { SupplementLinkPreviewService } from './application/ingredient-creation/supplement-link-preview.service';
 import { FeedAdditiveCatalogService } from './domain/ingredient/feed-additive-catalog.service';
+import { FeedMaterialCatalogService } from './domain/ingredient/feed-material-catalog.service';
 import { IngredientCreationIntakeService } from './application/ingredient-creation/ingredient-creation-intake.service';
 import { IngredientNameClassifierService } from './application/ingredient-creation/ingredient-name-classifier.service';
 import { IngredientDraftAgentService } from './application/ingredient-creation/ingredient-draft-agent.service';
@@ -1067,6 +1068,7 @@ validatePrismaConfig();
     SupplementIngredientService,
     SupplementLinkPreviewService,
     FeedAdditiveCatalogService,
+    FeedMaterialCatalogService,
     SupplementLabelIntakeService,
     SupplementLabelVisionService,
     IngredientCreationIntakeService,

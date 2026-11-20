@@ -1,0 +1,5055 @@
+{
+ "source": "饲料原料目录（农业部第1773号公告及后续修订汇总，截至2025-06）",
+ "sourceUrl": "https://www.moa.gov.cn/ztzl/sqxzjcgs/xzjcbz/202506/t20250630_6475262.htm",
+ "generatedAt": "2026-11-21",
+ "entries": [
+  {
+   "code": "1.1.1",
+   "name": "大麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "包括皮大麦（Hordeum vulgare L.）和裸大麦（青稞）（Hordeum vulgare var. nudum）籽实。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.1.2",
+   "name": "大麦次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "以大麦为原料经制粉工艺产生的副产品之一，由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.1.3",
+   "name": "大麦蛋白粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦分离出麸皮和淀粉后以蛋白质为主要成分的副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "1.1.4",
+   "name": "大麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦经制粉工艺加工形成的以大麦粉为主、含有少量细麦麸和胚的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.1.5",
+   "name": "大麦粉浆粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦经湿法加工提取蛋白、淀粉后的液态副产物经浓缩、干燥形成的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "1.1.6",
+   "name": "大麦麸",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "以大麦为原料碾磨制粉过程中所分离的麦皮层。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.1.7",
+   "name": "大麦壳",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦经脱壳工艺除去的外壳。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.1.8",
+   "name": "大麦糖渣",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦生产淀粉糖的副产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "1.1.9",
+   "name": "大麦纤维",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "从大麦籽实中提取的纤维，或者生产大麦淀粉过程中提取的纤维类产物。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.1.10",
+   "name": "大麦纤维渣［大麦皮］",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦淀粉加工的副产品，主要成分为纤维素，含有少部分胚乳。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.1.11",
+   "name": "大麦芽",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦发芽后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.1.12",
+   "name": "大麦芽粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦芽经干燥、碾磨获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.1.13",
+   "name": "大麦芽根",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "发芽大麦或大麦芽清理过程中的副产品，主要由麦芽根、大麦细粉、外皮和碎麦芽组成。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.1.14",
+   "name": "烘烤大麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦经适度烘烤形成的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.1.15",
+   "name": "喷浆大麦皮",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦生产淀粉及胚芽的副产品喷上大麦浸泡液干燥后获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.1.16",
+   "name": "膨化大麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦在一定温度和压力条件下经膨化处理获得的产品。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.1.17",
+   "name": "全大麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "不去除任何皮层的完整大麦籽粒经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.1.18",
+   "name": "压片大麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "去壳大麦经汽蒸、碾压后的产品。其中可含有少部分大麦壳。可经瘤胃保护。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.1.19",
+   "name": "大麦苗粉e",
+   "category": "谷物及其加工产品",
+   "subCategory": "大麦及其加工产品",
+   "description": "大麦的幼苗经干燥、粉碎后获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 水分"
+  },
+  {
+   "code": "1.2.1",
+   "name": "稻谷",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "禾本科草本植物栽培稻（Oryza sativa L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.2.2",
+   "name": "糙米",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "稻谷脱去颖壳后的产品，由皮层、胚乳和胚组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.2.3",
+   "name": "糙米粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "糙米经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.2.4",
+   "name": "____米e",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "稻谷经脱壳并碾去皮层所获得的产品。产品名称可标称大米，可根据类别标明籼米、粳米、糯米，可根据特殊品种标明黑米、红米等。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.2.5",
+   "name": "大米次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "由大米加工米粉和淀粉（包含干法和湿法碾磨、过筛）的副产品之一。",
+   "mandatoryLabel": "淀粉 粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.2.6",
+   "name": "大米蛋白粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "生产大米淀粉后以蛋白质为主的副产物。由大米经湿法碾磨、筛分、分离、浓缩和干燥获得。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "1.2.7",
+   "name": "大米粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.2.8",
+   "name": "大米酶解蛋白",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米蛋白粉经酶水解、干燥后获得的产品。",
+   "mandatoryLabel": "酸溶蛋白（三氯乙酸可溶蛋白） 粗蛋白质 粗灰分 钙含量"
+  },
+  {
+   "code": "1.2.9",
+   "name": "大米抛光次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "去除米糠的大米在抛光过程中产生的粉状副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.2.10",
+   "name": "大米糖渣",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米生产淀粉糖的副产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "1.2.11",
+   "name": "稻壳粉［砻糠粉］",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "稻谷在砻谷过程中脱去的颖壳经粉碎获得的产品。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.2.12",
+   "name": "稻米油［米糠油］",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "米糠经压榨或浸提制取的油。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "1.2.13",
+   "name": "米糠",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "糙米在碾米过程中分离出的皮层，含有少量胚和胚乳。",
+   "mandatoryLabel": "粗脂肪 酸价 粗纤维"
+  },
+  {
+   "code": "1.2.14",
+   "name": "米糠饼",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "米糠经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.2.15",
+   "name": "米糠粕［脱脂米糠］",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "米糠或米糠饼经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.2.16",
+   "name": "膨化大米（粉）",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米或碎米在一定温度和压力条件下，经膨化处理获得的产品。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.2.17",
+   "name": "碎米",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "稻谷加工过程中产生的破碎米粒（含米粞）。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.2.18",
+   "name": "统糠",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "稻谷加工过程中自然产生的含有稻壳的米糠，除不可避免的混杂外，不得人为加入稻壳粉。",
+   "mandatoryLabel": "粗脂肪 粗纤维 酸价"
+  },
+  {
+   "code": "1.2.19",
+   "name": "稳定化米糠",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "通过挤压、膨化、微波等稳定化方式灭酶处理过的米糠。",
+   "mandatoryLabel": "粗脂肪 粗纤维 酸价"
+  },
+  {
+   "code": "1.2.20",
+   "name": "压片大米",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "预糊化大米经压片获得的产品。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.2.21",
+   "name": "预糊化大米",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米或碎米经湿热、压力等预糊化工艺处理后形成的产品。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.2.22",
+   "name": "蒸谷米次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "经蒸谷处理的去壳糙米粗加工的副产品。主要由种皮、糊粉层、胚乳和胚芽组成，并经碳酸钙处理。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 碳酸钙"
+  },
+  {
+   "code": "1.2.23",
+   "name": "大米胚芽e",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米加工过程中提取的主要含胚芽的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "1.2.24",
+   "name": "大米胚芽粕e",
+   "category": "谷物及其加工产品",
+   "subCategory": "稻谷及其加工产品",
+   "description": "大米胚芽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.3.1",
+   "name": "高粱",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "高粱（Sorghum bicolor (L.) Moench.）籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.3.2",
+   "name": "高粱次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "以高粱为原料经制粉工艺产生的副产品之一，由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.3.3",
+   "name": "高粱粉浆粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "高粱湿法提取蛋白、淀粉后的液态副产物经浓缩、干燥形成的产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "1.3.4",
+   "name": "高粱糠",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "加工高粱米时脱下的皮层、胚和少量胚乳的混合物。",
+   "mandatoryLabel": "粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.3.5",
+   "name": "高粱米",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "高粱籽粒经脱皮工艺去除皮层后的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.3.6",
+   "name": "去皮高粱粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "高粱籽粒去除种皮、胚芽后，将胚乳部分研磨成适当细度获得的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.3.7",
+   "name": "全高粱粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "高粱及其加工产品",
+   "description": "不去除任何皮层的完整高粱籽粒经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.4.1",
+   "name": "黑麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "黑麦及其加工产品",
+   "description": "黑麦（Secale cereale L.）籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.4.2",
+   "name": "黑麦次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "黑麦及其加工产品",
+   "description": "以黑麦为原料经制粉工艺形成的副产品之一，由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.4.3",
+   "name": "黑麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "黑麦及其加工产品",
+   "description": "黑麦经制粉工艺制成的以黑麦粉为主、含有少量细麦麸和胚的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.4.4",
+   "name": "黑麦麸",
+   "category": "谷物及其加工产品",
+   "subCategory": "黑麦及其加工产品",
+   "description": "以黑麦为原料碾磨制粉过程中所分出的麦皮层。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.4.5",
+   "name": "全黑麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "黑麦及其加工产品",
+   "description": "不去除任何皮层的完整黑麦籽粒经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.5.1",
+   "name": "干白酒糟",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "白酒生产中，以一种或几种谷物或者薯类为原料，以稻壳等为填充辅料，经固态发酵、蒸馏提取白酒后的残渣，再经烘干粉碎的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 粗纤维"
+  },
+  {
+   "code": "1.5.2",
+   "name": "干黄酒糟",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "黄酒生产过程中，原料发酵后过滤获得的滤渣经干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.5.3",
+   "name": "____干酒精糟［DDG］ 1.大麦 2.大米 3.玉米 4.高粱 5.小麦 6.黑麦 7.谷物 8.薯类",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "谷物籽实或薯类经酵母发酵、蒸馏除去乙醇后，对剩余的釜溜物过滤获得的滤渣进行浓缩、干燥制成的产品。产品名称应标明具体的谷物来源。根据谷物种类不同，可分为大麦干酒精糟、大米干酒精糟、玉米干酒精糟、高粱干酒精糟、小麦干酒精糟、黑麦干酒精糟。以两种及两种以上谷物籽实获得的产品标称为谷物干酒精糟。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维 水分"
+  },
+  {
+   "code": "1.5.4",
+   "name": "_____干酒精糟可溶物［DDS］ 1.大麦 2.大米 3.玉米 4.高粱 5.小麦 6.黑麦 7.谷物 8.薯类",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "谷物籽实或薯类经酵母发酵、蒸馏除去乙醇后，对剩余的釜溜物过滤获得的滤液进行浓缩、干燥制成的产品。产品名称应标明具体的谷物来源。根据谷物种类不同，可分为大麦干酒精糟可溶物、大米干酒精糟可溶物、玉米干酒精糟可溶物、高粱干酒精糟可溶物、小麦干酒精糟可溶物、黑麦干酒精糟可溶物。以两种及两种以上谷物籽实获得的产品标称为谷物干酒精糟可溶物。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 水分"
+  },
+  {
+   "code": "1.5.5",
+   "name": "干啤酒糟",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "以大麦为主要原料生产啤酒的过程中，经糖化工艺后过滤获得的残渣，再经干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.5.6",
+   "name": "含可溶物的___干酒精糟［____干全酒精糟］［DDGS］ 1.大麦 2.大米 3.玉米 4.高粱 5.小麦 6.黑麦 7.谷物 8.薯类",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "谷物籽实或薯类经酵母发酵、蒸馏除去乙醇后，对剩余的全釜溜物（酒糟全液，至少含四分之三固体成分）进行浓缩、干燥制成的产品。产品名称应标明具体的谷物来源。根据谷物种类不同，可分为含可溶物的大麦干酒精糟、含可溶物的大米干酒精糟、含可溶物的玉米干酒精糟、含可溶物的高粱干酒精糟、含可溶物的小麦干酒精糟、含可溶物的黑麦干酒精糟。以两种及两种以上谷物籽实获得的产品标称为含可溶物的干谷物酒精糟。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维 水分"
+  },
+  {
+   "code": "1.5.7",
+   "name": "____湿酒精糟［DWG］ 1.大麦 2.大米 3.玉米 4.高粱 5.小麦 6.黑麦 7.谷物 8.薯类",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "谷物籽实或薯类经酵母发酵、蒸馏除去乙醇后，剩余的釜溜物经过滤后获得的滤渣。产品名称应标明具体的谷物来源。根据谷物种类不同，可分为大麦湿酒精糟、大米湿酒精糟、玉米湿酒精糟、高粱湿酒精糟、小麦湿酒精糟、黑麦湿精酒糟。以两种及两种以上谷物籽实获得的产品标称为谷物湿酒精糟。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维 水分"
+  },
+  {
+   "code": "1.5.8",
+   "name": "____湿酒精糟可溶物［DWS］ 1.大麦 2.大米 3.玉米 4.高粱 5.小麦 6.黑麦 7.谷物 8.薯类",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "谷物籽实或薯类经酵母发酵、蒸馏除去乙醇后，剩余的釜溜物经过滤后获得的滤液。产品名称应标明具体的谷物来源。根据谷物种类不同，可分为大麦湿酒精糟可溶物、大米湿酒精糟可溶物、玉米湿酒精糟可溶物、高粱湿酒精糟可溶物、小麦湿酒精糟可溶物、黑麦湿酒精糟可溶物。以两种及两种以上谷物籽实获得的产品标称为谷物湿酒精糟可溶物。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.5.9",
+   "name": "谷物酒糟糖浆e",
+   "category": "谷物及其加工产品",
+   "subCategory": "酒糟类",
+   "description": "酿酒生产中谷物发酵蒸馏后的酒糟醪液经蒸发浓缩获得的产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "1.6.1",
+   "name": "荞麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "荞麦及其加工产品",
+   "description": "蓼科一年生草本植物栽培荞麦（Fagopyrum esculentum Moench.）的瘦果。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.6.2",
+   "name": "荞麦次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "荞麦及其加工产品",
+   "description": "以荞麦为原料经制粉工艺形成的副产品之一，由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.6.3",
+   "name": "荞麦麸",
+   "category": "谷物及其加工产品",
+   "subCategory": "荞麦及其加工产品",
+   "description": "荞麦经制粉工艺所分离出的麦皮层。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.6.4",
+   "name": "全荞麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "荞麦及其加工产品",
+   "description": "以不去除任何皮层的完整荞麦经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.7.1",
+   "name": "____筛余物 1.大麦 2.大米 3.玉米 4.高粱 5.小麦 6.黑麦 7.荞麦 8.黍 9.粟 10.小黑麦 11燕麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "筛余物",
+   "description": "谷物籽实清理过程中筛选出的瘪的或破碎的籽实、种皮和外壳。因谷物种类不同，可分为大麦筛余物、大米筛余物、玉米筛余物、高粱筛余物、小麦筛余物、黑麦筛余物、荞麦筛余物、黍筛余物、粟筛余物、小黑麦筛余物、燕麦筛余物。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "1.8.1",
+   "name": "黍［黄米］",
+   "category": "谷物及其加工产品",
+   "subCategory": "黍及其加工产品",
+   "description": "禾本科草本植物栽培黍（Panicum miliaceum L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.8.2",
+   "name": "黍米粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "黍及其加工产品",
+   "description": "黍米（脱皮或不脱皮）经制粉工艺加工而成的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.8.3",
+   "name": "黍米糠",
+   "category": "谷物及其加工产品",
+   "subCategory": "黍及其加工产品",
+   "description": "黍糙米在碾米过程中分离出的皮层，含有少量胚和胚乳。",
+   "mandatoryLabel": "粗脂肪 粗纤维 酸价"
+  },
+  {
+   "code": "1.9.1",
+   "name": "粟［谷子］",
+   "category": "谷物及其加工产品",
+   "subCategory": "粟及其加工产品",
+   "description": "粟（Setaria italica (L.) var. germanica (Mill.) Schred）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.9.2",
+   "name": "小米",
+   "category": "谷物及其加工产品",
+   "subCategory": "粟及其加工产品",
+   "description": "粟经脱皮工艺除去皮层后的部分。按粒质不同分为粳性小米和糯性小米。",
+   "mandatoryLabel": "淀粉 粗脂肪"
+  },
+  {
+   "code": "1.9.3",
+   "name": "小米粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "粟及其加工产品",
+   "description": "小米经碾磨获得的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.9.4",
+   "name": "小米糠",
+   "category": "谷物及其加工产品",
+   "subCategory": "粟及其加工产品",
+   "description": "碾米机碾下的糙小米的皮层。",
+   "mandatoryLabel": "粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.10.1",
+   "name": "小黑麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "小黑麦及其加工产品",
+   "description": "小黑麦（Triticum × Secale cereale）籽实，小麦与黑麦通过杂交和杂种染色体加倍而形成的新果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.10.2",
+   "name": "全小黑麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "小黑麦及其加工产品",
+   "description": "以完整小黑麦籽实不去除任何皮层经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.10.3",
+   "name": "小黑麦次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "小黑麦及其加工产品",
+   "description": "以小黑麦为原料经制粉工艺形成的的副产品之一。由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.10.4",
+   "name": "小黑麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "小黑麦及其加工产品",
+   "description": "小黑麦经制粉工艺制成的以小黑麦粉为主、含有少量细麦麸和胚的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.10.5",
+   "name": "小黑麦麸",
+   "category": "谷物及其加工产品",
+   "subCategory": "小黑麦及其加工产品",
+   "description": "以小黑麦为原料碾磨制粉过程中所分出的麦皮层。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.11.1",
+   "name": "小麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦（Triticum aestivum L.）的籽实。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.11.2",
+   "name": "发芽小麦［芽麦］",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "发芽的小麦。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.11.3",
+   "name": "谷朊粉［活性小麦面筋粉］［小麦蛋白粉］",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "以小麦或小麦粉为原料，去除淀粉和其它碳水化合物等非蛋白质成分后获得的小麦蛋白产品。由于水合后具有高度粘弹性，又称活性小麦面筋粉。",
+   "mandatoryLabel": "粗蛋白质 吸水率"
+  },
+  {
+   "code": "1.11.4",
+   "name": "喷浆小麦麸",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "将小麦浸泡液喷到小麦麸皮上并经干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.11.5",
+   "name": "膨化小麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦在一定温度和压力条件下，经膨化处理获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 淀粉糊化度"
+  },
+  {
+   "code": "1.11.6",
+   "name": "全小麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "不去除任何皮层的完整小麦籽粒经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 面筋量"
+  },
+  {
+   "code": "1.11.7",
+   "name": "小麦次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "以小麦为原料经制粉工艺生产面粉的副产品之一，由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.11.8",
+   "name": "小麦粉［面粉］",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦经制粉工艺制成的以面粉为主、含有少量细麦麸和胚的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 面筋量"
+  },
+  {
+   "code": "1.11.9",
+   "name": "小麦粉浆粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦提取淀粉、谷朊粉后的液态副产物经浓缩、干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "1.11.10",
+   "name": "小麦麸［麸皮］",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦在加工过程中所分出的麦皮层。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.11.11",
+   "name": "小麦胚",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦加工时提取的胚及混有少量麦皮和胚乳的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "1.11.12",
+   "name": "小麦胚芽饼",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦胚经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "1.11.13",
+   "name": "小麦胚芽粕",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦胚经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "1.11.14",
+   "name": "小麦胚芽油",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦胚经压榨或浸提制取的油脂。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "1.11.15",
+   "name": "小麦水解蛋白",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "谷朊粉经部分水解后获得的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "1.11.16",
+   "name": "小麦糖渣",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦生产淀粉糖的副产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "1.11.17",
+   "name": "小麦纤维",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "从小麦籽实中提取的纤维，或者生产小麦淀粉过程中提取的纤维类产物。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.11.18",
+   "name": "小麦纤维渣［小麦皮］",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "小麦淀粉加工副产品。主要成分为纤维素，含有少部分胚乳。",
+   "mandatoryLabel": "粗纤维 水分"
+  },
+  {
+   "code": "1.11.19",
+   "name": "压片小麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "去壳小麦经汽蒸、碾压后的产品。其中可含有少量小麦壳。可经瘤胃保护。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.11.20",
+   "name": "预糊化小麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "小麦及其加工产品",
+   "description": "将粉碎或破碎小麦经湿热、压力等预糊化工艺处理后获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 淀粉糊化度"
+  },
+  {
+   "code": "1.12.1",
+   "name": "燕麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "燕麦（Avena sativa L.）的籽实。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.12.2",
+   "name": "膨化燕麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "碾磨或破碎燕麦在一定温度和压力条件下，经膨化处理获得的产品。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.12.3",
+   "name": "全燕麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "不去除任何皮层的完整燕麦籽粒经碾磨获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.12.4",
+   "name": "脱壳燕麦",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "燕麦的去壳籽实，可经蒸汽处理。",
+   "mandatoryLabel": "淀粉"
+  },
+  {
+   "code": "1.12.5",
+   "name": "燕麦次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "以燕麦为原料经制粉工艺形成的副产品之一，由糊粉层、胚乳及少量细麸组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.12.6",
+   "name": "燕麦粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "燕麦经制粉工艺制成的以燕麦粉为主、含有少量细麦麸和胚的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.12.7",
+   "name": "燕麦麸",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "以燕麦为原料碾磨制粉过程中所分离出的麦皮层。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.12.8",
+   "name": "燕麦壳",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "燕麦经脱皮工艺后脱下的外壳。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.12.9",
+   "name": "燕麦片",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "燕麦经汽蒸、碾压后的产品。可包括少部分的燕麦壳。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.12.10",
+   "name": "燕麦苗粉e",
+   "category": "谷物及其加工产品",
+   "subCategory": "燕麦及其加工产品",
+   "description": "燕麦的幼苗经干燥、粉碎后获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 水分"
+  },
+  {
+   "code": "1.13.1",
+   "name": "玉米",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米（Zea mays L.）籽实。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.13.2",
+   "name": "喷浆玉米皮",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "将玉米浸泡液喷到玉米皮上并经干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.13.3",
+   "name": "膨化玉米",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米在一定温度和压力条件下，经膨化处理获得的产品。",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.13.4",
+   "name": "去皮玉米",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米籽实脱去种皮后的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.13.5",
+   "name": "压片玉米",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "去皮玉米经汽蒸、碾压后的产品。其中可含有少部分种皮。.",
+   "mandatoryLabel": "淀粉 淀粉糊化度"
+  },
+  {
+   "code": "1.13.6",
+   "name": "玉米次粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "生产玉米粉、玉米碴过程中的副产品之一。主要由玉米皮和部分玉米碎粒组成。",
+   "mandatoryLabel": "淀粉 粗纤维"
+  },
+  {
+   "code": "1.13.7",
+   "name": "玉米蛋白粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米经脱胚、粉碎、去渣、提取淀粉后的黄浆水，再经脱水制成的富含蛋白质的产品，粗蛋白质含量不低于50%（以干基计）。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "1.13.8",
+   "name": "玉米淀粉渣",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "生产柠檬酸等玉米深加工产品过程中，玉米经粉碎、液化、过滤获得的滤渣，再经干燥获得的产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 粗脂肪 水分"
+  },
+  {
+   "code": "1.13.9",
+   "name": "玉米粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米经除杂、脱胚（或不脱胚）、碾磨获得的粉状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.13.10",
+   "name": "玉米浆干粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米浸泡液经过滤、浓缩、低温喷雾干燥后获得的产品。",
+   "mandatoryLabel": "粗蛋白 二氧化硫"
+  },
+  {
+   "code": "1.13.11",
+   "name": "玉米酶解蛋白",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米蛋白粉经酶水解、干燥后获得的产品。",
+   "mandatoryLabel": "酸溶蛋白（三氯乙酸可溶蛋白） 粗蛋白质 粗灰分 钙含量"
+  },
+  {
+   "code": "1.13.12",
+   "name": "玉米胚",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米籽实加工时所提取的胚及混有少量玉米皮和胚乳的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "1.13.13",
+   "name": "玉米胚芽饼",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米胚经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.13.14",
+   "name": "玉米胚芽粕",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米胚经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "1.13.15",
+   "name": "玉米皮",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米加工过程中分离出来的皮层。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.13.16",
+   "name": "玉米糁［玉米碴］",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米经除杂、脱胚、碾磨和筛分等系列工序加工而成的颗粒状产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "1.13.17",
+   "name": "玉米糖渣",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米生产淀粉糖的副产品。",
+   "mandatoryLabel": "淀粉 粗蛋白质 粗脂肪 水分"
+  },
+  {
+   "code": "1.13.18",
+   "name": "玉米芯粉",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "玉米的中心穗轴经研磨获得的粉状产品。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "1.13.19",
+   "name": "玉米油［玉米胚芽油］",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "由玉米胚经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "粗脂肪 酸价 过氧化值"
+  },
+  {
+   "code": "1.13.20",
+   "name": "玉米糠e",
+   "category": "谷物及其加工产品",
+   "subCategory": "玉米及其加工产品",
+   "description": "加工玉米时脱下的皮层、少量胚和胚乳的混合物。",
+   "mandatoryLabel": "粗脂肪 粗纤维"
+  },
+  {
+   "code": "1.14.1",
+   "name": "藜麦e",
+   "category": "谷物及其加工产品",
+   "subCategory": "其他",
+   "description": "藜麦（Chenopodium quinoa Willd.）的籽实。种子外皮含有的皂素已去除。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "1.14.2",
+   "name": "薏米［薏苡仁、苡仁］e",
+   "category": "谷物及其加工产品",
+   "subCategory": "其他",
+   "description": "禾本科植物薏苡（Coix chinensis Tod.）的种仁。",
+   "mandatoryLabel": "淀粉 粗蛋白质"
+  },
+  {
+   "code": "2.1.1",
+   "name": "扁桃［杏］仁饼",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "扁桃［杏］及其加工产品",
+   "description": "扁桃(Amygdalus Communis L.）仁或杏（Armeniaca vulgaris Lam.）仁经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.1.2",
+   "name": "扁桃［杏］仁粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "扁桃［杏］及其加工产品",
+   "description": "扁桃仁或杏仁饼经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.1.3",
+   "name": "扁桃［杏］仁油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "扁桃［杏］及其加工产品",
+   "description": "扁桃仁或杏仁经压榨或浸提制取的油脂。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.2.1",
+   "name": "菜籽［油菜籽］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "十字花科草本植物栽培油菜（Brassica napus L.），包括甘蓝型、白菜型、芥菜型油菜的小颗粒球形种子。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.2.2",
+   "name": "菜籽饼［菜饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "菜籽经压榨取油后的副产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "2.2.3",
+   "name": "菜籽蛋白",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "利用菜籽或菜籽粕生产的蛋白质含量不低于50％（以干基计）的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "2.2.4",
+   "name": "菜籽皮",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "油菜籽经脱皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.2.5",
+   "name": "菜籽粕［菜粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "油菜籽经预压浸提或直接溶剂浸提取油后获得的副产品，或由菜籽饼浸提取油后获得的副产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.2.6",
+   "name": "菜籽油［菜油］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "菜籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.2.7",
+   "name": "膨化菜籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "菜籽在一定温度和压力条件下，经膨化处理获得的产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "2.2.8",
+   "name": "双低菜籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "油菜籽中油的脂肪酸中芥酸含量不高于5.0%，饼粕中硫甙含量不高于45.0μmol/g的油菜籽品种。可经瘤胃保护。",
+   "mandatoryLabel": "芥酸 硫甙"
+  },
+  {
+   "code": "2.2.9",
+   "name": "双低菜籽粕［双低菜粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "菜籽及其加工产品",
+   "description": "双低菜籽预压浸提或直接溶剂浸提取油后获得的副产品，或由双低菜籽饼浸提取油后获得的副产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白 粗纤维 硫甙"
+  },
+  {
+   "code": "2.3.1",
+   "name": "大豆",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "豆科草本植物栽培大豆（Glycine max. L. Merr.）的种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.3.2",
+   "name": "大豆分离蛋白",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "以低温大豆粕为原料，利用碱溶酸析原理，将蛋白质和其它可溶性成分萃取出来，再在等电点下析出蛋白质，蛋白质含量不低于90％（以干基计）的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "2.3.3",
+   "name": "大豆磷脂油（大豆磷脂油粉）a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "在大豆原油脱胶过程中分离出的、经真空脱水获得的含油磷脂；或大豆磷脂油与载体（玉米粉、玉米芯粉、稻壳粉、麸皮）混合、干燥后的产品，粗脂肪不低于50%。",
+   "mandatoryLabel": "丙酮不溶物 粗脂肪 酸价 水分"
+  },
+  {
+   "code": "2.3.4",
+   "name": "大豆酶解蛋白",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆或大豆加工产品（脱皮豆粕/大豆浓缩蛋白）经酶水解、干燥后获得的产品。",
+   "mandatoryLabel": "酸溶蛋白（三氯乙酸可溶蛋白） 粗蛋白质 粗灰分 钙"
+  },
+  {
+   "code": "2.3.5",
+   "name": "大豆浓缩蛋白",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "低温大豆粕除去其中的非蛋白成分后获得的蛋白质含量不低于65%（以干基计）的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "2.3.6",
+   "name": "大豆胚芽粕［大豆胚芽粉］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆胚芽脱油后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.3.7",
+   "name": "大豆胚芽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆胚芽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.3.8",
+   "name": "大豆皮",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆经脱皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.3.9",
+   "name": "大豆筛余物",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆籽实清理过程中筛选出的瘪的或破碎的籽实、种皮和外壳。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "2.3.10",
+   "name": "大豆糖蜜",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "醇法大豆浓缩蛋白生产中，萃取液经浓缩获得的总糖不低于55%、粗蛋白质不低于8%的粘稠物（以干基计）。",
+   "mandatoryLabel": "总糖 蔗糖 粗蛋白质 水分"
+  },
+  {
+   "code": "2.3.11",
+   "name": "大豆纤维",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "从大豆中提取的纤维物质。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "2.3.12",
+   "name": "大豆油［豆油］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.3.13",
+   "name": "豆饼［大豆饼］a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆籽粒经压榨取油后的副产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "2.3.14",
+   "name": "豆粕［大豆粕］a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆经预压浸提或直接溶剂浸提取油后获得的副产品；或由大豆饼浸提取油后获得的副产品；或大豆胚片经膨胀浸提制油工艺提取油后获得的产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.3.15",
+   "name": "豆渣［大豆渣］a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆经浸泡、碾磨、加工成豆制品或提取蛋白后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.3.16",
+   "name": "烘烤大豆（粉）",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "烘烤的大豆或将其粉碎后的产品。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.3.17",
+   "name": "膨化大豆［膨化大豆粉］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "全脂大豆经清理、破碎（磨碎）、膨化处理获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "2.3.18",
+   "name": "膨化大豆蛋白［大豆组织蛋白］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "大豆分离蛋白、大豆浓缩蛋白在一定温度和压力条件下，经膨化处理获得的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "2.3.19",
+   "name": "膨化豆粕a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "大豆及其加工产品",
+   "description": "豆粕经膨化处理后获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.4.1",
+   "name": "番茄籽粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "番茄籽及其加工产品",
+   "description": "番茄（Lycopersicon esculentum Mill.）籽经压榨或浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.4.2",
+   "name": "番茄籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "番茄籽及其加工产品",
+   "description": "番茄籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.5.1",
+   "name": "橄榄饼［油橄榄饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "橄榄及其加工产品",
+   "description": "木犀科常绿乔木油树的椭圆形或卵形黑果油橄榄（Olea europaea L.）果实经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.5.2",
+   "name": "橄榄粕［油橄榄粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "橄榄及其加工产品",
+   "description": "油橄榄饼经浸提取油后获得的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.5.3",
+   "name": "橄榄油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "橄榄及其加工产品",
+   "description": "橄榄经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.6.1",
+   "name": "核桃仁饼",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "核桃及其加工产品",
+   "description": "脱壳或部分脱壳（含壳率不高于30%）的核桃（Juglans regia L.）经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.6.2",
+   "name": "核桃仁粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "核桃及其加工产品",
+   "description": "核桃仁经预压浸提或直接溶剂浸提取油后获得的副产品，或由核桃仁饼浸提取油后获得的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.6.3",
+   "name": "核桃仁油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "核桃及其加工产品",
+   "description": "核桃仁经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.7.1",
+   "name": "红花籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "红花籽及其加工产品",
+   "description": "菊科植物红花（Carthamus tinctorius L.）的种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.7.2",
+   "name": "红花籽饼",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "红花籽及其加工产品",
+   "description": "红花籽（仁）经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.7.3",
+   "name": "红花籽壳",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "红花籽及其加工产品",
+   "description": "红花籽脱壳取仁后的产品。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "2.7.4",
+   "name": "红花籽粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "红花籽及其加工产品",
+   "description": "红花籽（仁）经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.7.5",
+   "name": "红花籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "红花籽及其加工产品",
+   "description": "红花籽（仁）经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.8.1",
+   "name": "花椒籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花椒籽及其加工产品",
+   "description": "芸香科花椒属植物青花椒（Zanthoxylun schinifolium Sieb. et Zucc.）或花椒（Zanthoxylum bungeanum Maxim. var. bungeanum）的干燥成熟果实中的籽。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.8.2",
+   "name": "花椒籽饼［花椒饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花椒籽及其加工产品",
+   "description": "花椒籽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.8.3",
+   "name": "花椒籽粕［花椒粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花椒籽及其加工产品",
+   "description": "花椒籽经预压浸提或直接溶剂浸提取油后获得的副产品，或由花椒饼浸提取油获得的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.8.4",
+   "name": "花椒籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花椒籽及其加工产品",
+   "description": "花椒籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.9.1",
+   "name": "花生",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "豆科草本植物栽培花生（Arachis hypogaea L.）荚果的种子，椭圆形，种皮有黑、白、紫红等色。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.9.2",
+   "name": "花生饼［花生仁饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "脱壳或部分脱壳（含壳率不高于30%）的花生经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.9.3",
+   "name": "花生蛋白",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "由花生及花生粕生产的蛋白质含量不低于65％（以干基计）的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.9.4",
+   "name": "花生红衣",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "花生仁外衣，含有丰富单宁和硫胺。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "2.9.5",
+   "name": "花生壳",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "花生的外壳。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "2.9.6",
+   "name": "花生粕［花生仁粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "花生经预压浸提或直接溶剂浸提取油后获得的副产品，或由花生饼浸提取油获得的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.9.7",
+   "name": "花生油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "花生及其加工产品",
+   "description": "花生（仁）经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.10.1",
+   "name": "可可饼（粉）",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "可可及其加工产品",
+   "description": "脱壳后的可可（Theobroma cacao L.）豆经压榨取油后的副产品，可经粉碎。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.10.2",
+   "name": "可可油［可可脂］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "可可及其加工产品",
+   "description": "可可豆经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.11.1",
+   "name": "葵花籽［向日葵籽］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葵花籽及其加工产品",
+   "description": "菊科草本植物栽培向日葵（Helianthus annuus L.）短卵形瘦果的种子。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.11.2",
+   "name": "葵花头粉［向日葵盘粉］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葵花籽及其加工产品",
+   "description": "葵花盘脱除葵花籽后剩余物粉碎烘干的产品。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "2.11.3",
+   "name": "葵花籽壳［向日葵壳］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葵花籽及其加工产品",
+   "description": "向日葵籽的外壳。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "2.11.4",
+   "name": "葵花籽仁饼［向日葵籽仁饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葵花籽及其加工产品",
+   "description": "部分脱壳的向日葵籽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.11.5",
+   "name": "葵花籽仁粕［向日葵籽仁粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葵花籽及其加工产品",
+   "description": "部分脱壳的向日葵籽菜籽经预压浸提或直接溶剂浸提取油后获得的副产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.11.6",
+   "name": "葵花籽油［向日葵籽油］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葵花籽及其加工产品",
+   "description": "向日葵籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.12.1",
+   "name": "棉籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "锦葵科草木或多年生灌木棉花（Gossypium spp.）蒴果的种子。不得用于水产饲料。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.12.2",
+   "name": "棉仁饼",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "按脱壳程度，含壳量低的棉籽饼称为棉仁饼。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.12.3",
+   "name": "棉籽饼［棉饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "棉籽经脱绒、脱壳和压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.12.4",
+   "name": "棉籽蛋白a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "由棉籽或棉籽粕生产的粗蛋白质含量在50%以上的产品。",
+   "mandatoryLabel": "粗蛋白质 游离棉酚"
+  },
+  {
+   "code": "2.12.5",
+   "name": "棉籽壳",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "棉籽剥壳，以及仁壳分离后以壳为主的产品。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "2.12.6",
+   "name": "棉籽酶解蛋白",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "棉籽或棉籽蛋白粉经酶水解、干燥后获得的产品。",
+   "mandatoryLabel": "酸溶蛋白（三氯乙酸可溶蛋白） 粗蛋白质 粗灰分 游离棉酚 钙"
+  },
+  {
+   "code": "2.12.7",
+   "name": "棉籽粕［棉粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "棉籽经脱绒、脱壳、仁壳分离后，经预压浸提或直接溶剂浸提取油后获得的副产品，或由棉籽饼浸提取油获得的副产品。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.12.8",
+   "name": "棉籽油［棉油］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "棉籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.12.9",
+   "name": "脱酚棉籽蛋白［脱毒棉籽蛋白］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "棉籽及其加工产品",
+   "description": "以棉籽为原料，在低温条件下，经软化、轧胚、浸出提油后并将棉酚以游离状态萃取脱除后得到的粗蛋白含量不低于50%、游离棉酚含量不高于400 mg/kg、氨基酸占粗蛋白比例不低于87%的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 游离棉酚 氨基酸占粗蛋白比例"
+  },
+  {
+   "code": "2.13.2",
+   "name": "木棉籽粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "木棉籽及其加工产品",
+   "description": "木棉籽经预压浸提或直接溶剂浸提取油后获得的副产品，或由木棉籽饼浸提取油获得的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.13.3",
+   "name": "木棉籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "木棉籽及其加工产品",
+   "description": "木棉籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.14.1",
+   "name": "葡萄籽粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葡萄籽及其加工产品",
+   "description": "葡萄（Vitis vinifera L.）籽经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.14.2",
+   "name": "葡萄籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "葡萄籽及其加工产品",
+   "description": "葡萄籽经浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.15.1",
+   "name": "沙棘籽饼",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "沙棘籽及其加工产品",
+   "description": "沙棘（Hippophae rhamnoides L.）籽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.15.2",
+   "name": "沙棘籽粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "沙棘籽及其加工产品",
+   "description": "沙棘籽经浸提或超临界萃取取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.15.3",
+   "name": "沙棘籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "沙棘籽及其加工产品",
+   "description": "沙棘籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.16.1",
+   "name": "酸枣粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "酸枣及其加工产品",
+   "description": "酸枣(Ziziphus jujube Mill. var. spinosa (Bunge) Hu ex H. F. Chou）果仁经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.16.2",
+   "name": "酸枣油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "酸枣及其加工产品",
+   "description": "酸枣果仁经浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.17.1",
+   "name": "文冠果粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "文冠果加工产品",
+   "description": "文冠果（Xanthoceras sorbifolia Bunge.）种子经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.17.2",
+   "name": "文冠果油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "文冠果加工产品",
+   "description": "文冠果种子经压榨制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.18.1",
+   "name": "亚麻籽［胡麻籽］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "亚麻籽及其加工产品",
+   "description": "亚麻（Linum usitatissimum L.）的种子。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.18.2",
+   "name": "亚麻饼［亚麻籽饼，亚麻仁饼，胡麻饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "亚麻籽及其加工产品",
+   "description": "亚麻籽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.18.3",
+   "name": "亚麻粕［亚麻籽粕，亚麻仁粕，胡麻粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "亚麻籽及其加工产品",
+   "description": "亚麻籽经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.18.4",
+   "name": "亚麻籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "亚麻籽及其加工产品",
+   "description": "亚麻籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.18.5",
+   "name": "亚麻籽粉e",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "亚麻籽及其加工产品",
+   "description": "亚麻籽经制粉工艺获得的粉状产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.19.1",
+   "name": "椰子饼",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "椰子及其加工产品",
+   "description": "以干燥的椰子（Cocos nucifera L.）胚乳（即椰肉）为原料，经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.19.2",
+   "name": "椰子粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "椰子及其加工产品",
+   "description": "以干燥的椰子胚乳（即椰肉）为原料，经预榨以及溶剂浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.19.3",
+   "name": "椰子油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "椰子及其加工产品",
+   "description": "椰子胚乳（即椰肉）经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.20.1",
+   "name": "棕榈果",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "棕榈（Trachycarpus fortunei Hook.）果穗上的含油未加工脱脂和未分离果核的果（肉）实。",
+   "mandatoryLabel": "粗脂肪 粗蛋白 粗纤维"
+  },
+  {
+   "code": "2.20.2",
+   "name": "棕榈饼［棕榈仁饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "棕榈仁经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.20.3",
+   "name": "棕榈粕［棕榈仁粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "棕榈仁经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.20.4",
+   "name": "棕榈仁",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "油棕榈果实脱壳后的果仁。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.20.5",
+   "name": "棕榈仁油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "棕榈仁经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.20.6",
+   "name": "棕榈油（棕榈脂肪粉）a",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "棕榈果肉经压榨或浸提制取的油；或棕榈油经加热、喷雾、冷却获得的颗粒状粉末。产品不得添加任何载体，粗脂肪不低于99.5%。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.20.7",
+   "name": "棕榈脂肪酸粉g",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "油棕榈及其加工产品",
+   "description": "棕榈油经精炼、水解、氢化、蒸馏、喷雾、冷却制取的颗粒状棕榈脂肪酸粉。产品中总脂肪酸（包括棕榈酸、油酸和其他脂肪酸）含量不低于99.5%，其中棕榈酸（C16:0）含量大于60.0%，油酸（C18:1）含量小于25.0%。棕榈油须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值 碘价 总脂肪酸 棕榈酸"
+  },
+  {
+   "code": "2.21.1",
+   "name": "月见草籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "月见草籽及其加工产品",
+   "description": "月见草（Oenothera biennis L.）籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.21.2",
+   "name": "月见草籽粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "月见草籽及其加工产品",
+   "description": "月见草籽经冷榨、浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.21.3",
+   "name": "月见草籽油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "月见草籽及其加工产品",
+   "description": "月见草籽经冷榨、浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.22.1",
+   "name": "芝麻籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "芝麻及其加工产品",
+   "description": "芝麻（Sesamum indicum L.）种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.22.2",
+   "name": "芝麻饼［油麻饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "芝麻及其加工产品",
+   "description": "芝麻籽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.22.3",
+   "name": "芝麻粕",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "芝麻及其加工产品",
+   "description": "芝麻籽经预压浸提或直接溶剂浸提取油后的副产品，或芝麻籽饼浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.22.4",
+   "name": "芝麻油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "芝麻及其加工产品",
+   "description": "芝麻籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.23.1",
+   "name": "紫苏籽",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "紫苏及其加工产品",
+   "description": "紫苏（Perilla frutescens L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "2.23.2",
+   "name": "紫苏饼［紫苏籽饼］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "紫苏及其加工产品",
+   "description": "紫苏籽经压榨取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗纤维"
+  },
+  {
+   "code": "2.23.3",
+   "name": "紫苏粕［紫苏籽粕］",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "紫苏及其加工产品",
+   "description": "紫苏籽或紫苏籽饼经浸提取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "2.23.4",
+   "name": "紫苏油",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "紫苏及其加工产品",
+   "description": "紫苏籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.24.1",
+   "name": "氢化脂肪",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "其它",
+   "description": "植物油脂经氢化反应获得的产品。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.24.2",
+   "name": "琉璃苣籽油e",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "其它",
+   "description": "琉璃苣（Borago officinalis L.）籽经压榨或浸提制取的油。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "2.24.3",
+   "name": "奇亚籽i",
+   "category": "油料籽实及其加工产品",
+   "subCategory": "其它",
+   "description": "唇形科鼠尾草属芡欧鼠尾草（Salvia hispanica L.）的种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.1.1",
+   "name": "扁豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "扁豆及其加工产品",
+   "description": "豆科蝶形花亚科扁豆属扁豆（Lablab purpureus L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.1.2",
+   "name": "去皮扁豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "扁豆及其加工产品",
+   "description": "扁豆籽实去皮后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "3.2.1",
+   "name": "菜豆［芸豆］",
+   "category": "豆类及其加工产品",
+   "subCategory": "菜豆及其加工产品",
+   "description": "豆科菜豆属菜豆（Phaseolus vulgaris L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.3.1",
+   "name": "蚕豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "蚕豆及其加工产品",
+   "description": "豆科野豌豆属蚕豆（Vicia faba L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.3.2",
+   "name": "蚕豆粉浆蛋白粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "蚕豆及其加工产品",
+   "description": "用蚕豆生产淀粉时，从其粉浆中分离出淀粉后经干燥获得的粉状副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.3.3",
+   "name": "蚕豆皮",
+   "category": "豆类及其加工产品",
+   "subCategory": "蚕豆及其加工产品",
+   "description": "蚕豆籽实经去皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "3.3.4",
+   "name": "去皮蚕豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "蚕豆及其加工产品",
+   "description": "蚕豆籽实去皮后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "3.3.5",
+   "name": "压片蚕豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "蚕豆及其加工产品",
+   "description": "去皮蚕豆经汽蒸、碾压处理获得的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.4.1",
+   "name": "瓜尔豆a",
+   "category": "豆类及其加工产品",
+   "subCategory": "瓜尔豆及其加工产品",
+   "description": "豆科瓜尔豆属（Cyamopsis tetragonoloba L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.4.2",
+   "name": "瓜尔豆胚芽粕",
+   "category": "豆类及其加工产品",
+   "subCategory": "瓜尔豆及其加工产品",
+   "description": "豆科瓜尔豆属瓜尔豆（Cyamopsis tetragonoloba L.）籽实的胚芽经浸提制取瓜尔豆胶后的副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.4.3",
+   "name": "瓜尔豆粕",
+   "category": "豆类及其加工产品",
+   "subCategory": "瓜尔豆及其加工产品",
+   "description": "瓜尔豆籽实经浸提制取瓜尔豆胶后的副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.5.1",
+   "name": "红豆［赤豆、红小豆］",
+   "category": "豆类及其加工产品",
+   "subCategory": "红豆及其加工产品",
+   "description": "豆科豇豆属红豆（Vigna angulari (Willd.) Ohwi et H. Ohashi）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.5.2",
+   "name": "红豆皮",
+   "category": "豆类及其加工产品",
+   "subCategory": "红豆及其加工产品",
+   "description": "红豆籽实经脱皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "3.5.3",
+   "name": "红豆渣",
+   "category": "豆类及其加工产品",
+   "subCategory": "红豆及其加工产品",
+   "description": "红豆经湿法提取淀粉和蛋白后所得的副产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "3.6.1",
+   "name": "角豆粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "角豆及其加工产品",
+   "description": "豆科长角豆属长角豆（Ceratonia siliqua L.）的籽实和豆荚一起粉碎后获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 总糖"
+  },
+  {
+   "code": "3.7.1",
+   "name": "绿豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "绿豆及其加工产品",
+   "description": "豆科豇豆属绿豆（Vigna radiata L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.7.2",
+   "name": "绿豆粉浆蛋白粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "绿豆及其加工产品",
+   "description": "用绿豆生产淀粉时，从其粉浆中分离出淀粉后经干燥获得的粉状副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.7.3",
+   "name": "绿豆皮",
+   "category": "豆类及其加工产品",
+   "subCategory": "绿豆及其加工产品",
+   "description": "绿豆籽实经去皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "3.7.4",
+   "name": "绿豆渣",
+   "category": "豆类及其加工产品",
+   "subCategory": "绿豆及其加工产品",
+   "description": "绿豆经湿法提取淀粉和蛋白后所得的副产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "3.8.1",
+   "name": "豌豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豆科豌豆属豌豆（Pisum sativum L.）的籽实。可经瘤胃保护。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.8.2",
+   "name": "去皮豌豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豌豆籽实去皮后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "3.8.3",
+   "name": "豌豆次粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豌豆制粉过程中获得的副产品，主要由胚乳和少量豆皮组成。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "3.8.4",
+   "name": "豌豆粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豌豆经粉碎所得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "3.8.5",
+   "name": "豌豆粉浆蛋白粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "用豌豆生产淀粉时，从其粉浆中分离出淀粉后经干燥获得的粉状副产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.8.6",
+   "name": "豌豆粉浆粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豌豆经湿法提取淀粉和蛋白后所得的液态副产物，经浓缩、干燥获得的粉状产品。主要由可溶性蛋白和碳水化合物组成。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "3.8.7",
+   "name": "豌豆皮",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豌豆籽实经去皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "3.8.8",
+   "name": "豌豆纤维",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "从豌豆中提取的纤维物质。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "3.8.9",
+   "name": "豌豆渣",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "豌豆经湿法提取淀粉和蛋白后所得的副产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "3.8.10",
+   "name": "压片豌豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "豌豆及其加工产品",
+   "description": "去皮豌豆经汽蒸、碾压获得的产品。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.9.1",
+   "name": "鹰嘴豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "鹰嘴豆及其加工产品",
+   "description": "豆科鹰嘴豆属鹰嘴豆（Cicer arietinum L.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.10.1",
+   "name": "羽扇豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "羽扇豆及其加工产品",
+   "description": "苦味物质含量低的豆科羽扇豆属多叶羽扇豆（Lupinus polyphyllus Lindl.）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "3.10.2",
+   "name": "去皮羽扇豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "羽扇豆及其加工产品",
+   "description": "羽扇豆籽实经去皮后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "3.10.3",
+   "name": "羽扇豆皮",
+   "category": "豆类及其加工产品",
+   "subCategory": "羽扇豆及其加工产品",
+   "description": "羽扇豆籽实经去皮工艺脱下的种皮。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "3.10.4",
+   "name": "羽扇豆渣",
+   "category": "豆类及其加工产品",
+   "subCategory": "羽扇豆及其加工产品",
+   "description": "羽扇豆提取蛋白或寡糖组分后获得的副产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "3.11.1",
+   "name": "___豆荚",
+   "category": "豆类及其加工产品",
+   "subCategory": "其它",
+   "description": "本目录所列豆科植物籽实的豆荚，产品名称应标明原料的来源，如：豌豆荚。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "3.11.2",
+   "name": "___豆荚粉",
+   "category": "豆类及其加工产品",
+   "subCategory": "其它",
+   "description": "本目录所列豆科植物籽实的豆荚经粉碎获得的产品，产品名称应标明原料的来源，如：角豆荚粉。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "3.11.3",
+   "name": "烘烤___豆",
+   "category": "豆类及其加工产品",
+   "subCategory": "其它",
+   "description": "豆科菜豆属（Phaseolus L.）或豇豆属（Vigna Savi）植物的籽实经适当烘烤后的产品。产品名称应标明原料的来源，如：烘烤菜豆。可经瘤胃保护。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "3.12.1",
+   "name": "兵豆［小扁豆］e",
+   "category": "豆类及其加工产品",
+   "subCategory": "兵豆及其加工产品e",
+   "description": "豆科兵豆属兵豆（Lens culinaris）的籽实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "4.1.1",
+   "name": "萝卜干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "兵豆及其加工产品e",
+   "description": "萝卜（Raphanus sativus L.）经切块、干燥、粉碎工艺获得的不同形态的产品。产品名称应注明产品形态，如：白萝卜干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.2.1",
+   "name": "大蒜粉（片）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "大蒜及其加工产品",
+   "description": "百合科葱属蒜（Allium sativum L.）经粉碎或切片获得的白色至黄色粉末或片状物。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "4.2.2",
+   "name": "大蒜渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "大蒜及其加工产品",
+   "description": "大蒜取油后的副产品。",
+   "mandatoryLabel": "粗纤维 水分"
+  },
+  {
+   "code": "4.3.1",
+   "name": "甘薯［红薯、白薯、番薯、山芋、地瓜、红苕］干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "甘薯及其加工产品",
+   "description": "旋花科番薯属甘薯（Ipomoea batatas L.）植物的块根，经切块、干燥、粉碎工艺获得的不同形态的产品。产品名称应注明产品形态，如：甘薯干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.3.2",
+   "name": "甘薯渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "甘薯及其加工产品",
+   "description": "甘薯提取淀粉后的副产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.3.3",
+   "name": "紫薯干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "甘薯及其加工产品",
+   "description": "旋花科番薯属紫薯（Ipomoea batatas (L.) Lam）的块根，经切块、干燥、粉碎工艺获得的不同形态的产品。产品名称应注明产品形态，如：紫薯干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.4.1",
+   "name": "胡萝卜干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "胡萝卜及其加工产品",
+   "description": "胡萝卜（Daucus carota L.）经切块、干燥、粉碎工艺获得的不同形态的产品。产品名称应注明产品形态，如：胡萝卜干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.4.2",
+   "name": "胡萝卜渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "胡萝卜及其加工产品",
+   "description": "胡萝卜经榨汁或提取胡萝卜素后获得的副产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.5.1",
+   "name": "菊苣根干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "菊苣及其加工产品",
+   "description": "菊科菊苣属菊苣（Cichorium intybus L.）的块根，经干燥、粉碎工艺获得的不同形态的产品。产品名称应注明产品形态，如：菊苣根粉。",
+   "mandatoryLabel": "水分 总糖"
+  },
+  {
+   "code": "4.5.2",
+   "name": "菊苣渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "菊苣及其加工产品",
+   "description": "菊苣制取菊糖或香料后的副产品，由浸提或压榨后的菊苣片组成。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.6.1",
+   "name": "菊糖",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "菊芋及其加工产品",
+   "description": "菊科向日葵属菊芋（Helianthus tuberosus L.）的块根中提取的果聚糖。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "菊糖"
+  },
+  {
+   "code": "4.6.2",
+   "name": "菊芋渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "菊芋及其加工产品",
+   "description": "菊芋提取菊糖后的副产物。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.7.1",
+   "name": "马铃薯［土豆、洋芋、山药蛋］干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "马铃薯及其加工产品",
+   "description": "马铃薯（Solanum tuberosum L.）经切块、切片、干燥、粉碎等工艺获得的不同形态的产品。产品名称应注明产品形态，如：马铃薯干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.7.2",
+   "name": "马铃薯蛋白粉",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "马铃薯及其加工产品",
+   "description": "马铃薯提取淀粉后经干燥获得的粉状产品。主要成分为蛋白质。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "4.7.3",
+   "name": "马铃薯渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "马铃薯及其加工产品",
+   "description": "马铃薯经提取淀粉和蛋白后的副产物。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.8.1",
+   "name": "魔芋干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "魔芋及其加工产品",
+   "description": "天南星科魔芋属魔芋（Amorphophalms konjac）的块根经切块、切片、干燥、粉碎等工艺获得的不同形态的产品。产品名称应注明产品形态，如：魔芋干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.9.1",
+   "name": "木薯干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "木薯及其加工产品",
+   "description": "木薯（Manihot esculenta Crantz.）经切块、切片、干燥、粉碎等工艺获得的不同形态的产品。产品名称应注明产品形态，如：木薯干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.9.2",
+   "name": "木薯渣",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "木薯及其加工产品",
+   "description": "木薯提取淀粉后的副产物。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.10.1",
+   "name": "藕［莲藕］干（片、块、粉、颗粒）",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "藕及其加工产品",
+   "description": "莲藕经切块、切片、干燥、粉碎等工艺获得的不同形态的产品。产品名称应注明产品形态，如：莲藕干。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.11.1",
+   "name": "甜菜粕［渣］",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "甜菜及其加工产品",
+   "description": "藜科甜菜属甜菜（Beta vulgaris L.）的块根制糖后的副产品，由浸提或压榨后的甜菜片组成。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.11.2",
+   "name": "甜菜粕颗粒",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "甜菜及其加工产品",
+   "description": "以甜菜粕为原料，添加废糖蜜等辅料经制粒形成的产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "4.11.3",
+   "name": "甜菜糖蜜",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "甜菜及其加工产品",
+   "description": "从甜菜中提糖后获得的液体副产品。",
+   "mandatoryLabel": "总糖 粗灰分 水分"
+  },
+  {
+   "code": "4.12.1",
+   "name": "____瓜",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "食用瓜类及其加工产品",
+   "description": "可食用瓜类或其去除瓜籽后的产品。可鲜用或对其进行干燥加工处理，产品名称应标明使用原料的来源，如：南瓜。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "4.12.2",
+   "name": "____瓜籽",
+   "category": "块茎、块根及其加工产品",
+   "subCategory": "食用瓜类及其加工产品",
+   "description": "可食用瓜类的籽实经干燥等工艺加工获得的产品，产品名称应标明使用原料的来源，如：南瓜籽。",
+   "mandatoryLabel": "粗蛋白"
+  },
+  {
+   "code": "5.1.1",
+   "name": "辣椒（粉）",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "辣椒及其加工产品",
+   "description": "辣椒（Capsicum annuum L.）经干燥、粉碎后所得的产品。",
+   "mandatoryLabel": "粗蛋白 粗灰分"
+  },
+  {
+   "code": "5.1.2",
+   "name": "辣椒渣",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "辣椒及其加工产品",
+   "description": "辣椒皮提取红色素后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "5.1.3",
+   "name": "辣椒籽粕",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "辣椒及其加工产品",
+   "description": "辣椒籽取油后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维"
+  },
+  {
+   "code": "5.1.4",
+   "name": "辣椒籽油a",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "辣椒及其加工产品",
+   "description": "辣椒籽经压榨或浸提制取的油。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "酸价 过氧化值"
+  },
+  {
+   "code": "5.2.1",
+   "name": "鳄梨［牛油果］干（片、块、粉）",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "水果或坚果及其加工产品",
+   "description": "鳄梨（Persea americana Mill.）经切片、切块、干燥、粉碎等工艺获得的不同形态的产品。产品名称应注明产品形态，如：鳄梨干。",
+   "mandatoryLabel": "总糖 水分"
+  },
+  {
+   "code": "5.2.2",
+   "name": "鳄梨［牛油果］浓缩汁",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "水果或坚果及其加工产品",
+   "description": "鳄梨压榨后的汁液经浓缩后获得的产品。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖 水分"
+  },
+  {
+   "code": "5.2.3",
+   "name": "____果仁",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "水果或坚果及其加工产品",
+   "description": "可食用的坚果仁或水果仁，产品名称应标明使用原料的来源。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "5.2.4",
+   "name": "____果渣",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "水果或坚果及其加工产品",
+   "description": "可食用水果榨汁或果品加工过程中获得的副产品，产品名称应标明使用原料的来源，如：柑橘渣。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "5.2.5",
+   "name": "____果（汁、泥、片、干、粉）e",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "水果或坚果及其加工产品",
+   "description": "可食用水果鲜果，或对其进行加工后获得的果汁、果泥、果片、果干、果粉等。不得使用变质原料。产品名称应标明原料来源，如苹果。",
+   "mandatoryLabel": "总糖 水分"
+  },
+  {
+   "code": "5.3.1",
+   "name": "枣",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "枣及其加工产品",
+   "description": "食用枣（Ziziphus jujuba Mill.）。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "5.3.2",
+   "name": "枣粉",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "枣及其加工产品",
+   "description": "食用枣经干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗纤维 粗灰分"
+  },
+  {
+   "code": "5.4.1",
+   "name": "____菜（汁、泥、片、干、粉）e",
+   "category": "瓜果蔬菜及其加工产品",
+   "subCategory": "蔬菜及其加工产品",
+   "description": "可食用蔬菜鲜菜，或对其进行加工后获得的蔬菜汁、蔬菜泥、蔬菜片、蔬菜干、蔬菜粉等。不得使用变质原料。产品名称应标明原料来源，如菠菜。",
+   "mandatoryLabel": "粗纤维 水分"
+  },
+  {
+   "code": "6.1.1",
+   "name": "____草颗粒（块）",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "干草及其加工产品",
+   "description": "收割的牧草经自然干燥或烘干脱水、粉碎及制粒或压块后获得的产品。不得含有有毒有害草。产品名称应标明草的品种，如：苜蓿草颗粒，苜蓿草块。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维"
+  },
+  {
+   "code": "6.1.2",
+   "name": "____干草",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "干草及其加工产品",
+   "description": "收割的牧草经自然干燥或烘干脱水后获得的产品。不得含有有毒有害草。产品名称应标明草的品种，如：苜蓿干草。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维"
+  },
+  {
+   "code": "6.1.3",
+   "name": "____干草粉",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "干草及其加工产品",
+   "description": "收割的牧草经自然干燥或烘干脱水、粉碎后获得的产品。不得含有有毒有害草。产品名称应标明草的品种，如：苜蓿干草粉。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维"
+  },
+  {
+   "code": "6.1.4",
+   "name": "苜蓿渣",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "干草及其加工产品",
+   "description": "苜蓿干草粉用水提取苜蓿多糖等成分后获得的副产品。可经烘干、粉碎或挤压成颗粒状。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维"
+  },
+  {
+   "code": "6.2.1",
+   "name": "____氨化秸秆",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "秸秆及其加工产品",
+   "description": "以收获籽实后的玉米秸、麦秸、稻秸为原料，在密闭的条件下按一定比例喷洒液氨、尿素、碳铵等氨源，在适宜的温度下经一定时间的发酵而获得的产品。产品名称应标明作物的品种，如：玉米氨化秸秆。如原料为多种秸秆，产品名称直接标注氨化秸秆。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维 氨源种类"
+  },
+  {
+   "code": "6.2.2",
+   "name": "____碱化秸秆",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "秸秆及其加工产品",
+   "description": "用烧碱（氢氧化钠）或石灰水（氢氧化钙）浸泡或喷洒玉米秸、麦秸、稻秸等粗饲料而获得的产品。产品名称应标明作物的品种，如：玉米碱化秸秆。如原料为多种秸秆，产品名称直接标注碱化秸秆。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维"
+  },
+  {
+   "code": "6.2.3",
+   "name": "____秸秆",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "秸秆及其加工产品",
+   "description": "成熟农作物干的茎叶（穗）。产品名称应标明作物的品种，如：玉米秸秆。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维"
+  },
+  {
+   "code": "6.2.4",
+   "name": "____秸秆粉",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "秸秆及其加工产品",
+   "description": "成熟农作物的茎叶（穗）经自然或人工干燥、粉碎后获得的产品。产品名称应标明作物的品种，如：玉米秸秆粉。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维"
+  },
+  {
+   "code": "6.2.5",
+   "name": "____秸秆颗粒（块）",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "秸秆及其加工产品",
+   "description": "成熟农作物的茎叶（穗）经自然或人工干燥、粉碎、制粒或压块后获得的产品。产品名称应标明作物的品种，如：玉米秸秆颗粒，玉米秸秆块。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维"
+  },
+  {
+   "code": "6.3.1",
+   "name": "____青绿粗饲料",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "青绿饲料",
+   "description": "指可饲用的植物新鲜茎叶，主要包括天然牧草、栽培牧草、田间杂草、菜叶类、水生植物。产品不得含有有毒有害草。产品名称应标明植物品种，如：苜蓿。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维水分"
+  },
+  {
+   "code": "6.4.1",
+   "name": "____半干青贮饲料",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "青贮饲料",
+   "description": "又称低水分青贮饲料，是将青贮原料经过预干蒸发，使水分降低到40%-50%时进行青贮而获得的产品。有可能使用青贮添加剂。产品名称应标明青贮原料的品种，如：玉米半干青贮饲料。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维 青贮添加剂品种及用量 水分"
+  },
+  {
+   "code": "6.4.2",
+   "name": "____黄贮饲料",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "青贮饲料",
+   "description": "以收获籽实后的农作物秸秆为原料，通过添加微生物菌剂、酸化剂、酶制剂等添加剂，有可能添加适量水，在密闭缺氧的条件下，通过厌氧乳酸菌的发酵作用而获得的一类粗饲料产品。包括压袋装产品。产品名称应标明农作物的品种，如玉米黄贮饲料。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维青贮添加剂品种及用量 水分"
+  },
+  {
+   "code": "6.4.3",
+   "name": "____青贮饲料",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "青贮饲料",
+   "description": "将含水率65%~75%的青绿粗饲料切碎后，在密闭缺氧的条件下，通过厌氧乳酸菌的发酵作用而获得的一类粗饲料产品。产品名称应标明粗饲料的品种，如：玉米青贮饲料。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维 青贮添加剂品种及用量 水分"
+  },
+  {
+   "code": "6.5.1",
+   "name": "灌木或树木茎叶",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "其它粗饲料",
+   "description": "指可饲用的3米以下的多年生木本植物的成熟植株及各种树木新鲜或干燥的茎叶。产品名称应标明灌木或树木的品种，如：大叶杨茎叶。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维水分"
+  },
+  {
+   "code": "6.5.2",
+   "name": "灌木或树木茎叶粉",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "其它粗饲料",
+   "description": "指可饲用的3米以下的多年生木本植物的成熟植株及各种树木的茎叶经干燥、粉碎后获得的产品。产品名称应标明灌木与树木的品种，如：松针粉。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维水分"
+  },
+  {
+   "code": "6.5.3",
+   "name": "灌木与树木茎叶颗粒（块）",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "其它粗饲料",
+   "description": "指可饲用的3米以下的多年生木本植物的成熟植株及各种树木的茎叶经干燥、粉碎、制粒后获得的产品。产品名称应标明灌木与树木的品种，如：大叶杨茎叶颗粒。",
+   "mandatoryLabel": "粗灰分 中性洗涤纤维水分"
+  },
+  {
+   "code": "6.5.4",
+   "name": "构树茎叶e",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "其它粗饲料",
+   "description": "构树（Broussonetia papyrifera (Linn.) L'Hér. ex Vent.）新鲜或干燥茎叶。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维 水分"
+  },
+  {
+   "code": "6.5.5",
+   "name": "辣木茎叶e",
+   "category": "饲草、粗饲料及其加工产品",
+   "subCategory": "其它粗饲料",
+   "description": "辣木（Moringa）可饲用品种的新鲜或干燥茎叶。",
+   "mandatoryLabel": "粗蛋白质 中性洗涤纤维 水分"
+  },
+  {
+   "code": "7.1.1",
+   "name": "甘蔗糖蜜",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "甘蔗加工产品",
+   "description": "甘蔗（Saccharum officinarum L.）经制糖工艺提取糖后获得的粘稠液体或甘蔗糖蜜精炼提取糖后获得的液体副产品。",
+   "mandatoryLabel": "蔗糖 水分"
+  },
+  {
+   "code": "7.1.2",
+   "name": "甘蔗渣",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "甘蔗加工产品",
+   "description": "甘蔗提取糖后剩余的植物部分，主要由纤维组成。",
+   "mandatoryLabel": "粗纤维 水分"
+  },
+  {
+   "code": "7.2.1",
+   "name": "丝兰粉",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "丝兰及其加工产品",
+   "description": "丝兰（Yucca schidigera Roezl.）干燥、粉碎后得到的粉状产品。",
+   "mandatoryLabel": "吸氨量 水分"
+  },
+  {
+   "code": "7.2.2",
+   "name": "丝兰e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "丝兰及其加工产品",
+   "description": "百合科丝兰属丝兰（Yucca schidigera Roezl.）。",
+   "mandatoryLabel": "粗纤维"
+  },
+  {
+   "code": "7.2.3",
+   "name": "丝兰汁e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "丝兰及其加工产品",
+   "description": "丝兰压榨后的汁液，或汁液经浓缩后获得的产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.3.1",
+   "name": "甜叶菊渣",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "甜叶菊及其加工产品",
+   "description": "甜叶菊（Stevia rebaudiana (Bertoni) Hemsl L.）提取甜菊糖后的副产物。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "7.4.1",
+   "name": "万寿菊渣",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "万寿菊及其加工产品",
+   "description": "万寿菊（Tagetes erecta L.）提取叶黄素后的副产品。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "7.4.2",
+   "name": "万寿菊粉e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "万寿菊及其加工产品",
+   "description": "万寿菊干燥、粉碎后得到的粉状产品。",
+   "mandatoryLabel": "粗纤维 粗灰分 叶黄素"
+  },
+  {
+   "code": "7.5.1",
+   "name": "____藻",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "可食用大型海藻（如海带、巨藻、龙须藻）或食品企业加工食用大型海藻剩余的边角料，可经冷藏、冷冻、干燥、粉碎处理。产品名称应标明海藻品种和产品物理性状，如：海带粉。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "7.5.2",
+   "name": "____藻渣",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "可食用大型海藻经提取活性成分后的副产品，产品名称应标明使用原料的来源，如：海带渣。",
+   "mandatoryLabel": "总糖 粗灰分 水分"
+  },
+  {
+   "code": "7.5.3",
+   "name": "裂壶藻粉",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以裂壶藻（Schizochytrium sp.）种为原料，通过发酵、分离、干燥等工艺生产的富含DHA的藻粉。",
+   "mandatoryLabel": "粗脂肪 DHA"
+  },
+  {
+   "code": "7.5.4",
+   "name": "螺旋藻粉",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "螺旋藻（Spirulina platensis）干燥、粉碎后的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "7.5.5",
+   "name": "拟微绿球藻粉",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以拟微绿球藻（Nannochloropsis sp.）种为原料，通过培养、浓缩、干燥等工艺生产的富含EPA的藻粉。",
+   "mandatoryLabel": "粗脂肪 EPA"
+  },
+  {
+   "code": "7.5.6",
+   "name": "微藻粕",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "裂壶藻粉、拟微绿球藻粉或小球藻粉浸提脂肪后，经干燥得到的副产品。",
+   "mandatoryLabel": "粗蛋白 粗灰分"
+  },
+  {
+   "code": "7.5.7",
+   "name": "小球藻粉",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以小球藻（Chlorella sp.）种为原料，通过培养、浓缩、干燥等工艺生产的富含EPA和DHA的藻粉。",
+   "mandatoryLabel": "粗脂肪 EPA DHA"
+  },
+  {
+   "code": "7.5.8",
+   "name": "裸藻［绿虫藻］e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "裸藻（Euglena）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.5.9",
+   "name": "雨生红球藻粉e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以雨生红球藻（Haematococcus Pluvialis）种为原料，通过培养、浓缩、干燥等工艺生产的含虾青素的藻粉。",
+   "mandatoryLabel": "粗脂肪 虾青素"
+  },
+  {
+   "code": "7.5.10",
+   "name": "____藻油",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "本目录所列的藻类经压榨或浸提制取的油。产品名称应标明原料来源，如裂壶藻油。",
+   "mandatoryLabel": "粗脂肪 酸价 过氧化值"
+  },
+  {
+   "code": "7.5.11",
+   "name": "等鞭金藻粉j",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以天然等鞭金藻（Isochrysis sp.）种为原料，以尿素为氮源，在光生物反应器中培养，浓缩获得藻膏，经干燥、粉碎形成的藻粉。产品中真蛋白含量不低于35%，粗灰分不高于15%，尿素残留不高于0.5%，微囊藻毒素不得检出。该产品仅限于水产饲料使用。",
+   "mandatoryLabel": "真蛋白 粗脂肪 粗灰分 水分 尿素"
+  },
+  {
+   "code": "7.5.12",
+   "name": "褐指藻粉j",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以天然褐指藻（Phaeodactylum sp.）种为原料，以尿素为氮源，经藻种在光生物反应器培养，浓缩获得藻膏，经干燥、粉碎形成的藻粉。产品中真蛋白含量不低于30%，粗灰分不高于15%，尿素残留不高于0.5%，微囊藻毒素不得检出。该产品仅限于水产饲料使用。",
+   "mandatoryLabel": "真蛋白 粗脂肪 粗灰分 水分 尿素"
+  },
+  {
+   "code": "7.5.13",
+   "name": "四爿藻粉j",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "藻类及其加工产品",
+   "description": "以天然四爿藻（Tetraselmis sp.）为原料，以尿素为氮源，在光生物反应器中培养，浓缩获得藻膏，经干燥、粉碎形成的藻粉。产品中真蛋白含量不低于30%，粗灰分不高于15%，尿素残留不高于0.5%，微囊藻毒素不得检出。该产品仅限于水产饲料使用。",
+   "mandatoryLabel": "真蛋白 粗脂肪 粗灰分 水分 尿素"
+  },
+  {
+   "code": "7.6.1",
+   "name": "八角茴香",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "木兰科八角属植物八角(Illicium verum Hook.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.2",
+   "name": "白扁豆",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科扁豆属（Lablab Adans.）植物的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.3",
+   "name": "百合",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科百合属植物卷丹（Lilium lancifolium Thunb.）、百合（Lilium brownii F.E. Brown var. viridulum Baker）或细叶百合（Lilium pumilum DC.）的干燥肉质鳞叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.4",
+   "name": "白芍",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "毛茛科芍药亚科芍药属植物芍药（Paeonia lactiflora Pall.）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.5",
+   "name": "白术",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科苍术属植物白术（Atrctylodes macrocephala Koidz.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.6",
+   "name": "柏子仁",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "柏科侧柏属植物侧柏（Platycladus orientalis (L.) Franco）的干燥成熟种仁。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.7",
+   "name": "薄荷",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科薄荷属植物薄荷（Mentha haplocalyx Briq.）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.8",
+   "name": "补骨脂",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科补骨脂属植物补骨脂（Psoralea corylifolia L.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.9",
+   "name": "苍术",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科苍术属植物苍术（Atractylodes lancea (Thunb.) DC.）或北苍术（Atractylodes chinensis (DC.) Koidz）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.10",
+   "name": "侧柏叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "柏科侧柏属植物侧柏（Platycladus orientalis (L.) Franco）的干燥枝梢和叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.11",
+   "name": "车前草",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "车前科车前属植物车前（Plantago asiatica L.）或平车前（Plantago depressa Willd.）的干燥全草。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.12",
+   "name": "车前子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "车前科车前属植物车前（Plantago asiatica L.）或平车前（Plantago depressa Willd.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.13",
+   "name": "赤芍",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "毛茛科芍药亚科芍药属植物芍药（Paeonia lactiflora Pall.）或川赤芍（Paeonia veitchii Lynch）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.14",
+   "name": "川芎",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "伞形科藁本属植物川芎（Ligusticum chuanxiong Hort.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.15",
+   "name": "刺五加",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "五加科五加属植物刺五加（Acanthopanax senticosus (Rupr. et Maxim.) Harms）的干燥根和根茎或茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.16",
+   "name": "大蓟",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科蓟属植物蓟（Cirsium japonicum Fisch. ex DC.）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.17",
+   "name": "淡豆豉",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科大豆属植物大豆（Glycine max (L.) Merr.）的成熟种子的发酵加工品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.18",
+   "name": "淡竹叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "禾本科淡竹叶属植物淡竹叶（Lophatherum gracile Brongn.）的干燥茎叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.19",
+   "name": "当归",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "伞形科当归属植物当归（Angelica sinensis (Oliv.) Diels）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.20",
+   "name": "党参",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桔梗科党参属植物党参（Codonopsis pilosula (Franch.) Nannf.）、素花党参（Codonopsis pilosula Nannf. var. modesta (Nannf.) L. T. Shen）或川党参（Codonopsis tangshen Oliv.）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.21",
+   "name": "地骨皮",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "茄科枸杞属植物枸杞（Lycium chinense Mill.）或宁夏枸杞（Lycium barbarum L.）的干燥根皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.22",
+   "name": "丁香",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桃金娘科蒲桃属植物丁香（Syzygium aromaticum (L.) Merr. et Perry）的干燥花蕾。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.23",
+   "name": "杜仲",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "杜仲科杜仲属植物杜仲（Eucommia ulmoides Oliv.）的干燥树皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.24",
+   "name": "杜仲叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "杜仲科杜仲属植物杜仲（Eucommia ulmoides Oliv.）的干燥叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.25",
+   "name": "榧子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "红豆杉科榧树属植物榧树（Torreya grandis Fort.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.26",
+   "name": "佛手",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "芸香科柑橘属植物佛手（Citrus medica L. var. sarcodactylis (Noot.) Swingle）的干燥果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.27",
+   "name": "茯苓",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "多孔菌科茯苓属真菌茯苓（Poria cocos (Schw.) Wolf）的干燥菌核。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.28",
+   "name": "甘草",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科甘草属植物甘草（Glycyrrhiza uralensis Fisch.）、胀果甘草（Glycyrrhiza inflata Batal.）或洋甘草（Glycyrrhiza glabra L.）的干燥根和根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.29",
+   "name": "干姜",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "姜科姜属植物姜（Zingiber officinale Rosc.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.30",
+   "name": "高良姜",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "姜科山姜属植物高良姜（Alpinia officinarum Hance）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.31",
+   "name": "葛根",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科葛属植物葛（Pueraria lobata (Willd.) Ohwi）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.32",
+   "name": "枸杞子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "茄科枸杞属植物枸杞（Lycium chinense Mill.）或宁夏枸杞（Lycium barbarum L.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.33",
+   "name": "骨碎补",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "骨碎补科骨碎补属植物骨碎补（Davallia mariesii Moore ex Bak.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.34",
+   "name": "荷叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "睡莲科莲亚科莲属植物莲（Nelumbo nucifera Gaertn.）的干燥叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.35",
+   "name": "诃子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "使君子科诃子属植物诃子（Terminalia chebula Retz.）或微毛诃子（Terminalia chebula Retz. var. tomentella (Kurz) C. B. Clarke）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.36",
+   "name": "黑芝麻",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "胡麻科胡麻属植物芝麻（Sesamum indicum L.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.37",
+   "name": "红景天",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "景天科红景天属植物大花红景天（Rhodiola crenulata (Hook. F. et Thoms.) H. Ohba）的干燥根和根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.38",
+   "name": "厚朴",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "木兰科木兰属植物厚朴（Magnolia officinalis Rehd. et Wils.）或凹叶厚朴（Magnolia officinalis subsp. biloba (Rehd. et Wils.) Cheng.）的干燥干皮、根皮和枝皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.39",
+   "name": "厚朴花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "木兰科木兰属植物厚朴（Magnolia officinalis Rehd. et Wils.）或凹叶厚朴（Magnolia officinalis subsp. biloba (Rehd. et Wils.) Cheng.）的干燥花蕾。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.40",
+   "name": "胡芦巴",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科植物胡芦巴（Trigonella foenum-graecum L.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.41",
+   "name": "花椒",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "芸香科花椒属植物青花椒（Zanthoxylum schinifolium Sieb. et Zucc.）或花椒（Zanthoxylum bungeanum Maxim）的干燥成熟果皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.42",
+   "name": "槐角［槐实］",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科槐属植物槐（Sophora japonica L.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.43",
+   "name": "黄精",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科黄精属植物滇黄精（Polygonatum kingianum Coll. et Hemsl.）、黄精（Polygonatum sibiricum Delar.）或多花黄精（Polygonatum cyrtonema Hua）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.44",
+   "name": "黄芪",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科植物蒙古黄芪（Astragalus membranaceus (Fisch.) Bge. var. Mongholicus (Bge.) Hsiao）或膜荚黄芪（Astragalus membranaceus (Fisch.) Bge.）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.45",
+   "name": "藿香",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科藿香属植物藿香（Agastache rugosa (Fisch. et Mey.) O. Ktze）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.46",
+   "name": "积雪草",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "伞形科积雪草属植物积雪草（Centella asiatica (L.) Urb.）的干燥全草。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.47",
+   "name": "姜黄",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "姜科姜黄属植物姜黄（Curcuma longa L.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.48",
+   "name": "绞股蓝",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "葫芦科绞股蓝属（Gynostemma Bl.）植物。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.49",
+   "name": "桔梗",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桔梗科桔梗属植物桔梗（Platycodon grandiflorus (Jacq.) A. DC.）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.50",
+   "name": "金荞麦",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蓼科荞麦属植物金荞麦（Fagopyrum dibotrys (D. Don) Hara）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.51",
+   "name": "金银花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "忍冬科忍冬属植物忍冬（Lonicera japonica Thunb.）的干燥花蕾或带初开的花。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.52",
+   "name": "金樱子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蔷薇科蔷薇属植物金樱子（Rosa laevigata Michx.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.53",
+   "name": "韭菜子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科葱属植物韭菜（Allium tuberosum Rottl. ex Spreng.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.54",
+   "name": "菊花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科菊属植物菊花（Dendranthema morifolium (Ramat.) Tzvel.）的干燥头状花序。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.55",
+   "name": "橘皮",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "芸香科柑橘属植物橘（Citrus Reticulata Blanco）及其栽培变种的成熟果皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.56",
+   "name": "决明子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科决明属植物决明（Cassia tora L.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.57",
+   "name": "莱菔子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "十字花科萝卜属植物萝卜（Raphanus sativus L.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.58",
+   "name": "莲子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "睡莲科莲亚科莲属植物莲（Nelumbo nucifera Gaertn.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.59",
+   "name": "芦荟",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科芦荟属植物库拉索芦荟（Aloe barbadensis Miller）叶。也称“老芦荟”。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.60",
+   "name": "罗汉果",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "葫芦科罗汉果属植物罗汉果（Siraitia grosvenorii (Swingle) C. Jeffrey ex Lu et Z.Y. Zhang）的干燥果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.61",
+   "name": "马齿苋",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "马齿苋科马齿苋属植物马齿苋（Portulaca oleracea L.）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.62",
+   "name": "麦冬［麦门冬］",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科沿阶草属植物麦冬（Ophiopogon japonicus (L.f) Ker-Gawl.）的干燥块根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.63",
+   "name": "玫瑰花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蔷薇科蔷薇属植物玫瑰（Rosa rugosa Thunb.）的干燥花蕾。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.64",
+   "name": "木瓜",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蔷薇科木瓜属植物皱皮木瓜（Chaenomeles speciosa (Sweet) Nakai.）的干燥近成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.65",
+   "name": "木香",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科川木香属植物川木香（Dolomiaea souliei (Franch.) Shih）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.66",
+   "name": "牛蒡子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科牛蒡属植物牛蒡（Arctium lappa L.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.67",
+   "name": "女贞子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "木犀科女贞属植物女贞（Ligustrum lucidum Ait.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.68",
+   "name": "蒲公英",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科植物蒲公英（Taraxacum mongolicum Hand. Mazz.）、碱地蒲公英（Taraxacum borealisinense Kitam.） 或同属数种植物的干燥全草。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.69",
+   "name": "蒲黄",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "香蒲科植物水烛香蒲（Typha angustifolia L.）、东方香蒲（Typha orientalis Presl）或同属植物的干燥花粉。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.70",
+   "name": "茜草",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "茜草科茜草属植物茜草（Rubia cordifolia L.）的干燥根及根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.71",
+   "name": "青皮",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "芸香科柑橘属植物橘（Citrus reticulata Blanco）及其栽培变种的干燥幼果或未成熟果实的果皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.72",
+   "name": "人参",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "五加科人参属植物人参（Panax ginseng C. A. Mey.）的干燥根及根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.73",
+   "name": "人参叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "五加科人参属植物人参（Panax ginseng C. A. Mey.）的干燥叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.74",
+   "name": "肉豆蔻",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "肉豆蔻科肉豆蔻属植物肉豆蔻（Myristica fragrans Houtt.）的干燥种仁。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.75",
+   "name": "桑白皮",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桑科桑属植物桑（Morus alba L.）的干燥根皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.76",
+   "name": "桑椹",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桑科桑属植物桑（Morus alba L.）的干燥果穗。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.77",
+   "name": "桑叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桑科桑属植物桑（Morus alba L.）的干燥叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.78",
+   "name": "桑枝",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "桑科桑属植物桑（Morus alba L.）的干燥嫩枝。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.79",
+   "name": "沙棘",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "胡颓子科沙棘属植物沙棘（Hippophae rhamnoides L.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.80",
+   "name": "山药",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "薯蓣科薯蓣属植物薯蓣（Dioscorea opposita Thunb.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.81",
+   "name": "山楂",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蔷薇科山楂属植物山里红（Crataegus pinnatifida Bge. var. major N. E. Br.）或山楂（Crataegus pinnatifida Bge.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.82",
+   "name": "山茱萸",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "山茱萸科山茱萸属植物山茱萸（Cornus officinalis Sieb. et Zucc.）的干燥成熟果肉。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.83",
+   "name": "生姜",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "姜科姜属植物姜（Zingiber officinale Rosc.）的新鲜根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.84",
+   "name": "升麻",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "毛茛科升麻属植物大三叶升麻（Cimicifuga heracleifolia Kom.）、兴安升麻（Cimicifuga dahurica (Turcz.) Maxim.）或升麻（Cimicifuga foetida L.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.85",
+   "name": "首乌藤",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蓼科何首乌属植物何首乌（Fallopia multiflora (Thunb.) Harald.）的干燥藤茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.86",
+   "name": "酸角",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科酸豆属植物酸豆（Tamarindus indica L.）的果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.87",
+   "name": "酸枣仁",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "鼠李科枣属植物酸枣（Ziziphus jujuba Mill. var. spinosa (Bunge) Hu ex H. F. Chow）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.88",
+   "name": "天冬［天门冬］",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科天门冬属植物天门冬（Asparagus cochinchinensis (Lour.) Merr.）的干燥块根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.89",
+   "name": "土茯苓",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科菝葜属植物土茯苓（Smilax glabra Roxb.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.90",
+   "name": "菟丝子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "旋花科菟丝子属植物南方菟丝子（Cuscuta australis R. Br.）或菟丝子（Cuscuta chinensis Lam.）的干燥成熟种子。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.91",
+   "name": "五加皮",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "五加科五加属植物五加（Acanthopanax gracilistylus W.W. Smith）的干燥根皮。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.92",
+   "name": "乌梅",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "蔷薇科杏属植物梅（Armeniaca mume Sieb.）的干燥近成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.93",
+   "name": "五味子",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "木兰科五味子属植物五味子（Schisandra chinensis (Turcz.) Baill.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.94",
+   "name": "鲜白茅根",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "禾本科白茅属植物白茅（Imperata cylindrica (L.)Beauv.）的新鲜根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.95",
+   "name": "香附",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "莎草科莎草属植物香附子（Cyperus rotundus L.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.96",
+   "name": "香薷",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科石荠苎属植物石香薷（Mosla chinensis Maxim.）或江香薷（Mosla chinensis 'Jiangxiangru'）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.97",
+   "name": "小蓟",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科蓟属植物刺儿菜（Cirsium setosum (willd.) MB.）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.98",
+   "name": "薤白",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合葱属植物薤白（Allium macrostemon Bunge.）或藠头（Allium chinense G. Don）的干燥鳞茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.99",
+   "name": "洋槐花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "豆科刺槐属植物刺槐（Robinia pseudoacacia L.）的花，可经干燥、粉碎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.100",
+   "name": "杨树花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "杨柳科杨属（Populus L.）植物的花，可经干燥、粉碎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.101",
+   "name": "野菊花",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "菊科菊属植物野菊（Dendranthema indicum L.）的干燥头状花序。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.102",
+   "name": "益母草",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科益母草属植物益母草（Leonurus artemisia (Lour.) S. Y. Hu）的新鲜或干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.103",
+   "name": "薏苡仁",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "禾本科薏苡属植物薏苡（Coix lacryma-jobi L.）的干燥成熟种仁。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.104",
+   "name": "益智［益智仁］",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "姜科山姜属植物益智（Alpinia oxyphylla Miq.）的干燥成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.105",
+   "name": "银杏叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "银杏科银杏属植物银杏（Ginkgo biloba L.）的干燥叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.106",
+   "name": "鱼腥草",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "三白草科蕺菜属植物蕺菜（Houttuynia cordata Thunb.）的新鲜全草或干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.107",
+   "name": "玉竹",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科黄精属植物玉竹（Polygonatum odoratum (Mill.) Druce）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.108",
+   "name": "远志",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "远志科远志属植物远志（Polygala tenuifolia Willd.）或西伯利亚远志（Polygala sibirica L.）的干燥根。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.109",
+   "name": "越橘",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "杜鹃花科越橘属（Vaccinium L.）植物的果实或叶。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.110",
+   "name": "泽兰",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科地笋属植物硬毛地笋（Lycopus lucidus Turcz. var. hirtus Regel）的干燥地上部分。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.111",
+   "name": "泽泻",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "泽泻科泽泻属植物东方泽泻（Alisma orinentale (Samuel.) Juz.）的干燥块茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.112",
+   "name": "制何首乌",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "何首乌（Fallopia multiflora (Thunb.) Harald.）的炮制加工品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.113",
+   "name": "枳壳",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "芸香科柑橘属植物酸橙（Citrus aurantium L.）及其栽培变种的干燥未成熟果实。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.114",
+   "name": "知母",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "百合科知母属植物知母（Anemarrhena asphodeloides Bge.）的干燥根茎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.115",
+   "name": "紫苏叶",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科紫苏属植物紫苏（Perilla frutescens (L.) Britt.）的干燥叶（或带嫩枝）。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.116",
+   "name": "绿茶e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "以茶树的新叶或芽为原料，未经发酵，经杀青、整形、烘干等工序制成的产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "7.6.117",
+   "name": "迷迭香e",
+   "category": "其它植物、藻类及其加工产品",
+   "subCategory": "其他可饲用天然植物（仅指所称植物或植物的特定部位经干燥或粗提或干燥、粉碎获得的产品）a",
+   "description": "唇形科迷迭香属植物迷迭香（Rosmarinus officinalis）的干燥茎叶或花。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "8.1.1",
+   "name": "奶酪［干酪］",
+   "category": "乳制品及其副产品",
+   "subCategory": "干酪及干酪制品",
+   "description": "可食用的奶酪，根据使用要求可对其进行脱水干燥、碾磨粉碎等加工处理。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 脂肪 水分"
+  },
+  {
+   "code": "8.2.1",
+   "name": "酪蛋白［干酪素］",
+   "category": "乳制品及其副产品",
+   "subCategory": "酪蛋白及其加工制品",
+   "description": "以脱脂乳为原料，用酸、盐、凝乳酶等使乳中的酪蛋白凝集，再经脱水、干燥、粉碎获得的产品。该产品蛋白质含量不低于80%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 赖氨酸"
+  },
+  {
+   "code": "8.2.2",
+   "name": "水解酪蛋白",
+   "category": "乳制品及其副产品",
+   "subCategory": "酪蛋白及其加工制品",
+   "description": "将酪蛋白经酶水解、干燥获得的产品。该产品蛋白质含量不低于74%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 赖氨酸"
+  },
+  {
+   "code": "8.2.3",
+   "name": "酪蛋白酸钙j",
+   "category": "乳制品及其副产品",
+   "subCategory": "酪蛋白及其加工制品",
+   "description": "以脱脂乳为原料，制成酪蛋白后与氢氧化钙或碳酸钙等中和，再经干燥获得的产品。产品中蛋白质含量不低于88%，钙含量不低于1.15%。",
+   "mandatoryLabel": "蛋白质 钙"
+  },
+  {
+   "code": "8.3.1",
+   "name": "奶油［黄油］",
+   "category": "乳制品及其副产品",
+   "subCategory": "奶油及其加工制品",
+   "description": "以乳和（或）稀奶油（经发酵或不发酵）为原料，添加或不添加其它原料、食品添加剂和营养强化剂，经加工制成的脂肪含量不低于80%的产品。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "脂肪 酸价 过氧化值 水分"
+  },
+  {
+   "code": "8.3.2",
+   "name": "稀奶油",
+   "category": "乳制品及其副产品",
+   "subCategory": "奶油及其加工制品",
+   "description": "从乳中分离出的含脂肪的部分，添加或不添加其它原料、食品添加剂和营养强化剂，经加工制成的脂肪含量在10%～80%的产品。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "脂肪 酸价 过氧化值 水分"
+  },
+  {
+   "code": "8.4.1",
+   "name": "____乳",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳及乳粉",
+   "description": "生牛乳或生羊乳，包括全脂乳、脱脂乳、部分脱脂乳。产品名称应标明具体的动物种类和产品类型，如：全脂牛乳，脱脂羊乳。产品须由有资质的乳制品生产企业提供。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "蛋白质 脂肪 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "8.4.2",
+   "name": "初乳（粉）",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳及乳粉",
+   "description": "产奶动物（牛或羊）在分娩后前5天内分泌的乳汁或将其加工制成的粉状产品，产品名称应标明具体的动物种类，如：牛初乳，羊初乳粉。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 脂肪 IgGc"
+  },
+  {
+   "code": "8.4.3",
+   "name": "____乳粉［奶粉］",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳及乳粉",
+   "description": "以生牛乳或羊乳为原料，经加工制成的粉状产品，包括全脂、脱脂、部分脱脂乳粉和调制乳粉。产品名称应标明具体的动物品种来源和产品类型，如：全脂牛乳粉，脱脂羊乳粉。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 脂肪"
+  },
+  {
+   "code": "8.5.1",
+   "name": "乳清粉",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳清及其加工制品",
+   "description": "以乳清为原料经干燥制成的粉末状产品。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 粗灰分 乳糖"
+  },
+  {
+   "code": "8.5.2",
+   "name": "分离乳清蛋白",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳清及其加工制品",
+   "description": "乳清蛋白粉的一种，蛋白质含量不低于90%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 粗灰分"
+  },
+  {
+   "code": "8.5.3",
+   "name": "浓缩乳清蛋白",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳清及其加工制品",
+   "description": "乳清蛋白粉的一种，蛋白质含量不低于34%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 粗灰分 乳糖"
+  },
+  {
+   "code": "8.5.4",
+   "name": "乳钙［乳矿物盐］",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳清及其加工制品",
+   "description": "从乳清液中分离出的高钙含量的产品。钙含量不低于22%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "钙 磷 粗灰分"
+  },
+  {
+   "code": "8.5.5",
+   "name": "乳清蛋白粉",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳清及其加工制品",
+   "description": "以乳清为原料，经分离、浓缩、干燥等工艺制成的蛋白质含量不低于25%的粉末状产品。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 粗灰分 乳糖"
+  },
+  {
+   "code": "8.5.6",
+   "name": "脱盐乳清粉",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳清及其加工制品",
+   "description": "以乳清为原料，经脱盐、干燥制成的粉末状产品，乳糖含量不低于61%，粗灰分不高于3%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "蛋白质 粗灰分 乳糖"
+  },
+  {
+   "code": "8.6.1",
+   "name": "乳糖",
+   "category": "乳制品及其副产品",
+   "subCategory": "乳糖及其加工制品",
+   "description": "将乳清蒸发、结晶、干燥后获得的产品，乳糖含量不低于98%。产品须由有资质的乳制品生产企业提供。",
+   "mandatoryLabel": "乳糖"
+  },
+  {
+   "code": "9.1.1",
+   "name": "___油",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "动物油脂类产品",
+   "description": "分割可食用动物组织过程中获得的含脂肪部分，经熬油提炼获得的油脂。原料应来自单一动物种类，新鲜无变质或经冷藏、冷冻保鲜处理；不得使用发生疫病和含禁用物质的动物组织。本产品不得加入游离脂肪酸和其它非食用动物脂肪。产品中总脂肪酸不低于90%，不皂化物不高于2.5%，不溶杂质不高于1%。名称应标明具体的动物种类，如：猪油。",
+   "mandatoryLabel": "粗脂肪 不皂化物 酸价 丙二醛"
+  },
+  {
+   "code": "9.1.2",
+   "name": "___油渣（饼）",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "动物油脂类产品",
+   "description": "屠宰、分割可食用动物组织过程中获得的含脂肪部分，经提炼油脂后获得的固体残渣。原料应来自单一动物种类，新鲜无变质或经冷藏、冷冻保鲜处理；不得使用发生疫病和含禁用物质的动物组织。产品名称应标明具体的动物种类，如：猪油渣。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "9.2.1",
+   "name": "蚕蛹（粉）",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "蚕蛹经干燥获得的产品。可将其粉碎。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 酸价"
+  },
+  {
+   "code": "9.2.2",
+   "name": "蚕蛹粕［脱脂蚕蛹（粉）］",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "蚕蛹（粉）脱脂处理后获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 酸价"
+  },
+  {
+   "code": "9.2.3",
+   "name": "蜂花粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "蜜蜂采集被子植物雄蕊花药或裸子植物小孢子囊内的花粉细胞，形成的团粒状物。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖"
+  },
+  {
+   "code": "9.2.4",
+   "name": "蜂胶",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "蜜蜂科昆虫意大利蜂（Apis mellifera L.）等的干燥分泌物，可进行适当加工。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖"
+  },
+  {
+   "code": "9.2.5",
+   "name": "蜂蜡",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "蜜蜂科昆虫中华蜜蜂（Apis cerana Fabricius）或意大利蜂分泌的蜡，可进行适当加工。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "粗脂肪"
+  },
+  {
+   "code": "9.2.6",
+   "name": "蜂蜜",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "蜜蜂科昆虫中华蜜蜂或意大利蜂所酿的蜜，可进行适当加工。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖"
+  },
+  {
+   "code": "9.2.7",
+   "name": "___虫（粉）",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "昆虫经干燥获得的产品，可对其进行粉碎。此类昆虫在不影响公共健康和动物健康的前提下方可进行上述加工。产品名称应标明具体动物种类，如：黄粉虫（粉）。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 酸价"
+  },
+  {
+   "code": "9.2.8",
+   "name": "脱脂___虫粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "昆虫加工产品",
+   "description": "对昆虫（粉）采用超临界萃取等方法进行脱脂后获得的产品。此类昆虫在不影响人类和动物健康的前提下方可进行上述加工。产品名称应标明具体动物种类，如：脱脂黄粉虫粉。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "9.3.1",
+   "name": "肠膜蛋白粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "食用动物的小肠粘膜提取肝素钠后的剩余部分，经除臭、脱盐、水解、干燥、粉碎获得的产品。不得使用发生疫病和含禁用物质的动物组织。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 盐分"
+  },
+  {
+   "code": "9.3.2",
+   "name": "动物内脏",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "新鲜可食用动物的内脏。可以鲜用或对其进行冷藏、冷冻、蒸煮、干燥和烟熏处理。原料应来源于同一动物种类，不得使用发生疫病和含禁用物质的动物组织。产品名称需标注保鲜（加工）方法、具体动物种类和动物内脏名称，可在产品名称中标注物理形态。如：鲜猪肝、冻猪肺、熟猪心、烟熏猪大肠、脱水猪肝粒。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "粗蛋白质 水分 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.3.3",
+   "name": "动物内脏粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "新鲜或经冷藏、冷冻保鲜的食用动物内脏经高温蒸煮、干燥、粉碎获得的产品。原料应来源于同一动物种类，除不可避免的混杂外，不得含有蹄、角、牙齿、毛发、羽毛及消化道内容物，不得使用发生疫病和含禁用物质的动物组织。产品名称需标明具体动物种类，若能确定原料来源于何种动物内脏，产品名称可标明动物内脏名称，如：鸡内脏粉、猪内脏粉、猪肝脏粉。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.3.4",
+   "name": "动物器官",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "新鲜可食用动物的器官，可以鲜用或对其进行冷藏、冷冻、蒸煮、干燥和烟熏处理。原料应来源于同一动物种类，不得使用发生疫病和含禁用物质的动物组织。产品名称需标明具体动物种类，如：羊蹄、猪耳。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.3.5",
+   "name": "动物水解物",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "洁净的可食用动物的肉、内脏和器官经研磨粉碎、水解获得的产品，可以是液态、半固态或经加工制成的固态粉末。原料应来源于同一动物种类，新鲜无变质或经冷藏、冷冻保鲜处理，除不可避免的混杂外，不得含有蹄、角、牙齿、毛发、羽毛及消化道内容物。不得使用发生疫病和含禁用物质的动物组织。产品名称需标明具体动物种类和物理形态，如：猪水解液、牛水解膏、鸡水解粉。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "粗蛋白质 pH值 水分 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.3.6",
+   "name": "膨化羽毛粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "家禽羽毛经膨化、粉碎后获得的产品。原料不得使用发生疫病和变质家禽羽毛。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.3.7",
+   "name": "____皮",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "新鲜可食用动物的皮，可以鲜用或对其进行冷藏、冷冻、蒸煮、干燥和烟熏处理。原料应来源于同一动物种类，不得使用发生疫病和变质的动物皮，不得使用皮革及鞣革副产品。产品名称需标注具体动物种类，如：水牛皮。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "粗蛋白质 水分 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.3.8",
+   "name": "禽爪皮粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "加工禽爪过程中脱下的类角质外皮经干燥、粉碎获得的产品。原料应来源于同一动物种类，产品名称应标明具体动物种类，如：鸡爪皮粉。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分"
+  },
+  {
+   "code": "9.3.9",
+   "name": "水解蹄角粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "动物的蹄、角经水解、干燥、粉碎获得的产品。若能确定原料来源为某一特定动物种类和部位，则产品名称应标明该动物种类和部位，如：水解猪蹄粉。",
+   "mandatoryLabel": "粗蛋白质 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.3.10",
+   "name": "水解畜毛粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "未经提取氨基酸的清洁未变质的家畜毛发经水解、干燥、粉碎获得的产品。本产品胃蛋白酶消化率不低于75%。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.3.11",
+   "name": "水解羽毛粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "内脏、蹄、角、爪、羽毛及其加工产品",
+   "description": "家禽羽毛经水解后，干燥、粉碎获得的产品。原料不得使用发生疫病和变质的家禽羽毛。本产品胃蛋白酶消化率不低于75%。产品名称应注明水解的方法（酶解、酸解、碱解、高温高压水解），如：酶解羽毛粉。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.4.1",
+   "name": "蛋粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "禽蛋及其加工产品",
+   "description": "食用鲜蛋的蛋液，经巴氏消毒、干燥、脱水获得的产品。产品不含蛋壳或其它非蛋原料。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "9.4.2",
+   "name": "蛋黄粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "禽蛋及其加工产品",
+   "description": "食用鲜蛋的蛋黄，经巴氏消毒、干燥、脱水获得的产品。产品不含蛋壳或其它非蛋原料。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪"
+  },
+  {
+   "code": "9.4.3",
+   "name": "蛋壳粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "禽蛋及其加工产品",
+   "description": "禽蛋壳经灭菌、干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗灰分 钙"
+  },
+  {
+   "code": "9.4.4",
+   "name": "蛋清粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "禽蛋及其加工产品",
+   "description": "食用鲜蛋的蛋清，经巴氏消毒、干燥、脱水获得的产品。产品不含蛋壳或其它非蛋原料。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "9.4.5",
+   "name": "___蛋j",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "禽蛋及其加工产品",
+   "description": "未经过加工或仅经冷藏、涂膜等保鲜技术处理的可食用禽蛋，有壳或去壳。产品名称需标明具体动物种类，如鸡蛋、鸭蛋、鹌鹑蛋。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分（适用于有壳蛋）"
+  },
+  {
+   "code": "9.5.1",
+   "name": "蚯蚓粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "蚯蚓及其加工产品",
+   "description": "蚯蚓经干燥、粉碎的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "9.6.1",
+   "name": "___骨",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "新鲜的食用动物的骨骼。可以鲜用或对其进行冷藏、冷冻、蒸煮、干燥处理。原料应来源于同一动物种类，不得使用发生疫病和变质的动物骨骼。产品名称需标明保鲜（加工）方法和具体动物种类。如：鲜牛骨、冻猪软骨。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "钙 灰分 水分 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.6.2",
+   "name": "___骨粉（粒）",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "未变质的食用动物骨骼经灭菌、干燥、粉碎获得的产品。原料应来源于同一动物种类，不得使用发生疫病和变质的动物骨骼。产品名称需标明具体动物种类，如：猪骨粉、牛骨粒。",
+   "mandatoryLabel": "粗灰分 钙 总磷"
+  },
+  {
+   "code": "9.6.3",
+   "name": "骨胶",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "可食用动物骨骼经轧碎、脱油、水解获得的蛋白类产品。原料不得使用发生疫病和变质的动物骨骼。",
+   "mandatoryLabel": "凝胶强度 勃氏粘度 粗灰分"
+  },
+  {
+   "code": "9.6.4",
+   "name": "___骨髓",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "新鲜可食用动物骨腔内的软组织。可以鲜用或对其进行冷藏、冷冻、蒸煮、干燥处理。原料应来源于同一动物种类，不得使用发生疫病和变质的动物骨骼。产品名称需标明保鲜（加工）方法和动物种类。如：鲜牛骨髓。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 水分 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.6.5",
+   "name": "明胶",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "以来源于食用动物的皮、骨、韧带、肌腱中的胶原为原料，经水解获得的可溶性蛋白类产品。原料不得使用发生疫病和变质的动物组织，不得使用皮革及鞣革副产品。产品须由有资质的食品或药品生产企业提供。",
+   "mandatoryLabel": "凝胶强度 勃氏粘度 粗灰分"
+  },
+  {
+   "code": "9.6.6",
+   "name": "___肉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "食用动物的鲜肉或带骨肉、带皮肉。可以鲜用或对其进行冷藏、冷冻、蒸煮、干燥或烟熏处理。原料应来源于同一动物种类，不得使用发生疫病和含禁用物质的动物组织。产品名称需标明保鲜（加工）方法和动物种类，如：鲜羊肉、冻猪肉、熟鸡肉、干牛肉、烟熏鸡肉。该产品仅限于宠物饲料（食品）使用。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 水分 本产品仅限于宠物饲料（食品）使用"
+  },
+  {
+   "code": "9.6.7",
+   "name": "___肉粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "以分割可食用鲜肉过程中余下的部分为原料，经高温蒸煮、灭菌、脱脂、干燥、粉碎获得的产品。原料应来源于同一动物种类，除不可避免的混杂，不得添加蹄、角、畜毛、羽毛、皮革及消化道内容物；不得额外添加骨；不得使用发生疫病和含禁用物质的动物组织。产品中总磷含量不高于3.5%，钙含量不超过磷含量的2.2倍，胃蛋白酶消化率不低于85%。产品名称应标明具体动物种类，如：鸡肉粉。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 总磷 胃蛋白酶消化率 酸价"
+  },
+  {
+   "code": "9.6.8",
+   "name": "___肉骨粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "以分割可食用鲜肉过程中余下的部分为原料，经高温蒸煮、灭菌、脱脂、干燥、粉碎获得的产品。原料应来源于同一动物种类，除不可避免的混杂，不得添加蹄、角、畜毛、羽毛、皮革及消化道内容物。不得使用发生疫病和含禁用物质的动物组织。产品中总磷含量不低于3.5%，钙含量不超过磷含量的2.2倍，胃蛋白酶消化率不低于85%。产品名称应标明具体动物种类，如：鸡肉骨粉。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 总磷 胃蛋白酶消化率 酸价"
+  },
+  {
+   "code": "9.6.9",
+   "name": "骨源磷酸氢钙a",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "食用动物骨粉碎后，经盐酸浸泡所得溶液，用石灰乳中和，再经干燥、粉碎得到的产品，其中磷含量不低于16.5%，氯含量不高于3%。",
+   "mandatoryLabel": "粗灰分 总磷 钙 氯"
+  },
+  {
+   "code": "9.6.10",
+   "name": "脱胶骨粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "肉、骨及其加工产品",
+   "description": "食用动物骨骼经脱胶、干燥、粉碎获得的产品。原料不得使用发生疫病和变质的动物骨骼。",
+   "mandatoryLabel": "粗灰分 总磷 钙"
+  },
+  {
+   "code": "9.7.1",
+   "name": "喷雾干燥___血浆蛋白粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物得到的新鲜血液分离出的血浆为原料，经灭菌、喷雾干燥获得的产品。原料应来源于同一动物种类，不得使用发生疫病和变质的动物血液。产品名称应标明具体动物来源，如：喷雾干燥猪血浆蛋白粉。",
+   "mandatoryLabel": "粗蛋白质 免疫球蛋白（IgG或IgY）"
+  },
+  {
+   "code": "9.7.2",
+   "name": "喷雾干燥___血球蛋白粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物得到的新鲜血液分离出的血细胞为原料，经灭菌、喷雾干燥获得的产品。原料应来源于同一动物种类，不得使用发生疫病和变质的动物血液。产品名称应标明具体动物来源，如：喷雾干燥猪血球蛋白粉。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "9.7.3",
+   "name": "水解___血粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物得到的新鲜血液为原料，经水解、干燥获得的产品。原料应来源于同一动物种类，不得使用发生疫病和变质的动物血液。产品名称应标明具体动物来源，如：水解猪血粉。",
+   "mandatoryLabel": "粗蛋白质 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.7.4",
+   "name": "水解___血球蛋白粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物得到的新鲜血液分离出的血球为原料，经破膜、灭菌、酶解、浓缩、喷雾干燥等一系列工序获得的产品。原料应来源于同一动物种类，不得使用发生疫病和变质的动物血液。产品名称应标明具体动物来源，如：水解猪血球蛋白粉。",
+   "mandatoryLabel": "粗蛋白质 胃蛋白酶消化率"
+  },
+  {
+   "code": "9.7.5",
+   "name": "水解珠蛋白粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物获得的新鲜血液分离出的血球为原料，经破膜、灭菌、酶解、分离等工序得到得珠蛋白，再经浓缩、喷雾干燥获得的产品。粗蛋白质含量不低于90%。",
+   "mandatoryLabel": "粗蛋白质 赖氨酸"
+  },
+  {
+   "code": "9.7.6",
+   "name": "___血粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物得到的新鲜血液为原料，经干燥获得的产品。原料应来源于同一动物种类，不得使用发生疫病和变质的动物血液。产品粗蛋白质含量不低于85%。产品名称应标明具体动物来源，如：鸡血粉。",
+   "mandatoryLabel": "粗蛋白质"
+  },
+  {
+   "code": "9.7.7",
+   "name": "血红素蛋白粉",
+   "category": "陆生动物产品及其副产品",
+   "subCategory": "血液制品",
+   "description": "以屠宰食用动物得到的新鲜血液分离出的血球为原料，经破膜、灭菌、酶解、分离等工序获得血红素，再浓缩、喷雾干燥获得的产品。卟啉铁含量（以铁计）不低于1.2%。",
+   "mandatoryLabel": "粗蛋白质 卟啉铁（血红素铁）"
+  },
+  {
+   "code": "10.1.1",
+   "name": "____贝",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "贝类及其副产品",
+   "description": "新鲜可食用的贝类，可以鲜用或根据使用要求对其进行冷藏、冷冻、蒸煮、干燥处理。产品名称中应标明贝的种类，如：扇贝、牡蛎。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "10.1.2",
+   "name": "贝壳粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "贝类及其副产品",
+   "description": "贝类的壳经过干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗灰分 钙"
+  },
+  {
+   "code": "10.1.3",
+   "name": "干贝粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "贝类及其副产品",
+   "description": "食品企业加工食用干贝（扇贝柱）剩余的边角料（不包括壳），经干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 组胺"
+  },
+  {
+   "code": "10.2.1",
+   "name": "虾",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "新鲜的虾。可以鲜用或根据使用要求对其进行冷藏、冷冻、蒸煮、干燥处理。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "10.2.2",
+   "name": "磷虾粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "以磷虾（Euphausia superba）为原料，经干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 盐分 挥发性盐基氮"
+  },
+  {
+   "code": "10.2.3",
+   "name": "虾粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "虾经蒸煮、干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 盐分 挥发性盐基氮"
+  },
+  {
+   "code": "10.2.4",
+   "name": "虾膏",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "以虾为原料，经油脂分离、酶解、浓缩获得的膏状物。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 水分 挥发性盐基氮"
+  },
+  {
+   "code": "10.2.5",
+   "name": "虾壳粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "以食品企业加工虾仁过程中剥离出的虾头、虾壳为原料，经干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗灰分"
+  },
+  {
+   "code": "10.2.6",
+   "name": "虾油",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "以海洋虾类经蒸煮、压榨、分离获得的毛油为原料，再进行精炼获得的产品。",
+   "mandatoryLabel": "脂肪 酸价 碘价"
+  },
+  {
+   "code": "10.2.7",
+   "name": "蟹",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "新鲜的蟹。可以鲜用或根据使用要求对其进行冷藏、冷冻、蒸煮、干燥处理。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "10.2.8",
+   "name": "蟹粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "以蟹或蟹的某一部分为原料，经蒸煮、压榨、干燥、粉碎获得的产品。产品中粗蛋白质含量不低于25%。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 挥发性盐基氮"
+  },
+  {
+   "code": "10.2.9",
+   "name": "蟹壳粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "甲壳类动物及其副产品",
+   "description": "以蟹壳为原料，经烘干、粉碎获得的产品。",
+   "mandatoryLabel": "粗灰分"
+  },
+  {
+   "code": "10.3.1",
+   "name": "乌贼",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "新鲜的乌贼。可以鲜用或根据使用要求对其进行冷藏、冷冻、蒸煮、干燥处理。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "10.3.2",
+   "name": "乌贼粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "乌贼经蒸煮、压榨、干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 挥发性盐基氮"
+  },
+  {
+   "code": "10.3.3",
+   "name": "乌贼膏",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "以乌贼内脏为原料，经油脂分离、酶解、浓缩获得的膏状物。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 挥发性盐基氮 水分"
+  },
+  {
+   "code": "10.3.4",
+   "name": "乌贼内脏粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "乌贼膏或与载体混合后，经过干燥获得的产品。使用的载体应为饲料法规中许可使用的原料，并在标签中注明载体名称。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 载体名称 挥发性盐基氮"
+  },
+  {
+   "code": "10.3.5",
+   "name": "乌贼油",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "从乌贼内脏中分离出的油脂。",
+   "mandatoryLabel": "粗脂肪 酸价 碘价"
+  },
+  {
+   "code": "10.3.6",
+   "name": "鱿鱼",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "新鲜的鱿鱼。可以鲜用根据使用要求可对其进行冷藏、冷冻、蒸煮或干燥处理。",
+   "mandatoryLabel": "粗脂肪 酸价"
+  },
+  {
+   "code": "10.3.7",
+   "name": "鱿鱼粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "鱿鱼经蒸煮、压榨、干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 挥发性盐基氮"
+  },
+  {
+   "code": "10.3.8",
+   "name": "鱿鱼膏",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "以鱿鱼内脏为原料，经油脂分离、酶解、浓缩获得的膏状物。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 挥发性盐基氮 水分"
+  },
+  {
+   "code": "10.3.9",
+   "name": "鱿鱼内脏粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "鱿鱼膏或与载体混合后，经过干燥获得的产品。使用的载体应为饲料法规中许可使用的原料，并在标签中注明载体名称。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 载体名称 挥发性盐基氮"
+  },
+  {
+   "code": "10.3.10",
+   "name": "鱿鱼油",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "水生软体动物及其副产品",
+   "description": "从鱿鱼内脏中分离出的油脂。",
+   "mandatoryLabel": "粗脂肪 酸价 碘价"
+  },
+  {
+   "code": "10.4.1",
+   "name": "鱼",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "鲜鱼的全部或部分鱼体。可以鲜用或根据使用要求对其进行冷藏、冷冻、蒸煮、干燥处理。不得使用发生疫病和受污染的鱼。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "10.4.2",
+   "name": "白鱼粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "鳕鱼、鲽鱼、鹜鱼等白肉鱼种的全鱼或其为原料加工水产品后剩余的鱼体部分（包括鱼骨、鱼内脏、鱼头、鱼尾、鱼皮、鱼眼、鱼鳞和鱼鳍），经蒸煮、压榨、脱脂、干燥、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 赖氨酸 组胺 挥发性盐基氮"
+  },
+  {
+   "code": "10.4.3",
+   "name": "水解鱼蛋白粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "以全鱼或鱼的某一部分为原料，经浓缩、水解、干燥获得的产品。产品中粗蛋白质含量不低于50%。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分"
+  },
+  {
+   "code": "10.4.4",
+   "name": "鱼粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "全鱼或经分割的鱼体经蒸煮、压榨、脱脂、干燥、粉碎获得的产品。在干燥过程中可加入鱼溶浆。不得使用发生疫病和受污染的鱼。该产品原料若来源于淡水鱼，产品名称应标明“淡水鱼粉”。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 赖氨酸 挥发性盐基氮"
+  },
+  {
+   "code": "10.4.5",
+   "name": "鱼膏",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "以鲜鱼内脏等下杂物为原料，经油脂分离、酶解、浓缩获得的膏状物。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 挥发性盐基氮 水分"
+  },
+  {
+   "code": "10.4.6",
+   "name": "鱼骨粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "鱼类的骨骼经粉碎、烘干获得的产品。",
+   "mandatoryLabel": "钙 磷 粗灰分"
+  },
+  {
+   "code": "10.4.7",
+   "name": "鱼排粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "加工鱼类水产品过程中剩余的鱼体部分（包括鱼骨、鱼内脏、鱼头、鱼尾、鱼皮、鱼眼、鱼鳞和鱼鳍）经蒸煮、烘干、粉碎获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 挥发性盐基氮"
+  },
+  {
+   "code": "10.4.8",
+   "name": "鱼溶浆",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "以鱼粉加工过程中得到的压榨液为原料，经脱脂、浓缩或水解后再浓缩获得的膏状产品。产品中水分含量不高于50%。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 挥发性盐基氮 水分"
+  },
+  {
+   "code": "10.4.9",
+   "name": "鱼溶浆粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "鱼溶浆或与载体混合后，经过喷雾干燥或低温干燥获得的产品。使用载体应为饲料法规中许可使用的原料，并在产品标签中标明载体名称。",
+   "mandatoryLabel": "粗蛋白质 盐分 挥发性盐基氮 载体名称"
+  },
+  {
+   "code": "10.4.10",
+   "name": "鱼虾粉",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "以鱼、虾、蟹等水产动物及其加工副产物为原料，经蒸煮、压榨、干燥、粉碎等工序获得的产品。不得使用发生疫病和受污染的鱼。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 挥发性盐基氮 粗灰分"
+  },
+  {
+   "code": "10.4.11",
+   "name": "鱼油",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "对全鱼或鱼的某一部分经蒸煮、压榨获得的毛油，再进行精炼获得的产品。",
+   "mandatoryLabel": "粗脂肪 酸价 碘价 丙二醛"
+  },
+  {
+   "code": "10.4.12",
+   "name": "鱼浆b",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "鲜鱼或冰鲜鱼绞碎后，经饲料级或食品级甲酸（添加量不超过鱼鲜重的5%）防腐处理，在一定温度下经液化、过滤得到的液态物，可真空浓缩。挥发性盐基氮含量不高于50 mg/100g，组胺含量不高于300 mg/kg。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 水分 挥发性盐基氮 组胺"
+  },
+  {
+   "code": "10.4.13",
+   "name": "低脂肪鱼粉［低脂鱼粉］b",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "以鱼粉为原料，经正已烷浸提脱脂后得到的产品。粗蛋白质含量不低于68%，粗脂肪含量不高于6%，挥发性盐基氮含量不高于80 mg/100g，组胺含量不高于500 mg/kg，正已烷残留不高于500 mg/kg。原料鱼粉应为有资质的饲用鱼粉生产企业提供的合格产品。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 粗灰分 赖氨酸 水分 挥发性盐基氮 组胺"
+  },
+  {
+   "code": "10.4.14",
+   "name": "鱼皮e",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "鱼及其副产品",
+   "description": "加工鱼类产品过程中获得的鱼皮经干燥后的产品。",
+   "mandatoryLabel": "粗蛋白质 水分"
+  },
+  {
+   "code": "10.5.1",
+   "name": "卤虫卵",
+   "category": "鱼、其它水生生物及其副产品",
+   "subCategory": "其它",
+   "description": "卤虫及其卵。",
+   "mandatoryLabel": "空壳率 孵化率"
+  },
+  {
+   "code": "11.1.1",
+   "name": "凹凸棒石（粉）",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "天然水合镁铝硅酸盐矿物，可以是粒状或经粉碎后的粉。",
+   "mandatoryLabel": "镁 水分"
+  },
+  {
+   "code": "11.1.2",
+   "name": "沸石粉",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "天然斜发沸石或丝光沸石经粉碎获得的产品。",
+   "mandatoryLabel": "钙 吸蓝量 吸氨值 水分"
+  },
+  {
+   "code": "11.1.3",
+   "name": "高岭土",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "以高岭石簇矿为主的含有矿物元素的天然矿物，水合硅铝酸盐含量不低于65%。在配合饲料中用量不得超过2.5%。不得含有石棉。",
+   "mandatoryLabel": "铅 水分"
+  },
+  {
+   "code": "11.1.4",
+   "name": "海泡石",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "一种水合富镁硅酸盐黏土矿物。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "11.1.5",
+   "name": "滑石粉",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "天然硅酸镁盐类矿物滑石经精选、净化、粉碎、干燥获得的产品。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "11.1.6",
+   "name": "麦饭石",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "天然的无机硅铝酸盐。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "11.1.7",
+   "name": "蒙脱石",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "由颗粒极细的水合铝硅酸盐构成的矿物，一般为块状或土状。蒙脱石是膨润土的功能成分，需要从膨润土中提纯获得。",
+   "mandatoryLabel": "吸蓝量 吸氨值 水分"
+  },
+  {
+   "code": "11.1.8",
+   "name": "膨润土［斑脱岩、膨土岩］",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "以蒙脱石为主要成分的粘土岩—蒙脱石粘土岩。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "11.1.9",
+   "name": "石粉",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "用机械方法直接粉碎天然含碳酸钙的石灰石、方解石、白垩沉淀、白垩岩等而制得。钙含量不低于35%。",
+   "mandatoryLabel": "钙"
+  },
+  {
+   "code": "11.1.10",
+   "name": "蛭石",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "含有硅酸镁、铝、铁的天然矿物质经加热膨胀形成的产品。不得含有石棉。",
+   "mandatoryLabel": "水分 氟"
+  },
+  {
+   "code": "11.1.11",
+   "name": "腐植酸钠a",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "泥炭、褐煤或风化煤粉碎后，与氢氧化钠溶液充分反应得到的上清液经浓缩、干燥得到的产品，其中可溶性腐植酸不低于55%，水分不高于12%。",
+   "mandatoryLabel": "可溶性腐植酸 水分"
+  },
+  {
+   "code": "11.1.12",
+   "name": "硅藻土b",
+   "category": "矿物质",
+   "subCategory": "天然矿物质",
+   "description": "以天然硅藻土（硅藻的硅质遗骸）为原料，经过干燥、焙烧、酸洗、分级等工艺制成的硅藻土干燥品、酸洗品、焙烧品及助熔焙烧品。在配合饲料中用量不得超过2%。产品质量标准暂按《食品安全国家标准 食品添加剂 硅藻土》（GB 14936）执行。",
+   "mandatoryLabel": "水分 非硅物质"
+  },
+  {
+   "code": "12.1.1",
+   "name": "发酵豆粕",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "饼粕、糟渣发酵产品",
+   "description": "以豆粕为主要原料（不低于95%），以麸皮、玉米皮等为辅助原料，使用农业部《饲料添加剂品种目录》中批准使用的饲用微生物菌种进行固态发酵，并经干燥制成的蛋白质饲料原料产品。",
+   "mandatoryLabel": "粗蛋白质 酸溶蛋白 水苏糖 水分"
+  },
+  {
+   "code": "12.1.2",
+   "name": "发酵___果渣",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "饼粕、糟渣发酵产品",
+   "description": "以果渣为原料，使用农业部《饲料添加剂品种目录》中批准使用的饲用微生物进行固体发酵获得的产品。产品名称应标明具体原料来源，如：发酵苹果渣。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "12.1.3",
+   "name": "发酵棉籽蛋白",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "饼粕、糟渣发酵产品",
+   "description": "以脱壳程度高的棉籽粕或棉籽蛋白为主要原料（不低于95%），以麸皮、玉米等为辅助原料，使用农业部《饲料添加剂品种目录》中批准使用的酵母菌和芽胞杆菌进行固态发酵，并经干燥制成的粗蛋白质含量在50%以上的产品。",
+   "mandatoryLabel": "粗蛋白质 酸溶蛋白 游离棉酚 水分"
+  },
+  {
+   "code": "12.1.4",
+   "name": "酿酒酵母发酵白酒糟",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "饼粕、糟渣发酵产品",
+   "description": "以鲜白酒糟为基质，经酿酒酵母固体发酵、自溶、干燥、粉碎后得到的产品。",
+   "mandatoryLabel": "粗蛋白 粗纤维 酸溶蛋白 木质素"
+  },
+  {
+   "code": "12.2.1",
+   "name": "产朊假丝酵母蛋白",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "以玉米浸泡液、葡萄糖、葡萄糖母液等为培养基，利用产朊假丝酵母液体发酵，经喷雾干燥制成的粉末状产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.2.2",
+   "name": "啤酒酵母粉",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "啤酒发酵过程中产生的废弃酵母，以啤酒酵母细胞为主要组分，经干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.2.3",
+   "name": "啤酒酵母泥",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "啤酒发酵中产生的泥浆状废弃酵母，以啤酒酵母细胞为主且含有少量啤酒。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.2.4",
+   "name": "食品酵母粉a",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "食品酵母生产过程中产生的废弃酵母经干燥获得的产品，以酿酒酵母细胞为主要组分。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.2.5",
+   "name": "酵母水解物a",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "以酿酒酵母（Saccharomyces cerevisiae）为菌种，经液体发酵得到的菌体，再经自溶或外源酶催化水解后，浓缩或干燥获得的产品。酵母可溶物未经提取，粗蛋白含量不低于35%。",
+   "mandatoryLabel": "粗蛋白质（以干基计） 粗灰分 水分 甘露聚糖 氨基酸态氮"
+  },
+  {
+   "code": "12.2.6",
+   "name": "酿酒酵母培养物a",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "以酿酒酵母为菌种，经固体发酵后，浓缩、干燥获得的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 水分 甘露聚糖"
+  },
+  {
+   "code": "12.2.7",
+   "name": "酿酒酵母提取物a",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "酿酒酵母经液体发酵后得到的菌体，再经自溶或外源酶催化水解，或机械破碎后，分离获得的可溶性组分浓缩或干燥得到的产品。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.2.8",
+   "name": "酿酒酵母细胞壁a",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "单细胞蛋白",
+   "description": "酿酒酵母经液体发酵后得到的菌体，再经自溶或外源酶催化水解，或机械破碎后，分离获得的细胞壁浓缩、干燥得到的产品。",
+   "mandatoryLabel": "水分 甘露聚糖"
+  },
+  {
+   "code": "12.3.1",
+   "name": "谷氨酸渣［味精渣］",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "利用特定微生物和特定培养基培养获得的菌体蛋白类产品（微生物细胞经休眠或灭活）",
+   "description": "利用谷氨酸棒杆菌和由蔗糖、糖蜜、淀粉或其水解液等植物源成分及铵盐（或其它矿物质）组成的培养基发酵生产L-谷氨酸后剩余的固体残渣。菌体应灭活。可进行干燥处理。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 铵盐 水分"
+  },
+  {
+   "code": "12.3.2",
+   "name": "核苷酸渣",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "利用特定微生物和特定培养基培养获得的菌体蛋白类产品（微生物细胞经休眠或灭活）",
+   "description": "利用谷氨酸棒杆菌和由蔗糖、糖蜜、淀粉或其水解液等植物源成分及铵盐（或其它矿物质）组成的培养基发酵生产5’-肌苷酸二钠、5’-鸟苷酸二钠后剩余的固体残渣。菌体应灭活。可进行干燥处理。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 铵盐 水分"
+  },
+  {
+   "code": "12.3.3",
+   "name": "赖氨酸渣",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "利用特定微生物和特定培养基培养获得的菌体蛋白类产品（微生物细胞经休眠或灭活）",
+   "description": "利用谷氨酸棒杆菌和由蔗糖、糖蜜、淀粉或其水解液等植物源成分及铵盐（或其它矿物质）组成的培养基发酵生产L-赖氨酸后剩余的固体副产物。菌体应灭活。可进行干燥处理。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 铵盐 水分"
+  },
+  {
+   "code": "12.3.4",
+   "name": "辅酶Q10渣d, g",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "利用特定微生物和特定培养基培养获得的菌体蛋白类产品（微生物细胞经休眠或灭活）",
+   "description": "利用类球红细菌和由葡萄糖、玉米浆、无机盐等组成的主要原料发酵生产辅酶Q10后的固体副产物。菌体应灭活并经干燥处理。该产品仅限于畜禽和水产饲料使用。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 铵盐 水分"
+  },
+  {
+   "code": "12.3.5",
+   "name": "乙醇梭菌蛋白h, j",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "利用特定微生物和特定培养基培养获得的菌体蛋白类产品（微生物细胞经休眠或灭活）",
+   "description": "以乙醇梭菌（Clostridium autoethanogenum CICC 11088s）为发酵菌种，以钢铁工业转炉气中的CO为主要原料，采用液体发酵，生产乙醇后的剩余物，经分离、喷雾干燥等工艺制得。终产品不含生产菌株活细胞。该产品仅限于仔猪、肉禽、鱼类饲料使用。",
+   "mandatoryLabel": "粗蛋白质 粗灰分 水分 铵盐"
+  },
+  {
+   "code": "12.4.1",
+   "name": "____醋糟 1. 糯米 2. 高粱 3. 麦麸 4. 米糠 5. 甘薯 6. 水果 7. 谷物",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "糟渣类发酵副产物",
+   "description": "以所列物质为原料，经米曲霉、黑曲霉、啤酒酵母和醋杆菌发酵酿造提取食醋后所得的固体副产物。产品若来源于以单一原料，产品名称应标明其来源，如：糯米醋糟。",
+   "mandatoryLabel": "粗蛋白质 粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "12.4.2",
+   "name": "酱油糟",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "糟渣类发酵副产物",
+   "description": "以大豆、豌豆、蚕豆、豆饼、麦麸及食盐等为原料，经米曲霉、酵母菌及乳酸菌发酵酿制酱油后剩余的残渣经灭菌、干燥后获得的固体副产物。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 食盐"
+  },
+  {
+   "code": "12.4.3",
+   "name": "柠檬酸糟",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "糟渣类发酵副产物",
+   "description": "以含有淀粉的植物性原料发酵生产柠檬酸的过程中，发酵液经过滤剩余的滤渣经脱水干燥获得的固体产品。产品可经粉碎。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.4.4",
+   "name": "葡萄酒糟（泥）",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "糟渣类发酵副产物",
+   "description": "工业法生产葡萄汁的副产物，由分离发酵葡萄汁后的液体/糊状物组成。",
+   "mandatoryLabel": "粗蛋白质 粗灰分"
+  },
+  {
+   "code": "12.4.5",
+   "name": "甜菜糖蜜酵母发酵浓缩液a",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "糟渣类发酵副产物",
+   "description": "以甜菜糖蜜为原料，经液体发酵生产酵母后的残液再经浓缩得到的产品。",
+   "mandatoryLabel": "钾 盐分 甜菜碱 非蛋白氮"
+  },
+  {
+   "code": "12.5.1",
+   "name": "食用乙醇［食用酒精］e",
+   "category": "微生物发酵产品及副产品",
+   "subCategory": "其它",
+   "description": "以谷物、薯类、糖蜜或其它可食用农作物为原料，经发酵、蒸馏精制而成的，供食用的含水酒精。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "乙醇 甲醇 醛"
+  },
+  {
+   "code": "13.1.1",
+   "name": "___淀粉",
+   "category": "其它",
+   "subCategory": "淀粉及其加工产品",
+   "description": "谷物、豆类、块根、块茎等食用植物性原料经淀粉制取工艺（提取、脱水和干燥）获得的产品。产品名称应标明植物性原料的来源，如：玉米淀粉。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "淀粉 水分"
+  },
+  {
+   "code": "13.1.2",
+   "name": "糊精",
+   "category": "其它",
+   "subCategory": "淀粉及其加工产品",
+   "description": "淀粉在酸或酶的作用下进行低度水解反应所获得的小分子的中间产物。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "还原糖 葡萄糖当量 水分"
+  },
+  {
+   "code": "13.2.1",
+   "name": "果蔬加工产品及副产品",
+   "category": "其它",
+   "subCategory": "食品类产品及副产品",
+   "description": "新鲜水果和蔬菜在食品工业加工过程中获得的干燥或冷冻的产品。该类产品在不影响公共健康和动物健康的前提下方可生产和使用。产品名称应标明相应的水果、蔬菜和调味料种类的具体名称，如：番茄皮渣。",
+   "mandatoryLabel": "粗纤维 酸不溶灰分 淀粉 粗脂肪"
+  },
+  {
+   "code": "13.2.2",
+   "name": "食品工业产品及副产品",
+   "category": "其它",
+   "subCategory": "食品类产品及副产品",
+   "description": "食品工业（方便面和挂面、饼干和糕点、面包、肉制品、巧克力和糖果）生产过程中获得的前食品注和副产品（仅指上述食品在生产过程中因边角、不完整、散落、规格混杂原因而不能成为商品的部分）。可进行干燥处理。该类产品在不影响公共健康和动物健康的前提下方可生产和使用。产品名称应标明具体种类和来源，如：火腿肠粉。",
+   "mandatoryLabel": "粗蛋白质 粗脂肪 盐分 货架期 水分"
+  },
+  {
+   "code": "13.3.1",
+   "name": "白灵侧耳（白灵菇）",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "侧耳科侧耳属食用菌白灵侧耳（Pleurotus eryngii var. tuoliensia）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.2",
+   "name": "刺芹侧耳（杏鲍菇）",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "侧耳科侧耳属食用菌刺芹侧耳（Pleurotus eryngii）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.3",
+   "name": "平菇e",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "侧耳科侧耳属食用菌平菇（Pleurotus ostreatus）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.4",
+   "name": "香菇e",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "光茸菌科香菇属食用菌香菇（Lentinus edodes（Berk.）Sing）及其干燥产品",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.5",
+   "name": "毛柄金钱菌［金针菇］e",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "小皮伞科小火焰菌属食用菌毛柄金钱菌（F. velutipes）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.6",
+   "name": "木耳［黑木耳］e",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "木耳科木耳属食用菌木耳（Auricularia auricula (L.ex Hook.) Underwood）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.7",
+   "name": "银耳e",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "银耳科银耳属食用菌银耳（Tremella）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.8",
+   "name": "双孢蘑菇［白蘑菇］e",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "蘑菇属食用菌双孢蘑菇（Agaricus bisporus）及其干燥产品。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.3.9",
+   "name": "灵芝f",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "多孔菌科真菌赤芝（Ganoderma lucidum (Leyss. ex Fr.) Karst.）或紫芝（Ganoderma sinense Zhao, Xu et Zhang）的子实体及其干燥产品。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "13.3.10",
+   "name": "姬松茸f",
+   "category": "其它",
+   "subCategory": "食用菌及其加工产品",
+   "description": "蘑菇科蘑菇属姬松茸（Agaricus subrufescens）及其干燥产品。",
+   "mandatoryLabel": "水分"
+  },
+  {
+   "code": "13.4.1",
+   "name": "白糖［蔗糖］",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "以甘蔗或甜菜为原料经制糖工艺制取的精糖，主要成分为蔗糖。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖"
+  },
+  {
+   "code": "13.4.2",
+   "name": "果糖",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "己酮糖，单糖的一种，是葡萄糖的同分异构体。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "果糖 比旋光度"
+  },
+  {
+   "code": "13.4.3",
+   "name": "红糖［蔗糖］",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "以甘蔗为原料，经榨汁、浓缩获得的带糖蜜的赤色晶体，主要成分为蔗糖。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖"
+  },
+  {
+   "code": "13.4.4",
+   "name": "麦芽糖",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "两个葡萄糖分子以α-1,4-糖苷键连接构成的二糖。为淀粉经β-淀粉酶作用下不完全水解获得的产物。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": ""
+  },
+  {
+   "code": "13.4.5",
+   "name": "木糖",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "戊糖，单糖的一种，以玉米芯为原料，在硫酸催化剂存在的条件下经水解、脱色、净化、蒸发、结晶、干燥等工艺加工生产。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "木糖 比旋光度"
+  },
+  {
+   "code": "13.4.6",
+   "name": "葡萄糖",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "己醛糖，单糖的一种，是果糖的同分异构体，可含有一个结晶水。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "葡萄糖 比旋光度"
+  },
+  {
+   "code": "13.4.7",
+   "name": "葡萄糖胺盐酸盐a",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "壳聚糖和壳质结构的一部分，由甲壳类动物和其他节肢动物的外骨骼经水解制备或由粮食（如玉米或小麦）发酵生产。",
+   "mandatoryLabel": "葡萄糖 胺盐酸盐"
+  },
+  {
+   "code": "13.4.8",
+   "name": "葡萄糖浆",
+   "category": "其它",
+   "subCategory": "糖类",
+   "description": "淀粉经水解获得的高纯度、浓缩的营养性糖类的水溶液。产品须由有资质的食品生产企业提供。",
+   "mandatoryLabel": "总糖 水分"
+  },
+  {
+   "code": "13.5.1",
+   "name": "纤维素",
+   "category": "其它",
+   "subCategory": "纤维素及其加工产品",
+   "description": "天然木材通过机械加工而获得的产品，其主要成分为纤维素。",
+   "mandatoryLabel": "粗纤维 粗灰分 水分"
+  },
+  {
+   "code": "13.6.1",
+   "name": "明胶［胶原蛋白］e",
+   "category": "其它",
+   "subCategory": "食品动物加工产品",
+   "description": "以来源于食用动物的皮、骨、韧带、肌腱中的胶原为原料，经水解获得可溶性蛋白类产品。原料不得使用发生疫情或变质的动物组织，不得使用皮革及鞣革副产品。产品须由有资质的食品或药品生产企业提供",
+   "mandatoryLabel": "蛋白质粗灰分"
+  }
+ ]
+}

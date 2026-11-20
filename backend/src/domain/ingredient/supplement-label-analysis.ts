@@ -14,8 +14,10 @@ export type AnalysisBaseUnit = 'PCS' | 'G' | 'ML';
 export interface AnalysisContext {
   frontText: string;
   labelText: string;
-  /** 目录里查到的规范名（可能为空） */
+  /** 《饲料添加剂品种目录》里查到的规范名（可能为空） */
   catalogNames: { name: string; dogAllowed: boolean }[];
+  /** 《饲料原料目录》里对上的条目（鱼油这类要走这本目录） */
+  materialNames: { name: string; category: string }[];
   nutrientLabel: string | null;
   /** 从标签里认出的盐型（甘氨酸 / 硫酸 …） */
   saltNameZh: string | null;
@@ -165,17 +167,39 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       : null;
 
   // 标签名称：目录有命中时只能从命中里选；没有命中时允许模型给，但标注来源靠人确认
-  const catalogSet = new Set(ctx.catalogNames.map((item) => item.name));
+  const allCatalogNames = [
+    ...ctx.catalogNames.map((item) => item.name),
+    ...ctx.materialNames.map((item) => item.name)
+  ];
+  const catalogSet = new Set(allCatalogNames);
+  const stripBrackets = (value: string) => value.replace(/[（(][^）)]*[）)]/g, '').trim();
+  // 「甘氨酸铁络（螯）合物」这种名字本身就带括号，剥括号后要能回到目录里的**官方写法**
+  const officialByStripped = new Map(allCatalogNames.map((name) => [stripBrackets(name), name]));
   const labelNamesRaw = Array.isArray(source.labelNames) ? source.labelNames : [];
   const labelNames: string[] = [];
   for (const item of labelNamesRaw) {
-    const label = String(item ?? '').trim();
-    if (!label) continue;
-    if (catalogSet.size > 0 && !catalogSet.has(label)) {
-      dropped.push({ field: 'labelNames', reason: '不在目录候选里', value: label });
+    const raw = String(item ?? '').trim();
+    if (!raw) continue;
+
+    let official: string | null = null;
+    if (catalogSet.has(raw)) {
+      official = raw;
+    } else {
+      // 模型有时会把「鱼油（分类）」整句抄进来，或把「（螯）」吃掉
+      official = officialByStripped.get(stripBrackets(raw)) ?? null;
+    }
+
+    if (!official && catalogSet.size === 0) {
+      // 两本目录都没有候选时，允许模型的提案（人再看一眼）
+      official = raw;
+    }
+    if (!official) {
+      dropped.push({ field: 'labelNames', reason: '不在目录候选里', value: raw });
       continue;
     }
-    labelNames.push(label);
+    if (!labelNames.includes(official)) {
+      labelNames.push(official);
+    }
   }
 
   const tagNamesRaw = Array.isArray(source.tagNames) ? source.tagNames : [];
@@ -213,6 +237,11 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
  * 给模型的任务说明。要求：只输出 JSON，不确定就写 null，不要解释。
  */
 export function buildAnalysisPrompt(ctx: AnalysisContext): string {
+  const materialLines =
+    ctx.materialNames.length > 0
+      ? ctx.materialNames.map((item) => `- ${item.name}（${item.category}）`).join('\n')
+      : '（原料目录里没有对上条目）';
+
   const catalogLines =
     ctx.catalogNames.length > 0
       ? ctx.catalogNames
@@ -232,6 +261,9 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     '【《饲料添加剂品种目录》里可能的规范名】',
     catalogLines,
     '',
+    '【《饲料原料目录》里可能的规范名】',
+    materialLines,
+    '',
     '按下面的规则判断，只输出 JSON（不要 markdown 代码块、不要解释）：',
     '1. name：原料名要写**化学形态名**，不是营养素名。有盐/螯合形态时写成「盐名+营养素」，',
     '   例如 ferrous bisglycinate → 甘氨酸亚铁、copper sulfate → 硫酸铜、zinc gluconate → 葡萄糖酸锌；',
@@ -239,10 +271,11 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     '2. baseUnit：胶囊/片剂 → "PCS"；粉 → "G"；液体 → "ML"。unitDisplayLabel 对应 粒 / g / ml。',
     '3. priceCny：正面图里出现的人民币价格（数字，不要带 ¥）；看不到就 null，不要估。',
     '4. purchaseChannel：图上看得出是哪个渠道（如 iHerb 的中文站页面）就写渠道名；看不出来写 null。',
-    '5. labelCategory：填 "FEED_ADDITIVE" 或 "FEED_MATERIAL"。',
-    '   命中上面添加剂目录的品种 → FEED_ADDITIVE；属于饲料原料性质（鱼油、酵母、肉粉、骨粉、植物粉等）→ FEED_MATERIAL；',
-    '   拿不准就 null。',
-    '6. labelNames：只能从上面目录候选里选（可以多个）；没有候选就 null。',
+    '5. labelCategory：填 "FEED_ADDITIVE" 或 "FEED_MATERIAL"（两本目录，别混）。',
+    '   命中《饲料添加剂品种目录》→ FEED_ADDITIVE；命中《饲料原料目录》或属于原料性质（鱼油、酵母、肉粉、骨粉、植物粉等）→ FEED_MATERIAL；',
+    '   两部目录都没对上、也判断不了就 null。宁可空着，不要硬塞成添加剂。',
+    '6. labelNames：**必须来自对应那本目录**的候选（添加剂从添加剂候选里选，原料从原料候选里选，可以多个）；',
+    '   只写原料名本身，不要把括号里的分类抄进来（写「鱼油」，不要写「鱼油（水生动物产品）」）；没有候选就空数组。',
     `7. tagNames：从这些里选 ${ctx.allowedTags.join('、')}。`,
     `8. addTiming：从这些里选 ${ctx.allowedAddTimings.join('、')}（制作中 / 开饭前）。`,
     '9. nutrients：只填标签上明确写了含量的项，fieldPath 必须来自下面这个清单：',

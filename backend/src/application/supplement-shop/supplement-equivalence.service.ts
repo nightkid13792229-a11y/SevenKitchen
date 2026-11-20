@@ -611,11 +611,16 @@ export class SupplementEquivalenceService {
 
     await this.assertProductionLimit(id, toAdd as any);
 
+    const addPriorities = await this.nextPriorities(id, toAdd.length);
+
     await this.prisma.$transaction(async (tx) => {
-      if (toAdd.length > 0) {
-        await tx.ingredient.updateMany({
-          where: { id: { in: toAdd.map((item) => item.id) } },
-          data: { equivalenceGroupId: id },
+      for (const [index, ingredient] of toAdd.entries()) {
+        await tx.ingredient.update({
+          where: { id: ingredient.id },
+          data: {
+            equivalenceGroupId: id,
+            equivalencePriority: addPriorities[index] ?? 0,
+          },
         });
       }
       if (group.status === 'APPROVED') {
@@ -651,6 +656,26 @@ export class SupplementEquivalenceService {
    * 设置组内排序（2026-11-14 复审遗留）：0 最前，制作单默认选排序最前的可买成员。
    * 只改排序、不动成员：**不把已审核组打回草稿**（不算成员变更）。
    */
+
+  /**
+   * 新成员排到队尾：组内优先级是 0 最前，新来的不应该插队。
+   * 之前所有人都默认 0，撞成一片——排序按钮"上移/下移"看起来没反应就是这个原因。
+   */
+  private async nextPriorities(
+    groupId: string,
+    count: number,
+  ): Promise<number[]> {
+    const existing = await this.prisma.ingredient.findMany({
+      where: { equivalenceGroupId: groupId },
+      select: { equivalencePriority: true },
+    });
+    const max = existing.reduce(
+      (acc, item) => Math.max(acc, item.equivalencePriority ?? 0),
+      -1,
+    );
+    return Array.from({ length: count }, (_, index) => max + 1 + index);
+  }
+
   async setMemberPriority(
     id: string,
     ingredientId: string,
@@ -862,11 +887,16 @@ export class SupplementEquivalenceService {
       ),
     );
 
+    const movePriorities = await this.nextPriorities(groupId, toMove.length);
+
     await this.prisma.$transaction(async (tx) => {
-      if (toMove.length > 0) {
-        await tx.ingredient.updateMany({
-          where: { id: { in: toMove.map((item) => item.id) } },
-          data: { equivalenceGroupId: groupId },
+      for (const [index, ingredient] of toMove.entries()) {
+        await tx.ingredient.update({
+          where: { id: ingredient.id },
+          data: {
+            equivalenceGroupId: groupId,
+            equivalencePriority: movePriorities[index] ?? 0,
+          },
         });
       }
       const groupsToReset = new Set(oldGroupIds);

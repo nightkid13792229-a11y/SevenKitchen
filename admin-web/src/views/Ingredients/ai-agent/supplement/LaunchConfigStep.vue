@@ -1006,7 +1006,11 @@ async function moveMember(index: number, direction: -1 | 1): Promise<void> {
 }
 
 function sortMembers(members: EquivalenceGroupDetail['members']) {
-  return [...members].sort((a, b) => a.equivalencePriority - b.equivalencePriority)
+  // 优先级相同时按名字排，保证列表顺序稳定（历史数据里有过全员 0 的情况）
+  return [...members].sort(
+    (a, b) =>
+      a.equivalencePriority - b.equivalencePriority || a.name.localeCompare(b.name, 'zh-Hans-CN')
+  )
 }
 
 function applyRecommendation(item: { groupId: string; name: string }) {

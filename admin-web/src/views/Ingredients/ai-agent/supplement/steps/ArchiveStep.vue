@@ -130,6 +130,11 @@
             </el-select>
           </label>
           <label class="field">
+            <span>基准单位</span>
+            <el-input :model-value="`个（${draft.unitDisplayLabel}）`" disabled />
+            <em class="field__hint">补剂固定按「粒」记账，营养按每 1 {{ draft.unitDisplayLabel }} 记</em>
+          </label>
+          <label class="field">
             <span>每份几粒</span>
             <el-input-number
               v-model="draft.servingUnitsPerDose"
@@ -155,6 +160,11 @@
             <el-input v-model="draft.productModel" placeholder="如 120 粒/瓶" />
           </label>
           <label class="field">
+            <span>商品链接</span>
+            <el-input v-model="draft.evidence.productUrl" placeholder="iHerb 商品页链接（可空）" />
+            <em class="field__hint">贴进来后，档案里能回查当时买的哪一瓶</em>
+          </label>
+          <label class="field">
             <span>采购渠道</span>
             <el-input v-model="draft.purchaseChannel" placeholder="iHerb" />
           </label>
@@ -174,6 +184,19 @@
             <em class="field__hint">1 个采购单位 = 多少{{ draft.unitDisplayLabel }}</em>
           </label>
           <label class="field">
+            <span>生产损耗率</span>
+            <el-input-number
+              v-model="draft.productionLossRate"
+              :min="1"
+              :max="2"
+              :step="0.01"
+              :precision="2"
+              controls-position="right"
+              style="width: 100%"
+            />
+            <em class="field__hint">默认 1.05（+5%），可覆盖</em>
+          </label>
+          <label class="field">
             <span>当前采购价</span>
             <el-input-number
               v-model="draft.currentPricePerPurchaseUnit"
@@ -183,6 +206,22 @@
               data-anchor="purchasePricePerPurchaseUnit"
               style="width: 100%"
             />
+          </label>
+        </div>
+      </div>
+
+      <div class="group">
+        <p class="group__title">用途开关</p>
+        <div class="grid">
+          <label class="field field--switch">
+            <span>用于 DIY 推荐</span>
+            <el-switch v-model="draft.diyEnabled" />
+            <em class="field__hint">关掉后不出现在制作单候选里</em>
+          </label>
+          <label class="field field--switch">
+            <span>用于生产采购</span>
+            <el-switch v-model="draft.procurementEnabled" />
+            <em class="field__hint">关掉后下单不会当作实际采购原料</em>
           </label>
         </div>
       </div>
@@ -230,6 +269,9 @@
             >
               <el-option v-for="name in draft.labelNames" :key="name" :label="name" :value="name" />
             </el-select>
+            <em v-if="catalogCandidates.length > 0 && draft.labelNames.length === 0" class="field__hint">
+              目录里可能是：{{ catalogCandidates.map((item) => item.name).join('、') }}（点上面自己选，不自动填）
+            </em>
           </label>
         </div>
       </div>
@@ -320,9 +362,10 @@ import {
   type SupplementDraftValue
 } from '../supplementFormState'
 import { evaluateSupplementGates } from '../supplementGates'
+import type { SupplementLabelIntakeDto } from '@/types/ingredientCreation'
 
 /**
- * 第 3 步：图变档案。
+ * 建档：图变档案。
  *
  * 两张图只做一件事：把字读回来。字段映射与单位换算复用已有的
  * `patchFromPreview`（有单测），折算仍由服务端在写入时算。
@@ -354,6 +397,7 @@ const uploadingLabel = ref(false)
 const reading = ref(false)
 const readDone = ref(false)
 const skipped = ref<string[]>([])
+const catalogCandidates = ref<{ name: string; dogAllowed: boolean }[]>([])
 const showAll = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
@@ -375,14 +419,25 @@ const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: s
 const unitOptions = supplementUsageUnitOptions
 const tagSuggestions = ['矿物质', '维生素', '油脂类', '关节', '益生菌', '膳食纤维']
 
-const visibleGroups = computed(() =>
-  supplementNutrientGroups
+const hasAnyNutrient = computed(() => Object.keys(draft.servingNutrients).length > 0)
+
+/**
+ * 读出来之后只显示"真的有数"的字段，别让人在一屏空格子里找；
+ * 一个都没读到时，退回显示常用字段，方便手填。
+ */
+const visibleGroups = computed(() => {
+  const mode = showAll.value ? 'all' : hasAnyNutrient.value ? 'filled' : 'common'
+  return supplementNutrientGroups
     .map((group) => ({
       ...group,
-      fields: showAll.value ? group.fields : group.fields.filter((field) => field.common)
+      fields: group.fields.filter((field) => {
+        if (mode === 'all') return true
+        if (mode === 'filled') return draft.servingNutrients[field.fieldPath] !== undefined
+        return field.common
+      })
     }))
     .filter((group) => group.fields.length > 0)
-)
+})
 
 const nameFormWord = computed(() => findSupplementFormWord(draft.name))
 const gateReport = computed(() => evaluateSupplementGates(toGateInput(draft)))
@@ -531,6 +586,39 @@ async function maybeRead(): Promise<void> {
   }
 }
 
+/**
+ * 能确定的东西一律先填好，人只做判断：
+ * 名称、渠道、换算倍数、标签分类/时机、目录规范名、标签分组。
+ *
+ * 只在**空着**的时候填，绝不覆盖人已经改过的值。
+ */
+function applySuggestions(result: SupplementLabelIntakeDto): void {
+  if (!draft.purchaseChannel.trim()) {
+    draft.purchaseChannel = 'iHerb'
+  }
+  if (!draft.purchaseToBaseRatio && result.perBottleUnits) {
+    draft.purchaseToBaseRatio = result.perBottleUnits
+  }
+  if (!draft.addTiming) {
+    draft.addTiming = 'BEFORE_MIXING'
+  }
+
+  // 标签分组（矿物质/维生素/脂肪酸…）按营养素所在分组补一个
+  const firstNutrient = result.nutrients[0]?.fieldPath ?? ''
+  const group = supplementNutrientGroups.find((item) =>
+    item.fields.some((field) => field.fieldPath === firstNutrient)
+  )
+  if (draft.tagNames.length === 0 && group) {
+    draft.tagNames = [group.title]
+  }
+
+  // 目录能确定就填规范名；只能给候选时先留空，界面上列出候选让人选
+  if (draft.labelNames.length === 0 && result.catalog.suggestion) {
+    draft.labelNames = [result.catalog.suggestion.name]
+    draft.labelCategory = 'FEED_ADDITIVE'
+  }
+}
+
 async function readImages(): Promise<void> {
   if (!draft.evidence.frontImageUrl || !draft.evidence.labelImageUrl) {
     return
@@ -573,7 +661,13 @@ async function readImages(): Promise<void> {
       draft.unitDisplayLabel = result.front.unitDisplayLabel
     }
 
+    applySuggestions(result)
+
     skipped.value = skippedRows
+    catalogCandidates.value = (result.catalog?.matches ?? []).map((item) => ({
+      name: item.name,
+      dogAllowed: item.dogAllowed
+    }))
     readDone.value = true
     ElMessage.success('读完了，核对一下数字')
   } catch (error) {
@@ -749,6 +843,11 @@ function apiErrorMessage(error: unknown, fallback: string): string {
   gap: 4px;
   font-size: 12px;
   color: #5b6470;
+}
+.field--switch {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
 }
 .field__hint {
   font-size: 11px;

@@ -681,6 +681,14 @@ export interface SupplementFrontFieldsDto {
   unitDisplayLabel: string | null
 }
 
+export interface SupplementCatalogMatchDto {
+  name: string
+  category: string
+  scope: string
+  dogAllowed: boolean
+  exact: boolean
+}
+
 export interface SupplementLabelIntakeDto {
   frontText: string
   labelText: string
@@ -689,4 +697,14 @@ export interface SupplementLabelIntakeDto {
   nutrients: SupplementLinkPreviewNutrientDto[]
   unrecognized: string[]
   suggestedName: string | null
+  /** 每瓶多少粒（正面规格里读出来的），用来预填换算倍数 */
+  perBottleUnits: number | null
+  /** 标签里认出的盐型（甘氨酸 / 硫酸 …） */
+  saltNameZh: string | null
+  /** 目录里可能的规范名；suggestion 只在能确定时非空 */
+  catalog: {
+    query: string
+    matches: SupplementCatalogMatchDto[]
+    suggestion: SupplementCatalogMatchDto | null
+  }
 }

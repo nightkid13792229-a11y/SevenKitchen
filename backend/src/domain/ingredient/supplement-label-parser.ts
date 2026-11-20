@@ -101,6 +101,20 @@ const NUTRIENT_ALIASES: Record<string, string> = {
   glutamicacid: 'aminoAcids.glutamicAcid',
   glycine: 'aminoAcids.glycine',
   proline: 'aminoAcids.proline',
+  // 中文标签（国产货常见）
+  铁: 'minerals.iron',
+  锌: 'minerals.zinc',
+  铜: 'minerals.copper',
+  钙: 'minerals.calcium',
+  磷: 'minerals.phosphorus',
+  钾: 'minerals.potassium',
+  钠: 'minerals.sodium',
+  镁: 'minerals.magnesium',
+  氯: 'minerals.chloride',
+  锰: 'minerals.manganese',
+  硒: 'minerals.selenium',
+  碘: 'minerals.iodine',
+  牛磺酸: 'aminoAcids.taurine',
   // 大体成分
   calories: 'macros.energyKcal',
   energy: 'macros.energyKcal',
@@ -119,7 +133,8 @@ const NUTRIENT_ALIASES: Record<string, string> = {
 function normalizeName(raw: string): string {
   return raw
     .replace(/\([^)]*\)/g, ' ')
-    .replace(/[^A-Za-z0-9]/g, '')
+    // 中文标签也要能匹配（铁 / 锌 / 牛磺酸），不能只留 ASCII
+    .replace(/[^A-Za-z0-9\u4e00-\u9fa5]/g, '')
     .toLowerCase()
 }
 
@@ -128,7 +143,7 @@ export function toCanonicalFieldPath(rawName: string): string | null {
 }
 
 /** 成分表从这一行开始；页面里通常写作 `**Supplement facts**`。 */
-const FACTS_HEADER = /supplement\s*facts/i
+const FACTS_HEADER = /supplement\s*facts|营养成分表|營養成分表/i
 
 /**
  * `Serving Size: 4 Soft Gels` → 4。读不出返回 null，不默认成 1。
@@ -166,7 +181,20 @@ export function extractServingUnits(text: string): number | null {
  * 去掉括号后是 `Vitamin D3 125 mcg`，若单位可选，`3` 会被当成数值读走。
  */
 const ROW_WITH_UNIT =
-  /^(.*?)\s*([\d,]+(?:\.\d+)?)\s*(mg|mcg|µg|μg|g|kg|IU|CFU|billion|kcal)(?=[\s%†♢‡*]|$)/i
+  /^(.*?)\s*([\d,]+(?:\.\d+)?)\s*(mg|mcg|µg|μg|g|kg|IU|CFU|billion|kcal|毫克|微克|克|国际单位)(?=[\s%†♢‡*]|$)/i
+
+/** 中文单位 → 档案单位。 */
+const UNIT_ALIASES: Record<string, string> = {
+  毫克: 'mg',
+  微克: 'mcg',
+  克: 'g',
+  国际单位: 'iu'
+};
+
+function normalizeUnit(raw: string): string {
+  const text = String(raw ?? '').trim();
+  return UNIT_ALIASES[text] ?? text.toLowerCase();
+}
 
 /** 没有单位、且数字在行尾：只用来认 `Calories 10` 这种能量行。 */
 const ROW_NO_UNIT = /^(.*?)\s+([\d,]+(?:\.\d+)?)\s*$/
@@ -190,12 +218,45 @@ export function parseSupplementLabel(text: string): ParsedLabel {
 
   const nutrients: ParsedNutrient[] = []
   const unrecognized: string[] = []
+  /**
+   * 视觉模型经常把表格拆成「名字一行、数值下一行」，或者直接输出 markdown 表格。
+   * 这里把两种形态都回收成"名字 + 数值"再走原来的解析。
+   */
+  let pendingName = ''
 
   for (let index = start + 1; index < lines.length; index += 1) {
-    const line = lines[index].trim()
-    if (!line) {
+    const rawLine = lines[index].trim()
+    if (!rawLine) {
       continue
     }
+
+    // markdown 表格行：| Iron | 18 mg | 100% |
+    if (rawLine.startsWith('|')) {
+      const cells = rawLine
+        .replace(/^\||\|$/g, '')
+        .split('|')
+        .map((cell) => cell.replace(/\*\*/g, '').trim())
+        .filter(Boolean)
+      if (cells.length >= 2) {
+        const nameCell = cells[0]
+        if (/^(amount\s*per\s*serving|serving\s*size|%\s*daily|daily\s*value)/i.test(nameCell)) {
+          continue
+        }
+        const valueCell = cells.slice(1).find((cell) => /[\d]/.test(cell)) ?? ''
+        lines[index] = `${nameCell} ${valueCell}`
+        pendingName = ''
+      } else {
+        continue
+      }
+    }
+
+    // 名字一行、数值下一行
+    if (pendingName && /^[\d,]+(?:\.\d+)?\s*(mg|mcg|µg|μg|g|kg|IU|CFU|billion|kcal|毫克|微克|克|国际单位)\b/i.test(rawLine)) {
+      lines[index] = `${pendingName} ${rawLine}`
+      pendingName = ''
+    }
+
+    const line = lines[index].trim()
     // 先把 markdown 的加粗标记拿掉，否则表头 `**Amount Per Serving…` 会被当成脚注
     const plain = line.replace(/\*\*/g, '').trim()
     // 脚注：单个 * 开头，或 `**Percent Daily…` 这种加粗脚注，或 † ♢
@@ -233,7 +294,7 @@ export function parseSupplementLabel(text: string): ParsedLabel {
     if (withUnit) {
       name = withUnit[1]
       value = Number(withUnit[2].replace(/,/g, ''))
-      unit = withUnit[3].toLowerCase()
+      unit = normalizeUnit(withUnit[3])
     } else {
       const noUnit = bare.match(ROW_NO_UNIT)
       const label = noUnit ? cleanName(noUnit[1]).toLowerCase() : ''
@@ -245,8 +306,17 @@ export function parseSupplementLabel(text: string): ParsedLabel {
       }
     }
 
+    if (!Number.isFinite(value)) {
+      // 只有纯文字、不含数字的行才可能是"名字行"，记下来等下一行
+      const candidate = cleanName(bare)
+      if (candidate && !/[\d]/.test(candidate) && candidate.length <= 60) {
+        pendingName = candidate
+      }
+      continue
+    }
+
     name = cleanName(name)
-    if (!name || !Number.isFinite(value)) {
+    if (!name) {
       continue
     }
 

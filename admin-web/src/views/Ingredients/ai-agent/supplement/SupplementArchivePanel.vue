@@ -54,6 +54,7 @@
           style="width: 320px"
           @update:model-value="(value: string) => (form.storageCondition = value)"
         />
+        <span class="archive-hint">选填；不填只是「数据体检」会提醒，不挡上架</span>
       </el-form-item>
 
       <el-form-item label="内容物油性">
@@ -107,11 +108,6 @@
       </el-tooltip>
     </div>
 
-    <div class="archive-actions">
-      <el-button type="primary" size="small" :loading="saving" @click="submit">
-        保存本段并确认
-      </el-button>
-    </div>
   </div>
 </template>
 

@@ -56,7 +56,7 @@
             {{ formatPrice(referencePrice) }} / {{ row?.displayUnit }}
           </span>
           <span class="launch-seg__hint">
-            按当前定价规则试算 1 {{ row?.displayUnit }} 的售价（含圆整，不含包材/服务费/运费）；最终价以下单页为准
+            {{ priceBreakdown }}
           </span>
         </div>
 
@@ -124,6 +124,7 @@
               placeholder="图片地址（用于制作单弹窗展示，可不填）"
               style="width: 360px"
             />
+            <el-button size="small" :loading="uploadingImage" @click="pickImage">上传图片</el-button>
             <el-button
               size="small"
               :loading="fetchingPreview"
@@ -132,6 +133,16 @@
             >
               从链接抓取
             </el-button>
+            <input
+              ref="imageInput"
+              type="file"
+              accept="image/*"
+              hidden
+              @change="onImageFile"
+            />
+            <span class="launch-seg__hint">
+              也可以直接按 ⌘V 粘贴截图（焦点不在输入框时）
+            </span>
             <span v-if="!canFetchFromLink" class="launch-seg__hint">
               目前只支持 iHerb 链接抓取
             </span>
@@ -173,18 +184,6 @@
             <el-button text size="small" @click="undoImage">撤销上次采用的主图</el-button>
           </div>
         </template>
-
-        <div class="launch-seg__actions">
-          <el-button
-            size="small"
-            type="primary"
-            :loading="savingDiy"
-            :disabled="!dataReady"
-            @click="saveDiy"
-          >
-            保存本段并确认
-          </el-button>
-        </div>
         </div>
       </div>
 
@@ -215,18 +214,6 @@
             {{ row.purchaseUnit }} · 1 {{ row.purchaseUnit }} = {{ row.purchaseToBaseRatio }}
             {{ row.displayUnit }} · 进货价 ¥{{ row.pricePerPurchaseUnit }}
           </span>
-        </div>
-
-        <div class="launch-seg__actions">
-          <el-button
-            size="small"
-            type="primary"
-            :loading="savingProc"
-            :disabled="!dataReady"
-            @click="saveProcurement"
-          >
-            保存本段并确认
-          </el-button>
         </div>
         </div>
       </div>
@@ -272,6 +259,7 @@
           </el-select>
         </div>
 
+        <p v-if="autoGroupHint" class="launch-seg__hint">{{ autoGroupHint }}</p>
         <p v-if="selectedGroupHint" class="launch-seg__warn">{{ selectedGroupHint }}</p>
 
         <div v-if="row?.equivalenceGroup" class="launch-seg__row">
@@ -289,26 +277,14 @@
           </el-button>
           <span class="launch-seg__hint">0 最前；制作单默认选排序最前的可买成员</span>
         </div>
-
-        <div class="launch-seg__actions">
-          <el-button
-            size="small"
-            type="primary"
-            :loading="savingGroup"
-            :disabled="!dataReady"
-            @click="saveGroup"
-          >
-            保存本段并确认
-          </el-button>
-        </div>
       </div>
 
       <div class="launch-actions">
         <span class="launch-actions__hint">
           {{ missing.length ? `还差：${missing.join('、')}` : '四段都已明确' }}
         </span>
-        <el-button :loading="savingAll" :disabled="!dataReady" @click="saveAll">
-          一次保存四段
+        <el-button type="primary" :loading="savingAll" :disabled="!dataReady" @click="saveAll">
+          全部保存并确认
         </el-button>
       </div>
 
@@ -414,6 +390,10 @@ const decisions = reactive<LaunchDecisions>({
 })
 
 const groupChoice = ref<string>('')
+const autoGroupHint = ref('')
+const shopConfig = ref<{ markupMultiplier?: number; priceRoundingMode?: string } | null>(null)
+const uploadingImage = ref(false)
+const imageInput = ref<HTMLInputElement | null>(null)
 const recommendations = ref<Array<{ groupId: string; name: string; reason: string }>>([])
 const fetchingResult = reactive({
   image: null as string | null,
@@ -718,6 +698,57 @@ async function adoptModel() {
 }
 
 /** 采用 AI 推荐的组：先确认它真的在可选列表里（列表可能被截断/已停用） */
+function pickImage(): void {
+  imageInput.value?.click()
+}
+
+async function uploadImageFile(file: File): Promise<void> {
+  if (!file.type.startsWith('image/')) {
+    ElMessage.warning('这不是图片文件')
+    return
+  }
+  uploadingImage.value = true
+  try {
+    const uploaded = await ingredientApi.uploadIngredientDiyImage(file)
+    if (uploaded?.url) {
+      diyForm.imageUrl = uploaded.url
+      ElMessage.success('图片已上传，保存后生效')
+    }
+  } catch {
+    ElMessage.error('这张图没传上去，重试一次')
+  } finally {
+    uploadingImage.value = false
+  }
+}
+
+async function onImageFile(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (file) {
+    await uploadImageFile(file)
+  }
+}
+
+/** 粘贴截图：只在 DIY 段展开、且焦点不在输入框里时接 */
+async function onPasteImage(event: ClipboardEvent): Promise<void> {
+  if (!open.diy) return
+  const target = event.target as HTMLElement | null
+  if (
+    target &&
+    (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+  ) {
+    return
+  }
+  const item = Array.from(event.clipboardData?.items ?? []).find(
+    (entry) => entry.kind === 'file' && entry.type.startsWith('image/'),
+  )
+  const file = item?.getAsFile()
+  if (!file) return
+  event.preventDefault()
+  await uploadImageFile(file)
+}
+
 function applyRecommendation(item: { groupId: string; name: string }) {
   if (!selectableGroups.value.some((group) => group.id === item.groupId)) {
     ElMessage.warning('这个组当前不可选（可能已停用或列表已截断），请手动选组')
@@ -914,6 +945,29 @@ const verdictTitle = computed(() => {
  * 参考售价：调后端同一个定价服务试算「1 个展示单位」，
  * 不在前端自己乘倍率——圆整规则/服务费口径只有一处（2026-11-14 复审）。
  */
+/** 把参考售价拆开写：成本 × 加价 = 原价 → 圆整 → 售价 */
+const priceBreakdown = computed(() => {
+  const unitCost = row.value?.unitCost
+  const price = referencePrice.value
+  const unit = row.value?.displayUnit ?? ''
+  if (typeof unitCost !== 'number' || price === null) {
+    return `按当前定价规则试算 1 ${unit} 的售价（含圆整，不含包材/服务费/运费）；最终价以下单页为准`
+  }
+  const markup = shopConfig.value?.markupMultiplier
+  const raw = typeof markup === 'number' ? unitCost * markup : null
+  const rounding = shopConfig.value?.priceRoundingMode
+  const roundingText = rounding === 'CEIL_TO_0_1' ? '向上取到 0.1' : '按规则圆整'
+  return [
+    `成本 ¥${unitCost.toFixed(2)}/${unit}`,
+    typeof markup === 'number' ? `× 加价 ${markup}` : '',
+    raw !== null ? `= ¥${raw.toFixed(2)}` : '',
+    `${roundingText} → ¥${price.toFixed(2)}`,
+    '（不含包材/服务费/运费，最终价以下单页为准）'
+  ]
+    .filter(Boolean)
+    .join(' ')
+})
+
 async function loadReferencePrice(item: SupplementCatalogItem | null) {
   referencePrice.value = null
   if (!item || typeof item.unitCost !== 'number' || !Number.isFinite(item.unitCost)) {
@@ -995,7 +1049,25 @@ function statusLabel(status: string): string {
   return '草稿'
 }
 
-onMounted(load)
+onMounted(() => {
+  window.addEventListener('paste', onPasteImage)
+  void load()
+  supplementShopApi
+    .getConfig()
+    .then((config) => {
+      shopConfig.value = {
+        markupMultiplier: config?.markupMultiplier,
+        priceRoundingMode: config?.priceRoundingMode
+      }
+    })
+    .catch(() => {
+      shopConfig.value = null
+    })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('paste', onPasteImage)
+})
 </script>
 
 <style scoped>
@@ -1044,6 +1116,12 @@ onMounted(load)
   box-shadow: 0 0 0 2px #409eff;
 }
 .launch-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid #ebeef5;
+  padding: 10px 0;
   display: flex;
   align-items: center;
   justify-content: flex-end;

@@ -342,6 +342,22 @@ describe('home runtime regressions', () => {
     expect(source).toContain('closeShelfSheet()')
   })
 
+  it('renames the seasoning avoid group and adds examples for unexpandable groups', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+    const template = source.slice(0, source.indexOf('<script setup'))
+
+    // 后台标签叫「调味」，顾客端显示为「香料」
+    expect(source).toContain("调味: '香料'")
+    // 没有子标签的分类给示例；内脏按需求给「肝、肾、心」
+    expect(source).toContain("内脏: ['肝', '肾', '心']")
+    expect(source).toContain('const examples = children.length')
+    expect(template).toContain('{{ group.displayLabel }}')
+    expect(template).toContain("如：{{ group.examples.join('、') }}")
+  })
+
   it('resets the new shelf filters from the empty-state reset button', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

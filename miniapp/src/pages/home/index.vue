@@ -301,13 +301,16 @@
                   ]"
                   @tap="onShelfGroupTap(group)"
                 >
-                  <text class="sf-group-name">{{ group.label }}</text>
+                  <text class="sf-group-name">{{ group.displayLabel }}</text>
                   <text class="sf-group-count">{{ group.count }} 道</text>
                   <text v-if="group.disabled" class="sf-group-warn">会避开全部食谱</text>
                   <view v-else class="sf-check">
                     <text v-if="shelfDraft.avoidTagIds.includes(group.value)">✓</text>
                   </view>
                 </view>
+                <text v-if="group.examples.length" class="sf-group-examples">
+                  如：{{ group.examples.join('、') }}
+                </text>
                 <view v-if="group.children.length" class="sf-chips sf-chips--sub">
                   <view
                     v-for="child in group.children"
@@ -670,6 +673,10 @@ interface ShelfFilterState {
 interface AvoidGroup extends ShelfFilterOption {
   children: ShelfFilterOption[]
   disabled: boolean
+  /** 顾客端显示名（「调味」在顾客端叫「香料」） */
+  displayLabel: string
+  /** 没有子标签、展不开的分类，给几个常见例子 */
+  examples: string[]
 }
 
 
@@ -732,6 +739,26 @@ const needsPillText = computed(() => {
   return shelfOptionLabels(shelfOptions.needs, ids) || `已选 ${ids.length} 项`
 })
 
+// 顾客端叫法：后台原料标签叫「调味」，顾客看不懂；这里显示为「香料」。
+const AVOID_GROUP_LABEL_ALIASES: Record<string, string> = {
+  调味: '香料'
+}
+
+// 没有子标签、展不开的分类，用几个常见例子说明收的是什么。
+const AVOID_GROUP_EXAMPLES: Record<string, string[]> = {
+  内脏: ['肝', '肾', '心'],
+  蛋类: ['鸡蛋', '鸭蛋', '鹌鹑蛋'],
+  谷物: ['大米', '燕麦', '小米'],
+  豆类: ['红豆', '黄豆', '绿豆'],
+  坚果种子: ['核桃', '芝麻', '南瓜子'],
+  蔬菜: ['胡萝卜', '南瓜', '西兰花'],
+  水果: ['苹果', '蓝莓', '香蕉'],
+  菌藻: ['香菇', '海带', '木耳'],
+  薯类: ['红薯', '土豆', '山药'],
+  油脂: ['鱼油', '亚麻籽油', '鸡油'],
+  调味: ['八角', '桂皮', '香叶']
+}
+
 const shelfAvoidGroups = computed<AvoidGroup[]>(() => {
   const childrenOf = new Map<string, ShelfFilterOption[]>()
   for (const tag of shelfOptions.avoid) {
@@ -745,10 +772,17 @@ const shelfAvoidGroups = computed<AvoidGroup[]>(() => {
     .filter((tag) => !tag.parentId)
     .map((tag) => {
       const children = childrenOf.get(tag.value) || []
+      const displayLabel = AVOID_GROUP_LABEL_ALIASES[tag.label] || tag.label
+      // 有子标签的分类直接把子项摆出来，不需要示例；没有子项的才给示例。
+      const examples = children.length
+        ? []
+        : (AVOID_GROUP_EXAMPLES[tag.label] || AVOID_GROUP_EXAMPLES[displayLabel] || [])
       return {
         ...tag,
         children,
-        disabled: total > 0 && tag.count >= total
+        disabled: total > 0 && tag.count >= total,
+        displayLabel,
+        examples
       }
     })
 })
@@ -3472,6 +3506,15 @@ defineOptions({
 .sf-group-head {
   border-bottom: 0;
   padding-bottom: 12rpx;
+}
+
+.sf-group-examples {
+  display: block;
+  padding: 0 0 16rpx 4rpx;
+  margin-top: -8rpx;
+  font-size: 22rpx;
+  line-height: 1.45;
+  color: #8c8a72;
 }
 
 .sf-group-head.is-off {

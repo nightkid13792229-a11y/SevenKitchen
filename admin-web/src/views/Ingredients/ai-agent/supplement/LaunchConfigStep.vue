@@ -61,6 +61,30 @@
           </span>
         </div>
 
+        <div v-if="targetsLoaded" class="launch-seg__row">
+          <span class="launch-seg__label">默认目标营养素</span>
+          <el-select
+            v-model="defaultTargets"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            placeholder="设计器里加这条补剂时默认勾选的营养素"
+            style="width: 420px"
+            size="small"
+          >
+            <el-option
+              v-for="option in targetOptions"
+              :key="option.value"
+              :label="`${option.label}（${option.unit}）`"
+              :value="option.value"
+            />
+          </el-select>
+          <span class="launch-seg__hint">
+            只影响设计器里默认勾哪几项，不锁定食谱；只列档案里有值的营养素
+          </span>
+        </div>
+
         <div v-if="decisions.retail === false" class="launch-seg__row">
           <span class="launch-seg__label">不上架原因</span>
           <el-select
@@ -376,7 +400,8 @@ import {
   type EquivalenceGroupDetail,
   type EquivalenceGroupSummary,
 } from '@/api/supplementEquivalence'
-import { ingredientApi } from '@/api/ingredients'
+import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
+import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { getApiErrorMessage, toastApiError } from '@/utils/apiError'
 import SupplementArchivePanel from './SupplementArchivePanel.vue'
@@ -441,6 +466,16 @@ const groupChoice = ref<string>('')
 const autoGroupHint = ref('')
 const shopConfig = ref<{ markupMultiplier?: number; priceRoundingMode?: string } | null>(null)
 const uploadingImage = ref(false)
+const nutritionFoodId = computed(() => {
+  const mappings = ingredient.value?.nutritionFoodMappings ?? []
+  return mappings[0]?.nutritionFoodId ?? null
+})
+/** 营养档案里"有值"的字段，用来当默认目标候选 */
+const targetOptions = ref<Array<{ value: string; label: string; unit: string }>>([])
+const defaultTargets = ref<string[]>([])
+/** 只有读到过才能保存，避免把没加载成功的当成"清空" */
+const targetsLoaded = ref(false)
+
 const groupDetail = ref<EquivalenceGroupDetail | null>(null)
 const loadingGroupDetail = ref(false)
 const reviewingGroup = ref(false)
@@ -453,7 +488,8 @@ function currentFingerprint(): string {
     archiveRef.value?.buildPatch?.() ?? null,
     diyForm,
     procForm,
-    groupChoice.value
+    groupChoice.value,
+    defaultTargets.value
   ])
 }
 
@@ -526,6 +562,7 @@ async function load() {
     groups.value = groupList.items || []
     equivalenceEnabled.value = config?.equivalenceEnabled === true
     void loadReferencePrice(row.value)
+    void loadNutritionTargets()
 
     const properties = savedProperties()
     diyForm.enabled = detail?.diyEnabled !== false
@@ -834,6 +871,53 @@ async function onPasteImage(event: ClipboardEvent): Promise<void> {
   await uploadImageFile(file)
 }
 
+/**
+ * 读营养档案：把「有值的营养素」做成默认目标候选，并带出已配置的目标。
+ *
+ * 默认目标只影响设计器里「添加这条补剂」时的初始勾选，不锁定食谱。
+ */
+async function loadNutritionTargets(): Promise<void> {
+  const foodId = nutritionFoodId.value
+  targetsLoaded.value = false
+  targetOptions.value = []
+  defaultTargets.value = []
+  if (!foodId) return
+  try {
+    const detail = await nutritionFoodApi.getDetail(foodId)
+    const profile = (detail?.nutritionData ?? {}) as unknown as Record<string, unknown>
+    const options: Array<{ value: string; label: string; unit: string }> = []
+    for (const group of supplementNutrientGroups) {
+      for (const field of group.fields) {
+        const value = readProfileValue(profile, field.fieldPath)
+        if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+          options.push({
+            value: field.fieldPath,
+            label: `${group.title} · ${field.label}`,
+            unit: field.unit
+          })
+        }
+      }
+    }
+    targetOptions.value = options
+    defaultTargets.value = (detail?.defaultSupplementTargets ?? [])
+      .map((item) => item.fieldPath)
+      .filter(Boolean)
+    targetsLoaded.value = true
+  } catch {
+    targetsLoaded.value = false
+  }
+}
+
+/** `minerals.iron` → profile.minerals.iron */
+function readProfileValue(profile: Record<string, unknown>, fieldPath: string): unknown {
+  return fieldPath.split('.').reduce<unknown>((acc, key) => {
+    if (acc && typeof acc === 'object') {
+      return (acc as Record<string, unknown>)[key]
+    }
+    return undefined
+  }, profile)
+}
+
 /** 选中哪个组，就把它的成员和审核状态拉出来——审核和排序都在这一屏做 */
 async function loadGroupDetail(groupId: string): Promise<void> {
   if (!groupId || groupId === GROUP_SKIPPED) {
@@ -1021,6 +1105,27 @@ async function saveAll() {
   } catch (error) {
     failed += 1
     toastApiError(error, '商品档案保存失败', (message) => ElMessage.error(message))
+  }
+
+  try {
+    if (nutritionFoodId.value && targetsLoaded.value) {
+      const picked = defaultTargets.value
+      const payload = picked.map((fieldPath) => {
+        const option = targetOptions.value.find((item) => item.value === fieldPath)
+        return {
+          fieldPath,
+          label: option?.label ?? null,
+          unit: option?.unit ?? null
+        }
+      })
+      await nutritionFoodApi.update(nutritionFoodId.value, {
+        defaultSupplementTargets: payload
+      })
+      saved += 1
+    }
+  } catch (error) {
+    failed += 1
+    toastApiError(error, '默认目标营养素保存失败', (message) => ElMessage.error(message))
   }
 
   try {

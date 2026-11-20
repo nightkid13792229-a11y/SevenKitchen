@@ -127,6 +127,16 @@ export class CreateSupplementIngredientDto {
   @IsIn(SUPPLEMENT_BASE_UNITS)
   baseUnit?: 'PCS' | 'G' | 'ML';
 
+  @ApiPropertyOptional({
+    description:
+      '默认目标营养素（fieldPath 列表）。不传则按营养档案里有值的营养素兜底；一个都没有会拒绝建档',
+    type: [String],
+  })
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  defaultTargetFields?: string[];
+
   @ApiProperty({ description: '单位展示名', enum: SUPPLEMENT_UNIT_LABELS })
   @IsIn(SUPPLEMENT_UNIT_LABELS)
   unitDisplayLabel!: string;
@@ -230,6 +240,7 @@ export function toCreateSupplementInput(
     productModel: dto.productModel ?? null,
     purchaseChannel: dto.purchaseChannel ?? null,
     baseUnit: dto.baseUnit ?? 'PCS',
+    defaultTargetFields: dto.defaultTargetFields,
     unitDisplayLabel: dto.unitDisplayLabel,
     physicalForm: dto.physicalForm,
     purchaseUnit: dto.purchaseUnit,

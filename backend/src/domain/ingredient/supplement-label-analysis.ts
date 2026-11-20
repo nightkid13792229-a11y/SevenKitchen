@@ -44,6 +44,8 @@ export interface AnalysisResult {
   labelNames: string[];
   tagNames: string[];
   addTiming: string | null;
+  /** 这条补剂的默认目标营养素（必须是 nutrients 里出现过的字段） */
+  defaultTargetFields: string[];
 }
 
 export interface AnalysisOutcome {
@@ -160,6 +162,13 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
     nutrients.push({ fieldPath, value, unit: String(entry.unit ?? '') });
   }
 
+  // 默认目标营养素：只认自己列出来的营养素，模型不能凭空加
+  const ownFieldPaths = new Set(nutrients.map((item) => item.fieldPath));
+  const targetRaw = Array.isArray(source.defaultTargetFields) ? source.defaultTargetFields : [];
+  const defaultTargetFields = targetRaw
+    .map((item) => String(item ?? '').trim())
+    .filter((item) => ownFieldPaths.has(item));
+
   const labelCategoryRaw = String(source.labelCategory ?? '').toUpperCase();
   const labelCategory =
     labelCategoryRaw === 'FEED_ADDITIVE' || labelCategoryRaw === 'FEED_MATERIAL'
@@ -227,7 +236,8 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       labelCategory,
       labelNames,
       tagNames,
-      addTiming
+      addTiming,
+      defaultTargetFields
     },
     dropped
   };
@@ -280,7 +290,9 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     `8. addTiming：从这些里选 ${ctx.allowedAddTimings.join('、')}（制作中 / 开饭前）。`,
     '9. nutrients：只填标签上明确写了含量的项，fieldPath 必须来自下面这个清单：',
     `   ${ctx.allowedFieldPaths.join('、')}`,
-    '10. 任何一项不确定就写 null，不要编。',
+    '10. defaultTargetFields：这条补剂**主要补哪几个营养素**（fieldPath 数组），',
+    '    只能从 nutrients 里选；单一补剂就一个，B 族/鱼油可以多个。选不出来就空数组。',
+    '11. 任何一项不确定就写 null，不要编。',
     '',
     'JSON 结构：',
     '{"name":string|null,"brand":string|null,"productModel":string|null,"priceCny":number|null,',
@@ -288,7 +300,7 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     ' "physicalForm":"CAPSULE"|"TABLET"|"POWDER"|"LIQUID"|null,"servingUnitsPerDose":number|null,',
     ' "nutrients":[{"fieldPath":string,"value":number,"unit":string}],',
     ' "labelCategory":"FEED_ADDITIVE"|"FEED_MATERIAL"|null,"labelNames":string[],"tagNames":string[],',
-    ' "addTiming":string|null}'
+    ' "addTiming":string|null,"defaultTargetFields":string[]}'
   ].join('\n');
 }
 

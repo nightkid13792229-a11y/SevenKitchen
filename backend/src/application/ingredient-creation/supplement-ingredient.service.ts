@@ -5,6 +5,7 @@ import {
   createEmptyNutritionProfile,
 } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
+import { findNutritionField } from '../../domain/ingredient/nutrition-field-catalog';
 
 /**
  * 补剂建档。
@@ -35,6 +36,11 @@ export interface CreateSupplementIngredientInput {
   purchaseChannel?: string | null;
   /** 基准单位：胶囊/片剂 PCS，粉类 G，液体 ML */
   baseUnit?: 'PCS' | 'G' | 'ML';
+  /**
+   * 默认目标营养素（fieldPath 列表）。必填：设计器里加这条补剂时默认勾哪几项。
+   * 不传就按营养档案里"有值的营养素"兜底；一个都没有则拒绝建档。
+   */
+  defaultTargetFields?: string[];
   /** 粒 / 片 / 胶囊 / 平勺 / 份 */
   unitDisplayLabel: string;
   physicalForm: SupplementPhysicalForm;
@@ -167,6 +173,31 @@ export class SupplementIngredientService {
           }
         });
 
+        // 默认目标营养素：显式给了就用，没给按档案里有值的营养素兜底；
+        // 一个都没有就不让建档——否则设计器里加进去没有默认目标，等于白建。
+        const targetFields = (input.defaultTargetFields ?? []).filter(
+          (fieldPath) => Number(perUnitNutrients[fieldPath]) > 0,
+        );
+        const resolvedTargetFields =
+          targetFields.length > 0
+            ? targetFields
+            : Object.keys(perUnitNutrients).filter(
+                (fieldPath) => Number(perUnitNutrients[fieldPath]) > 0,
+              );
+        if (resolvedTargetFields.length === 0) {
+          throw new BadRequestException(
+            '这条补剂没有任何营养素数值，无法确定默认目标营养素；请先把标签上的含量读出来或手填',
+          );
+        }
+        const defaultSupplementTargets = resolvedTargetFields.map((fieldPath) => {
+          const field = findNutritionField(fieldPath);
+          return {
+            fieldPath,
+            label: field?.label ?? null,
+            unit: field?.unit ?? null,
+          };
+        });
+
         const nutritionFood = await tx.nutritionFood.create({
           data: {
             name: nutritionFoodName,
@@ -183,6 +214,8 @@ export class SupplementIngredientService {
             ediblePortionLabel: `每 1 ${input.unitDisplayLabel}`,
             processingLabel: '标签折算',
             nutritionData: profile as unknown as Prisma.InputJsonValue,
+            defaultSupplementTargets:
+              defaultSupplementTargets as unknown as Prisma.InputJsonValue,
             notes: '补剂标签折算，待人工确认',
             createdBy: input.createdBy,
             status: 'PENDING'

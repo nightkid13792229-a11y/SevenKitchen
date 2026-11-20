@@ -116,6 +116,7 @@ const EMPTY_ANALYSIS: AnalysisOutcome['result'] = {
   labelNames: [],
   tagNames: [],
   addTiming: null,
+  defaultTargetFields: [],
 };
 
 @Injectable()

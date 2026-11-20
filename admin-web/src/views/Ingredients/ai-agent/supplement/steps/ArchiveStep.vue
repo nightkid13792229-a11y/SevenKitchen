@@ -26,6 +26,29 @@
     </el-alert>
 
     <div class="archive-step__block">
+      <label class="wb-label">默认目标营养素（必填）</label>
+      <el-select
+        v-model="draft.defaultTargetFields"
+        multiple
+        filterable
+        collapse-tags
+        collapse-tags-tooltip
+        placeholder="设计器里加这条补剂时默认勾选的营养素；AI 会先填"
+        style="width: 100%"
+      >
+        <el-option
+          v-for="option in targetOptions"
+          :key="option.value"
+          :label="`${option.label}（${option.unit}）`"
+          :value="option.value"
+        />
+      </el-select>
+      <em class="field__hint">
+        只能选标签上读出来的营养素；没有它就加不成这条补剂
+      </em>
+    </div>
+
+    <div class="archive-step__block">
       <label class="wb-label">选品依据（可不填）</label>
       <el-input
         v-model="selectionNote"
@@ -450,6 +473,22 @@ watch(
   }
 )
 
+const targetOptions = computed(() => {
+  const options: Array<{ value: string; label: string; unit: string }> = []
+  for (const group of supplementNutrientGroups) {
+    for (const field of group.fields) {
+      if (draft.servingNutrients[field.fieldPath] !== undefined) {
+        options.push({
+          value: field.fieldPath,
+          label: `${group.title} · ${field.label}`,
+          unit: field.unit
+        })
+      }
+    }
+  }
+  return options
+})
+
 const hasAnyNutrient = computed(() => Object.keys(draft.servingNutrients).length > 0)
 
 /**
@@ -659,6 +698,9 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
   if (analysis.addTiming) {
     draft.addTiming = analysis.addTiming
   }
+  if ((analysis.defaultTargetFields ?? []).length > 0) {
+    draft.defaultTargetFields = analysis.defaultTargetFields
+  }
   droppedHints.value = result.diagnostics?.dropped ?? analysis.dropped ?? []
 }
 
@@ -739,6 +781,10 @@ async function readImages(): Promise<void> {
 
     applySuggestions(result)
     applyAnalysis(result)
+    // 模型没给目标时，用"读到的营养素"兜底——建档门禁要求至少一个
+    if (draft.defaultTargetFields.length === 0) {
+      draft.defaultTargetFields = result.nutrients.map((item) => item.fieldPath)
+    }
 
     skipped.value = skippedRows
     catalogCandidates.value = (result.catalog?.matches ?? []).map((item) => ({
@@ -769,6 +815,10 @@ function buildSelection(): Record<string, unknown> {
 }
 
 async function submit(): Promise<void> {
+  if (draft.defaultTargetFields.length === 0) {
+    ElMessage.error('还没有默认目标营养素：先把标签上的营养素读出来，或手填含量')
+    return
+  }
   const payload = toCreatePayload(draft)
   if (!payload) {
     return

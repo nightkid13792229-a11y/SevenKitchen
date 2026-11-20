@@ -149,3 +149,20 @@ describe('buildAnalysisPrompt', () => {
     expect(prompt).toContain('化学形态名');
   });
 });
+
+describe('validateAnalysis · 默认目标营养素', () => {
+  it('只保留自己列出来的营养素', () => {
+    const { result } = validateAnalysis(
+      {
+        nutrients: [{ fieldPath: 'minerals.iron', value: 18, unit: 'mg' }],
+        defaultTargetFields: ['minerals.iron', 'minerals.zinc'],
+      },
+      ctx(),
+    );
+    expect(result.defaultTargetFields).toEqual(['minerals.iron']);
+  });
+
+  it('没给就是空数组，不猜', () => {
+    expect(validateAnalysis({}, ctx()).result.defaultTargetFields).toEqual([]);
+  });
+});

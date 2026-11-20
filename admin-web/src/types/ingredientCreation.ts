@@ -589,6 +589,8 @@ export interface CreateSupplementIngredientPayload {
   purchaseChannel?: string
   /** 基准单位：胶囊/片剂 PCS，粉 G，液体 ML */
   baseUnit?: 'PCS' | 'G' | 'ML'
+  /** 默认目标营养素；不传后端按档案里有值的营养素兜底 */
+  defaultTargetFields?: string[]
   unitDisplayLabel: string
   physicalForm: SupplementPhysicalForm
   purchaseUnit: string
@@ -740,6 +742,8 @@ export interface SupplementAnalysisDto {
   labelNames: string[]
   tagNames: string[]
   addTiming: string | null
+  /** 模型判断的默认目标营养素 */
+  defaultTargetFields: string[]
   /** 被代码挡下来的结论，界面上说明一下 */
   dropped?: { field: string; reason: string; value: string }[]
 }

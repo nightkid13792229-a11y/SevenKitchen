@@ -1,18 +1,14 @@
 /**
- * 补剂三步流程的状态。
+ * 补剂建档流程的状态（两步：建档 → 上架）。
  *
  * 三条规矩：
- * 1. 每一步能不能进，由**产物**决定（有形态结论才能比价，选中商品才能建档，写入成功才能上架）；
+ * 1. 能不能进下一步，由**产物**决定（写入成功才能上架）；
  * 2. 状态是纯数据，不碰 Vue，好在 node 里直接测；
  * 3. 当天一气呵成，所以只做 sessionStorage 快照，不做服务端草稿。
  */
-import type {
-  SupplementComparisonDto,
-  SupplementDimensionsAdviceDto
-} from '@/types/ingredientCreation'
 import { emptySupplementDraft, type SupplementDraftValue } from '../supplementFormState'
 
-export type FlowStep = 1 | 2 | 3 | 4
+export type FlowStep = 1 | 2
 
 export interface SupplementSavedResult {
   ingredientId: string
@@ -20,31 +16,22 @@ export interface SupplementSavedResult {
   evidenceId: string
 }
 
-/** 人选定的形态/来源候选（维度驱动） */
-export interface ChosenForm {
-  dimensionKey: 'FORM' | 'SOURCE'
-  candidateKey: string
-  labelZh: string
-  status: 'EVIDENCED' | 'MARKET_ONLY'
-  /** 这一档的结论；AVOID/无结论被人硬选时，快照要记成人工覆盖 */
-  verdict: 'RECOMMENDED' | 'ACCEPTABLE' | 'AVOID' | 'NO_EVIDENCE'
-}
-
+/**
+ * 补剂建档流程（2026-11-20 收敛）。
+ *
+ * 定形态与比价已移到 DSH 的 supplement-product-selection Skill：
+ * 这里只负责「拿到最终选定的商品 → 录档案 → 门禁 → 写入 → 上架」。
+ * 选品依据（形态结论、比价、链接）由人从 Skill 的结论里粘一段进来，随档案留档。
+ */
 export interface SupplementFlowState {
   step: FlowStep
-  nutrientKey: string | null
-  nutrientLabel: string
-  formAdvice: SupplementDimensionsAdviceDto | null
-  chosenForm: ChosenForm | null
-  /** 这一类没有形态可问时置 true：第 2 步放行，但没有任何形态锚点 */
-  formSkipped: boolean
-  comparison: SupplementComparisonDto | null
-  chosenOfferUrl: string | null
+  /** 选品依据：形态、出处、选中商品与单价，人从 Skill 结论里粘过来 */
+  selectionNote: string
   archive: SupplementDraftValue
   saved: SupplementSavedResult | null
 }
 
-export const FLOW_STORAGE_KEY = 'supplement-flow-v3'
+export const FLOW_STORAGE_KEY = 'supplement-flow-v4'
 
 export interface SimpleStorage {
   getItem(key: string): string | null
@@ -55,40 +42,10 @@ export interface SimpleStorage {
 export function emptyFlowState(): SupplementFlowState {
   return {
     step: 1,
-    nutrientKey: null,
-    nutrientLabel: '',
-    formAdvice: null,
-    chosenForm: null,
-    formSkipped: false,
-    comparison: null,
-    chosenOfferUrl: null,
+    selectionNote: '',
     archive: emptySupplementDraft(),
     saved: null
   }
-}
-
-/** 选定的形态候选：人点过的优先；没点过但有推荐时，用推荐那条。 */
-export function effectiveForm(state: SupplementFlowState): ChosenForm | null {
-  if (state.chosenForm) {
-    return state.chosenForm
-  }
-  const recommendation = state.formAdvice?.recommendation
-  if (!recommendation) {
-    return null
-  }
-  for (const group of state.formAdvice?.dimensions ?? []) {
-    const hit = group.candidates.find((item) => item.key === recommendation.candidateKey)
-    if (hit) {
-      return {
-        dimensionKey: hit.dimension,
-        candidateKey: hit.key,
-        labelZh: hit.labelZh,
-        status: hit.status,
-        verdict: hit.verdict
-      }
-    }
-  }
-  return null
 }
 
 export function canEnter(state: SupplementFlowState, step: FlowStep): boolean {
@@ -96,10 +53,6 @@ export function canEnter(state: SupplementFlowState, step: FlowStep): boolean {
     case 1:
       return true
     case 2:
-      return state.formSkipped || !!effectiveForm(state)
-    case 3:
-      return !!state.chosenOfferUrl
-    case 4:
       return !!state.saved?.ingredientId
     default:
       return false
@@ -152,25 +105,13 @@ export function loadSnapshot(storage?: SimpleStorage): SupplementFlowState | nul
       return null
     }
     const step = parsed.step
-    if (step !== 1 && step !== 2 && step !== 3 && step !== 4) {
+    if (step !== 1 && step !== 2) {
       return null
     }
-    // 老快照可能缺字段：以空状态为底，只覆盖有的。
-    // 形态建议的结构在 v3 变过（options → dimensions），旧的直接丢掉回第 1 步，
-    // 否则第 3 步提交时会对 undefined 调 flatMap（2026-11-20 复核）。
-    const advice = parsed.formAdvice
-    const adviceValid =
-      advice === null ||
-      advice === undefined ||
-      Array.isArray((advice as { dimensions?: unknown }).dimensions)
-
+    // 老快照可能缺字段：以空状态为底，只覆盖有的
     return {
       ...emptyFlowState(),
       ...parsed,
-      step: adviceValid ? (parsed.step as FlowStep) : 1,
-      formAdvice: adviceValid ? (advice ?? null) : null,
-      chosenForm: adviceValid ? (parsed.chosenForm ?? null) : null,
-      formSkipped: adviceValid ? !!parsed.formSkipped : false,
       archive: {
         ...emptySupplementDraft(),
         ...(parsed.archive ?? {})

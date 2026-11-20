@@ -2,7 +2,7 @@
   <section class="launch-step" data-testid="launch-config-step">
     <header class="launch-step__head">
       <div>
-        <h3>第 4 步 · 落地配置</h3>
+        <h3>② 上架 · 落地配置</h3>
         <p class="launch-step__desc">
           四段都要明确（参与 / 不参与），不能空着。这里调用的是补剂商品目录、原料档案、
           等价组三个既有入口，规则与那些页面完全一致。

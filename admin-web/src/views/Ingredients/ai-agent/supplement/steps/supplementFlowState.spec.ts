@@ -1,12 +1,11 @@
 /**
- * 三步流程状态的单测：进得去进不去，只看产物。
+ * 建档流程状态的单测：两步（建档 → 上架），能不能进只看产物。
  */
 import { describe, expect, it } from 'vitest'
 import {
   FLOW_STORAGE_KEY,
   canEnter,
   clearSnapshot,
-  effectiveForm,
   emptyFlowState,
   goTo,
   loadSnapshot,
@@ -14,7 +13,6 @@ import {
   type SimpleStorage,
   type SupplementFlowState
 } from './supplementFlowState'
-import type { SupplementDimensionsAdviceDto } from '@/types/ingredientCreation'
 
 function memoryStorage(): SimpleStorage & { dump: Map<string, string> } {
   const dump = new Map<string, string>()
@@ -30,78 +28,36 @@ function memoryStorage(): SimpleStorage & { dump: Map<string, string> } {
   }
 }
 
-function withAdvice(): SupplementFlowState {
-  const advice: SupplementDimensionsAdviceDto = {
-    nutrientKey: 'minerals.copper',
-    nutrientLabel: '铜',
-    dimensions: [
-      {
-        key: 'FORM',
-        label: '形态',
-        candidates: [
-          {
-            key: 'coppersulfate',
-            labelZh: '硫酸铜',
-            dimension: 'FORM',
-            status: 'EVIDENCED',
-            citations: [],
-            verdict: 'ACCEPTABLE',
-            reason: '测试',
-            market: null
-          }
-        ]
-      }
-    ],
-    recommendation: { dimensionKey: 'FORM', candidateKey: 'coppersulfate' },
-    gaps: []
+function savedState(): SupplementFlowState {
+  return {
+    ...emptyFlowState(),
+    saved: { ingredientId: 'i', nutritionFoodId: 'f', evidenceId: 'e' }
   }
-  return { ...emptyFlowState(), formAdvice: advice }
 }
 
 describe('canEnter', () => {
-  it('没有形态结论，不能进第 2 步', () => {
+  it('第 1 步永远能进', () => {
+    expect(canEnter(emptyFlowState(), 1)).toBe(true)
+  })
+
+  it('没写入成功，不能进上架', () => {
     expect(canEnter(emptyFlowState(), 2)).toBe(false)
-    expect(canEnter(withAdvice(), 2)).toBe(true)
-  })
-
-  it('推荐但没点过，也能进第 2 步（推荐即默认选中）', () => {
-    expect(effectiveForm(withAdvice())?.candidateKey).toBe('coppersulfate')
-  })
-
-  it('跳过形态（空表直接比价）也能进第 2 步', () => {
-    const state = { ...emptyFlowState(), formSkipped: true }
-    expect(canEnter(state, 2)).toBe(true)
-  })
-
-  it('没有选中商品，不能进第 3 步', () => {
-    expect(canEnter(withAdvice(), 3)).toBe(false)
-    expect(canEnter({ ...withAdvice(), chosenOfferUrl: 'u' }, 3)).toBe(true)
-  })
-
-  it('没写入成功，不能进第 4 步', () => {
-    const state = { ...withAdvice(), chosenOfferUrl: 'u' }
-    expect(canEnter(state, 4)).toBe(false)
-    expect(
-      canEnter(
-        { ...state, saved: { ingredientId: 'i', nutritionFoodId: 'f', evidenceId: 'e' } },
-        4
-      )
-    ).toBe(true)
+    expect(canEnter(savedState(), 2)).toBe(true)
   })
 
   it('进不去就原地不动', () => {
     const state = emptyFlowState()
-    expect(goTo(state, 3)).toBe(state)
+    expect(goTo(state, 2)).toBe(state)
   })
 })
 
 describe('快照', () => {
-  it('能存能读', () => {
+  it('能存能读（含选品依据）', () => {
     const storage = memoryStorage()
-    const state = { ...withAdvice(), step: 2 as const }
+    const state = { ...savedState(), step: 2 as const, selectionNote: '形态=无机盐' }
     saveSnapshot(state, storage)
     expect(loadSnapshot(storage)?.step).toBe(2)
-    expect(loadSnapshot(storage)?.formAdvice?.recommendation?.candidateKey).toBe('coppersulfate')
+    expect(loadSnapshot(storage)?.selectionNote).toBe('形态=无机盐')
   })
 
   it('坏数据当没有', () => {
@@ -112,29 +68,10 @@ describe('快照', () => {
     expect(loadSnapshot(storage)).toBeNull()
   })
 
-  it('老快照缺字段时补默认值，不炸在 undefined 上', () => {
+  it('老快照（三步/四步）直接丢弃，不炸在 undefined 上', () => {
     const storage = memoryStorage()
-    storage.setItem(FLOW_STORAGE_KEY, JSON.stringify({ step: 1, nutrientLabel: '锌' }))
-    const restored = loadSnapshot(storage)
-    expect(restored?.nutrientLabel).toBe('锌')
-    expect(restored?.archive.servingNutrients).toEqual({})
-  })
-
-  it('旧的固定四档快照（没有 dimensions）直接丢掉回第 1 步', () => {
-    const storage = memoryStorage()
-    storage.setItem(
-      FLOW_STORAGE_KEY,
-      JSON.stringify({
-        step: 3,
-        nutrientLabel: '铜',
-        formAdvice: { options: [{ level: 'OXIDE' }], recommendedLevel: 'OXIDE' },
-        chosenForm: { candidateKey: 'x' }
-      })
-    )
-    const restored = loadSnapshot(storage)
-    expect(restored?.step).toBe(1)
-    expect(restored?.formAdvice).toBeNull()
-    expect(restored?.chosenForm).toBeNull()
+    storage.setItem(FLOW_STORAGE_KEY, JSON.stringify({ step: 3, nutrientLabel: '铜' }))
+    expect(loadSnapshot(storage)).toBeNull()
   })
 
   it('清除后读不到', () => {

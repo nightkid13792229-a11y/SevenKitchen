@@ -13,8 +13,6 @@ import type {
   PendingSupplementArchiveDto,
   SupplementEvidenceDto,
   SupplementCandidateDto,
-  SupplementComparisonDto,
-  SupplementDimensionsAdviceDto,
   SupplementLabelIntakeDto,
   SupplementLinkPreviewDto,
   CheckDomain,
@@ -60,34 +58,6 @@ export const ingredientCreationApi = {
     payload: CreateSupplementIngredientPayload
   ): Promise<CreateSupplementIngredientResultDto> =>
     api.post(`${BASE}/supplements`, payload),
-
-  /**
-   * 补剂比价：一轮抓 iHerb 的商品，算每 1000 单位有效成分的价，排序并给推荐。
-   *
-   * 整表硬上限 75 秒，调用方要留够余量。
-   */
-  compareSupplementOffers: (payload: {
-    nutrientKey: string
-    /** 选定的形态正名；没有形态可问时不传，后端不做同档分组 */
-    formLabel?: string
-    /** 形态的别称：用来判断每一瓶是不是同一档 */
-    formAliases?: string[]
-    keyword?: string
-    limit?: number
-  }): Promise<SupplementComparisonDto> =>
-    api.post('/admin/ingredient-supplement-agent/compare', payload, { timeout: 120000 }),
-
-  /**
-   * 形态建议（维度驱动）：形态/来源由知识库原文与市场标题长出。
-   *
-   * 同一个路径；旧的固定四档已于 2026-11-20 删除。
-   */
-  supplementFormDimensions: (payload: {
-    nutrientKey: string
-    nutrientLabel: string
-    question?: string
-  }): Promise<SupplementDimensionsAdviceDto> =>
-    api.post('/admin/ingredient-supplement-agent/form-advice', payload, { timeout: 180000 }),
 
   /** 两张图读成档案初稿：正面认规格剂型，标签认 Serving Size 与成分表。 */
   readSupplementLabelImages: (payload: {

@@ -674,61 +674,6 @@ export interface CreateSupplementIngredientResultDto {
  * 补剂三步（2026-11-20）：形态建议 / 比价 / 图建档
  * ------------------------------------------------------------------ */
 
-/**
- * 结论。`NO_EVIDENCE` 是承重墙：没有原文支撑的结论一律落在这里，
- * 页面上不许给它「推荐」的样式。
- */
-export type SupplementFormVerdict = 'RECOMMENDED' | 'ACCEPTABLE' | 'AVOID' | 'NO_EVIDENCE'
-
-export interface SupplementCitationDto {
-  documentId: string
-  documentName: string
-  page: number
-  quote: string
-}
-
-export type SupplementOfferMissingDto =
-  | 'PRICE'
-  | 'UNITS_PER_BOTTLE'
-  | 'SERVING_UNITS'
-  | 'AMOUNT'
-  | 'COMPOUND_PRODUCT'
-
-export interface SupplementOfferDto {
-  url: string
-  name: string
-  priceCny: number | null
-  unitsPerBottle: number | null
-  servingUnitsPerDose: number | null
-  amountPerServing: number | null
-  formLevel: string | null
-  compound: boolean
-  servingsPerBottle: number | null
-  pricePerServing: number | null
-  pricePerThousand: number | null
-  missing: SupplementOfferMissingDto[]
-  sameForm: boolean
-}
-
-export interface SupplementPriceBasisDto {
-  nutrientKey: string
-  unit: 'MG' | 'IU' | 'CFU'
-  per: number
-  basisLabel: string
-  amountUnitLabel: string
-  fieldPaths: string[]
-}
-
-export interface SupplementComparisonDto {
-  offers: SupplementOfferDto[]
-  recommendedUrl: string | null
-  reason: string
-  basis: SupplementPriceBasisDto
-  failed: { url: string; name: string; reason: string }[]
-  partial: boolean
-}
-
-
 export interface SupplementFrontFieldsDto {
   brandCandidate: string | null
   productModel: string | null
@@ -744,45 +689,4 @@ export interface SupplementLabelIntakeDto {
   nutrients: SupplementLinkPreviewNutrientDto[]
   unrecognized: string[]
   suggestedName: string | null
-}
-
-/* ------------------------------------------------------------------ *
- * 维度驱动（2026-11-20）：形态/来源的取值由知识库原文与市场标题长出
- * ------------------------------------------------------------------ */
-
-export type SupplementDimensionKey = 'FORM' | 'SOURCE'
-
-export interface SupplementDimensionCandidateDto {
-  key: string
-  labelZh: string
-  dimension: SupplementDimensionKey
-  status: 'EVIDENCED' | 'MARKET_ONLY'
-  citations: SupplementCitationDto[]
-  verdict: SupplementFormVerdict
-  reason: string
-  market: { count: number; samples: string[] } | null
-  /** 同一条形态的其他叫法（双甘氨酸铜、甘氨酸螯合铜…） */
-  alsoKnownAs?: string[]
-}
-
-export interface SupplementDimensionGroupDto {
-  key: SupplementDimensionKey
-  label: string
-  candidates: SupplementDimensionCandidateDto[]
-}
-
-export interface SupplementRetrievalDto {
-  queries: string[]
-  pages: { documentId: string; page: number; score: number }[]
-  dropped: { documentId: string; page: number; reason: string }[]
-  failures?: { query: string; error: string }[]
-}
-
-export interface SupplementDimensionsAdviceDto {
-  nutrientKey: string
-  nutrientLabel: string
-  dimensions: SupplementDimensionGroupDto[]
-  recommendation: { dimensionKey: SupplementDimensionKey; candidateKey: string } | null
-  gaps: string[]
-  retrieval?: SupplementRetrievalDto
 }

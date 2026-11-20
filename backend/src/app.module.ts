@@ -231,12 +231,7 @@ import { NutritionGovernanceService } from './application/nutrition-governance/n
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
 import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
 import { SupplementAgentController } from './interfaces/controllers/supplement-agent.controller';
-import { SupplementOfferFetcherService } from './application/ingredient-creation/supplement-offer-fetcher.service';
-import { SupplementFormAdviceService } from './application/ingredient-creation/supplement-form-advice.service';
 import { SupplementLabelIntakeService } from './application/ingredient-creation/supplement-label-intake.service';
-import { SupplementMarketFormService } from './application/ingredient-creation/supplement-market-form.service';
-import { SupplementKbFormService } from './application/ingredient-creation/supplement-kb-form.service';
-import { SupplementFormTermService } from './application/ingredient-creation/supplement-form-term.service';
 import { SupplementLabelVisionService } from './application/ingredient-creation/supplement-label-vision.service';
 import { IngredientCreationAuditService } from './application/ingredient-creation/ingredient-creation-audit.service';
 import { IngredientCreationCandidateService } from './application/ingredient-creation/ingredient-creation-candidate.service';
@@ -1072,12 +1067,7 @@ validatePrismaConfig();
     SupplementIngredientService,
     SupplementLinkPreviewService,
     FeedAdditiveCatalogService,
-    SupplementOfferFetcherService,
-    SupplementFormAdviceService,
     SupplementLabelIntakeService,
-    SupplementMarketFormService,
-    SupplementKbFormService,
-    SupplementFormTermService,
     SupplementLabelVisionService,
     IngredientCreationIntakeService,
     IngredientNameClassifierService,

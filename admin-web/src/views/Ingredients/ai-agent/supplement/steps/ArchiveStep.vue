@@ -2,16 +2,39 @@
   <section class="archive-step">
     <header class="archive-step__head">
       <div>
-        <h3>③ 建档</h3>
+        <h3>① 建档</h3>
         <p class="archive-step__desc">
           传两张图：正面（品牌/规格/剂型）和标签（Serving Size + 成分表）。
           图上的字由 AI 抄，字段与折算由系统算；认不出的格子留空，不猜。
         </p>
       </div>
       <div class="archive-step__actions">
-        <el-button text data-action="back-to-compare" @click="emit('back')">← 回去比价</el-button>
+        <el-button text data-action="copy-skill-hint" @click="helpTextVisible = !helpTextVisible">
+          选品依据怎么填？
+        </el-button>
       </div>
     </header>
+
+    <el-alert
+      v-if="helpTextVisible"
+      type="info"
+      :closable="false"
+      show-icon
+      class="archive-step__help"
+    >
+      在 DSH 里跑「补剂选品」Skill，把它的形态结论与选中商品贴到下面；没有也可以直接建档。
+    </el-alert>
+
+    <div class="archive-step__block">
+      <label class="wb-label">选品依据（可不填）</label>
+      <el-input
+        v-model="selectionNote"
+        type="textarea"
+        :rows="3"
+        data-evidence="selectionNote"
+        placeholder="例如：形态=无机盐（SACN5 第 37 页）；选 Swanson Albion Copper 2mg×300 片 ¥80.76，每 1000mg ¥134.60"
+      />
+    </div>
 
     <div class="archive-step__uploads">
       <div class="upload-card">
@@ -142,7 +165,6 @@
               data-anchor="purchasePricePerPurchaseUnit"
               style="width: 100%"
             />
-            <em v-if="offer" class="field__hint">按比价选中那瓶带入的</em>
           </label>
         </div>
       </div>
@@ -270,11 +292,6 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { supplementNutrientGroups, supplementUsageUnitOptions } from '@/constants/supplementNutrients'
-import type {
-  SupplementDimensionsAdviceDto,
-  SupplementOfferDto
-} from '@/types/ingredientCreation'
-import type { ChosenForm } from './supplementFlowState'
 import {
   computePerUnit,
   findMissingHumanFields,
@@ -294,21 +311,23 @@ import { evaluateSupplementGates } from '../supplementGates'
  */
 const props = defineProps<{
   draft: SupplementDraftValue
-  offer: SupplementOfferDto | null
-  /** 第 1 步选定的形态候选 */
-  chosenForm: ChosenForm | null
-  formAdvice: SupplementDimensionsAdviceDto | null
+  /** 选品依据：形态结论、出处、选中商品与单价（人从 Skill 结论里粘过来） */
+  selectionNote: string
   /** 父级记着的写入结果：返回这一步时不要再让人重复写一遍 */
   savedResult?: { ingredientId: string; nutritionFoodId: string; evidenceId: string } | null
 }>()
 
 const emit = defineEmits<{
-  (event: 'back'): void
+  (event: 'update:selectionNote', value: string): void
   (event: 'saved', value: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void
   (event: 'go-launch'): void
 }>()
 
 const draft = props.draft
+const selectionNote = computed({
+  get: () => props.selectionNote,
+  set: (value: string) => emit('update:selectionNote', value)
+})
 const frontInput = ref<HTMLInputElement | null>(null)
 const labelInput = ref<HTMLInputElement | null>(null)
 const uploadingFront = ref(false)
@@ -321,6 +340,7 @@ const saving = ref(false)
 const confirming = ref(false)
 const confirmed = ref(false)
 const errorText = ref('')
+const helpTextVisible = ref(false)
 const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: string } | null>(
   props.savedResult ?? null
 )
@@ -484,27 +504,10 @@ async function readImages(): Promise<void> {
  * 只存"当时看到的"，不存推断；事后复核时能一路对回原文与比价表。
  */
 function buildSelection(): Record<string, unknown> {
-  const dimensions = props.formAdvice?.dimensions ?? []
-  const candidate =
-    dimensions.flatMap((group) => group.candidates).find(
-      (item) => item.key === props.chosenForm?.candidateKey
-    ) ?? null
   return {
-    dimensionKey: props.chosenForm?.dimensionKey ?? null,
-    candidateKey: props.chosenForm?.candidateKey ?? null,
-    candidateLabel: props.chosenForm?.labelZh ?? null,
-    // 人硬选的情形都算覆盖：市场有但没依据，或有原文但结论是"不推荐/无结论"
-    humanOverride:
-      !!props.chosenForm &&
-      (props.chosenForm.status !== 'EVIDENCED' ||
-        (props.chosenForm.verdict !== 'RECOMMENDED' &&
-          props.chosenForm.verdict !== 'ACCEPTABLE')),
-    nutrientKey: props.formAdvice?.nutrientKey ?? null,
-    nutrientLabel: props.formAdvice?.nutrientLabel ?? null,
-    gaps: props.formAdvice?.gaps ?? [],
-    formCandidate: candidate,
-    offer: props.offer,
-    chosenAt: new Date().toISOString()
+    source: 'SKILL',
+    note: props.selectionNote.trim() || null,
+    recordedAt: new Date().toISOString()
   }
 }
 
@@ -566,18 +569,6 @@ function apiErrorMessage(error: unknown, fallback: string): string {
   return fallback
 }
 
-// 第 2 步选中的那瓶，价格与规格先带进来（人改了就不再覆盖）
-if (props.offer) {
-  if (!draft.currentPricePerPurchaseUnit && props.offer.priceCny) {
-    draft.currentPricePerPurchaseUnit = props.offer.priceCny
-  }
-  if (!draft.purchaseToBaseRatio && props.offer.unitsPerBottle) {
-    draft.purchaseToBaseRatio = props.offer.unitsPerBottle
-  }
-  if (!draft.purchaseChannel.trim()) {
-    draft.purchaseChannel = 'iHerb'
-  }
-}
 </script>
 
 <style scoped>
@@ -604,6 +595,19 @@ if (props.offer) {
   font-size: 12px;
   color: #8a9099;
   line-height: 1.6;
+}
+.archive-step__block {
+  padding: 10px 0;
+  border-bottom: 1px solid #f2f4f6;
+}
+.archive-step__help {
+  margin-bottom: 4px;
+}
+.wb-label {
+  display: block;
+  font-size: 12px;
+  color: #5b6470;
+  margin-bottom: 6px;
 }
 .archive-step__uploads {
   display: grid;

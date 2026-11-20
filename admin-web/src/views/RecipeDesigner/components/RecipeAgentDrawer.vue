@@ -54,12 +54,10 @@
           {{ session.lastError }}
         </div>
 
-        <div
-          v-if="session?.phase === 'PLAN' && session.plan"
-          ref="planRef"
-          class="agent-plan"
-        >
-          <div class="agent-plan__title">营养方案（待确认）</div>
+        <div v-if="session?.plan" ref="planRef" class="agent-plan">
+          <div class="agent-plan__title">
+            营养方案{{ session.planConfirmedAt ? "（已确认）" : "（待确认）" }}
+          </div>
           <div class="agent-plan__summary">{{ session.plan.summary }}</div>
           <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
             每日 {{ session.plan.mealsPerDay }} 餐

@@ -819,7 +819,6 @@ function syncShelfDraft(): void {
 }
 
 function openShelfSheet(key: ShelfSheetKey): void {
-  uni.showToast({ title: '筛选已点击', icon: 'none', duration: 1200 })
   shelfOpenSheet.value = key
   shelfSearch.value = ''
   syncShelfDraft()
@@ -3253,8 +3252,13 @@ defineOptions({
 
 .sf-mask {
   position: fixed;
-  inset: 0;
-  z-index: 998;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 9999;
   background: rgba(22, 32, 27, 0.48);
   display: flex;
   align-items: flex-end;

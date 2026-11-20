@@ -91,6 +91,9 @@ export class SearchSupplementCandidatesDto {
   keyword!: string;
 }
 
+/** 基准单位：胶囊/片剂按「个」，粉按「克」，液体按「毫升」。 */
+export const SUPPLEMENT_BASE_UNITS = ['PCS', 'G', 'ML'] as const;
+
 export class CreateSupplementIngredientDto {
   @ApiProperty({ description: '原料名称', example: '鱼油（Omega-3）' })
   @IsString()
@@ -115,6 +118,14 @@ export class CreateSupplementIngredientDto {
   @IsString()
   @MaxLength(200)
   purchaseChannel?: string;
+
+  @ApiPropertyOptional({
+    description: '基准单位：胶囊/片剂 PCS，粉类 G，液体 ML；不传按 PCS',
+    enum: SUPPLEMENT_BASE_UNITS,
+  })
+  @IsOptional()
+  @IsIn(SUPPLEMENT_BASE_UNITS)
+  baseUnit?: 'PCS' | 'G' | 'ML';
 
   @ApiProperty({ description: '单位展示名', enum: SUPPLEMENT_UNIT_LABELS })
   @IsIn(SUPPLEMENT_UNIT_LABELS)
@@ -218,6 +229,7 @@ export function toCreateSupplementInput(
     brand: dto.brand ?? null,
     productModel: dto.productModel ?? null,
     purchaseChannel: dto.purchaseChannel ?? null,
+    baseUnit: dto.baseUnit ?? 'PCS',
     unitDisplayLabel: dto.unitDisplayLabel,
     physicalForm: dto.physicalForm,
     purchaseUnit: dto.purchaseUnit,

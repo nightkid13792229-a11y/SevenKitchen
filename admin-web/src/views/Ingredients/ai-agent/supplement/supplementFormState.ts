@@ -28,6 +28,8 @@ export interface SupplementDraftValue {
   brand: string
   productModel: string
   purchaseChannel: string
+  /** 基准单位：胶囊/片剂 PCS，粉 G，液体 ML */
+  baseUnit: 'PCS' | 'G' | 'ML'
   unitDisplayLabel: string
   physicalForm: SupplementPhysicalForm
   servingUnitsPerDose: number | null
@@ -55,6 +57,7 @@ export function emptySupplementDraft(): SupplementDraftValue {
     brand: '',
     productModel: '',
     purchaseChannel: '',
+    baseUnit: 'PCS',
     unitDisplayLabel: '粒',
     physicalForm: 'CAPSULE',
     servingUnitsPerDose: null,
@@ -196,6 +199,7 @@ export function toCreatePayload(
     brand: text(draft.brand) ?? undefined,
     productModel: text(draft.productModel) ?? undefined,
     purchaseChannel: text(draft.purchaseChannel) ?? undefined,
+    baseUnit: draft.baseUnit,
     unitDisplayLabel: draft.unitDisplayLabel,
     physicalForm: draft.physicalForm,
     purchaseUnit: draft.purchaseUnit.trim(),

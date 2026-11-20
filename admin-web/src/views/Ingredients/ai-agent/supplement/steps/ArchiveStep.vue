@@ -97,6 +97,9 @@
         >
           重新读
         </el-button>
+        <p v-if="droppedHints.length > 0" class="upload-card__warn">
+          有 {{ droppedHints.length }} 条判断没过校验，已留空：{{ droppedHints.map((item) => item.reason).join('；') }}
+        </p>
         <p v-if="skipped.length > 0" class="upload-card__warn">
           这些没认出来，请照标签补：{{ skipped.join('、') }}
         </p>
@@ -131,8 +134,17 @@
           </label>
           <label class="field">
             <span>基准单位</span>
-            <el-input :model-value="`个（${draft.unitDisplayLabel}）`" disabled />
-            <em class="field__hint">补剂固定按「粒」记账，营养按每 1 {{ draft.unitDisplayLabel }} 记</em>
+            <el-select v-model="draft.baseUnit" style="width: 100%">
+              <el-option
+                v-for="item in baseUnitOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+            <em class="field__hint">
+              营养按每 1 {{ draft.unitDisplayLabel }} 记；胶囊/片剂按个，粉按克，液体按毫升
+            </em>
           </label>
           <label class="field">
             <span>每份几粒</span>
@@ -347,7 +359,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ingredientApi, nutritionFoodApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
@@ -398,6 +410,7 @@ const reading = ref(false)
 const readDone = ref(false)
 const skipped = ref<string[]>([])
 const catalogCandidates = ref<{ name: string; dogAllowed: boolean }[]>([])
+const droppedHints = ref<{ field: string; reason: string; value: string }[]>([])
 const showAll = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
@@ -418,6 +431,22 @@ const saved = ref<{ ingredientId: string; nutritionFoodId: string; evidenceId: s
 
 const unitOptions = supplementUsageUnitOptions
 const tagSuggestions = ['矿物质', '维生素', '油脂类', '关节', '益生菌', '膳食纤维']
+
+const baseUnitOptions = [
+  { value: 'PCS', label: '个（粒/片/胶囊）', unit: '粒' },
+  { value: 'G', label: '克（粉类）', unit: 'g' },
+  { value: 'ML', label: '毫升（液体）', unit: 'ml' }
+] as const
+
+watch(
+  () => draft.baseUnit,
+  (value) => {
+    const option = baseUnitOptions.find((item) => item.value === value)
+    if (option) {
+      draft.unitDisplayLabel = option.unit
+    }
+  }
+)
 
 const hasAnyNutrient = computed(() => Object.keys(draft.servingNutrients).length > 0)
 
@@ -587,6 +616,46 @@ async function maybeRead(): Promise<void> {
 }
 
 /**
+ * 模型给出的判断（名称写化学形态、基准单位看剂型、渠道/价格从图上找、
+ * 标签类型按目录性质定）。有值就覆盖规则推断的结果——这是"人只做判断"的那一半。
+ */
+function applyAnalysis(result: SupplementLabelIntakeDto): void {
+  const analysis = result.analysis
+  if (!analysis) {
+    return
+  }
+  const setIf = <K extends keyof typeof draft>(key: K, value: (typeof draft)[K] | null) => {
+    if (value !== null && value !== undefined && value !== '') {
+      draft[key] = value as (typeof draft)[K]
+    }
+  }
+  setIf('name', analysis.name)
+  setIf('brand', analysis.brand)
+  setIf('productModel', analysis.productModel)
+  setIf('purchaseChannel', analysis.purchaseChannel)
+  setIf('baseUnit', analysis.baseUnit)
+  setIf('unitDisplayLabel', analysis.unitDisplayLabel)
+  setIf('physicalForm', analysis.physicalForm)
+  setIf('servingUnitsPerDose', analysis.servingUnitsPerDose)
+  if (analysis.priceCny !== null) {
+    draft.currentPricePerPurchaseUnit = analysis.priceCny
+  }
+  if (analysis.labelCategory) {
+    draft.labelCategory = analysis.labelCategory
+  }
+  if (analysis.labelNames.length > 0) {
+    draft.labelNames = analysis.labelNames
+  }
+  if (analysis.tagNames.length > 0) {
+    draft.tagNames = analysis.tagNames
+  }
+  if (analysis.addTiming) {
+    draft.addTiming = analysis.addTiming
+  }
+  droppedHints.value = analysis.dropped ?? []
+}
+
+/**
  * 能确定的东西一律先填好，人只做判断：
  * 名称、渠道、换算倍数、标签分类/时机、目录规范名、标签分组。
  *
@@ -662,6 +731,7 @@ async function readImages(): Promise<void> {
     }
 
     applySuggestions(result)
+    applyAnalysis(result)
 
     skipped.value = skippedRows
     catalogCandidates.value = (result.catalog?.matches ?? []).map((item) => ({

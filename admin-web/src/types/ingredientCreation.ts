@@ -587,6 +587,8 @@ export interface CreateSupplementIngredientPayload {
   brand?: string
   productModel?: string
   purchaseChannel?: string
+  /** 基准单位：胶囊/片剂 PCS，粉 G，液体 ML */
+  baseUnit?: 'PCS' | 'G' | 'ML'
   unitDisplayLabel: string
   physicalForm: SupplementPhysicalForm
   purchaseUnit: string
@@ -707,4 +709,25 @@ export interface SupplementLabelIntakeDto {
     matches: SupplementCatalogMatchDto[]
     suggestion: SupplementCatalogMatchDto | null
   }
+  /** 模型对档案的判断（已过校验）；模型没给出时为 null */
+  analysis: SupplementAnalysisDto | null
+}
+
+export interface SupplementAnalysisDto {
+  name: string | null
+  brand: string | null
+  productModel: string | null
+  priceCny: number | null
+  purchaseChannel: string | null
+  baseUnit: 'PCS' | 'G' | 'ML' | null
+  unitDisplayLabel: string | null
+  physicalForm: SupplementPhysicalForm | null
+  servingUnitsPerDose: number | null
+  nutrients: { fieldPath: string; value: number; unit: string }[]
+  labelCategory: 'FEED_ADDITIVE' | 'FEED_MATERIAL' | null
+  labelNames: string[]
+  tagNames: string[]
+  addTiming: string | null
+  /** 被代码挡下来的结论，界面上说明一下 */
+  dropped?: { field: string; reason: string; value: string }[]
 }

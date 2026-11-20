@@ -115,4 +115,49 @@ export class SupplementLabelVisionService {
       clearTimeout(timer);
     }
   }
+
+  /**
+   * 文本判断：把两张图抄出来的字交给模型，让它按档案规则下结论（只回 JSON）。
+   *
+   * 与 read() 用同一条模型配置；失败不抛给整条链路——识别还在，判断可以退化成人工。
+   */
+  async analyze(prompt: string): Promise<{ text: string; model: string } | null> {
+    const runtime = await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
+      purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
+      fallbackToDefault: false
+    });
+    const base = runtime.baseUrl.replace(/\/+$/, '');
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    try {
+      const response = await fetch(`${base}${CHAT_PATH}`, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          Authorization: `Bearer ${runtime.apiKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: runtime.model,
+          temperature: 0,
+          max_tokens: MAX_TOKENS,
+          thinking: { type: 'disabled' },
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const payload = (await response.json()) as {
+        choices?: { message?: { content?: unknown } }[];
+      };
+      const content = payload.choices?.[0]?.message?.content;
+      const text = typeof content === 'string' ? content.trim() : '';
+      return text ? { text, model: runtime.model } : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
 }

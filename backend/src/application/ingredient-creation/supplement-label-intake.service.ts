@@ -17,6 +17,13 @@ import {
   FeedAdditiveCatalogService,
   type CatalogMatch,
 } from '../../domain/ingredient/feed-additive-catalog.service';
+import {
+  buildAnalysisPrompt,
+  parseAnalysisJson,
+  validateAnalysis,
+  type AnalysisOutcome,
+} from '../../domain/ingredient/supplement-label-analysis';
+import { listSupplementTargetFields } from '../../domain/ingredient/nutrition-field-catalog';
 
 /**
  * 两张图 → 档案初稿。
@@ -52,17 +59,25 @@ export interface LabelIntakeResult {
   saltNameZh: string | null;
   /** 《饲料添加剂品种目录》里可能的规范名：suggestion 只在能确定时给 */
   catalog: { query: string; matches: CatalogMatch[]; suggestion: CatalogMatch | null };
+  /** 模型对档案的判断（名称/基准单位/渠道/价格/标签类型…），已过代码校验 */
+  analysis: (AnalysisOutcome['result'] & { dropped: AnalysisOutcome['dropped'] }) | null;
 }
 
-const COUNT_IN_TEXT = /(\d[\d,]*)\s*(tablets?|capsules?|soft\s*gels?|veg(?:gie)?\s*caps?|vegcaps?|lozenges?|片|粒|胶囊)/i;
+const COUNT_IN_TEXT =
+  /(\d[\d,]*)\s*(tablets?|capsules?|soft\s*gels?|veg(?:gie)?\s*caps?|vegcaps?|lozenges?|片|粒|胶囊|kg|g|ml|毫升|克)/i;
 
-/** 「180 CAPSULES」→ 180；读不出就 null。 */
+/**
+ * 「180 CAPSULES」→ 180；「500 g」→ 500。
+ * 粉按克、液体按毫升时，换算倍数就是这瓶多少克/多少毫升。
+ */
 export function parseCountFromTitle(productModel: string | null): number | null {
-  const match = String(productModel ?? '').match(COUNT_IN_TEXT);
+  const text = String(productModel ?? '');
+  const match = text.match(COUNT_IN_TEXT);
   if (!match) {
     return null;
   }
-  const value = Number(match[1].replace(/,/g, ''));
+  const unit = match[2].toLowerCase();
+  const value = Number(match[1].replace(/,/g, '')) * (unit === 'kg' ? 1000 : 1);
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 
@@ -114,6 +129,25 @@ export class SupplementLabelIntakeService {
         `serving=${servingUnitsPerDose ?? 'none'}`,
     );
 
+    // 模型判断：名称要写化学形态、基准单位看剂型、渠道/价格从图上找、
+    // 标签类型（添加剂 vs 原料）按目录性质定。失败就退回人工，不影响识别结果。
+    const allowedFieldPaths = listSupplementTargetFields().map((field) => field.fieldPath);
+    const analysis = await this.judge({
+      frontText,
+      labelText,
+      catalogNames: catalogMatches.map((entry) => ({
+        name: entry.name,
+        dogAllowed: entry.dogAllowed,
+      })),
+      nutrientLabel: suggestedName,
+      saltNameZh: detectSaltNameZh(labelText),
+      parsedNutrients: parsed.nutrients,
+      allowedFieldPaths,
+      // 标签分组与前端 `supplementNutrientGroups` 的标题一一对应
+      allowedTags: ['矿物质', '维生素', '脂肪酸', '氨基酸', '基础营养'],
+      allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
+    });
+
     return {
       frontText,
       labelText,
@@ -129,6 +163,26 @@ export class SupplementLabelIntakeService {
         matches: catalogMatches,
         suggestion: catalogSuggestion,
       },
+      // 拍平：前端只关心"结论 + 被挡下来的原因"
+      analysis: analysis ? { ...analysis.result, dropped: analysis.dropped } : null,
     };
+  }
+
+  /** 让模型按档案规则下结论；任何一步失败都返回 null（页面退回人工判断）。 */
+  private async judge(ctx: Parameters<typeof buildAnalysisPrompt>[0]): Promise<AnalysisOutcome | null> {
+    try {
+      const reply = await this.vision.analyze(buildAnalysisPrompt(ctx));
+      if (!reply) {
+        return null;
+      }
+      const parsed = parseAnalysisJson(reply.text);
+      if (!parsed) {
+        return null;
+      }
+      return validateAnalysis(parsed, ctx);
+    } catch (error) {
+      this.logger.warn(`模型判断失败，退回人工：${(error as Error).message}`);
+      return null;
+    }
   }
 }

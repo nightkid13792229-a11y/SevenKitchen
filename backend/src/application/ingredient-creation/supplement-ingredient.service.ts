@@ -33,6 +33,8 @@ export interface CreateSupplementIngredientInput {
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
+  /** 基准单位：胶囊/片剂 PCS，粉类 G，液体 ML */
+  baseUnit?: 'PCS' | 'G' | 'ML';
   /** 粒 / 片 / 胶囊 / 平勺 / 份 */
   unitDisplayLabel: string;
   physicalForm: SupplementPhysicalForm;
@@ -138,7 +140,7 @@ export class SupplementIngredientService {
           data: {
             name: input.name,
             type: IngredientType.SUPPLEMENT,
-            baseUnit: 'PCS',
+            baseUnit: (input.baseUnit ?? 'PCS') as 'PCS' | 'G' | 'ML',
             unitDisplayLabel: input.unitDisplayLabel,
             brand: input.brand ?? null,
             productModel: input.productModel ?? null,

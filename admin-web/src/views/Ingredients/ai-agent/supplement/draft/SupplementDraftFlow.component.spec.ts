@@ -10,7 +10,9 @@ import { flushPromises, mount } from '@vue/test-utils'
 import ElementPlus, { ElMessageBox } from 'element-plus'
 import type {
   SupplementDraftPayload,
-  SupplementDraftView
+  SupplementDraftReview,
+  SupplementDraftView,
+  SupplementWriteVerification
 } from '@/api/supplementDrafts'
 
 const api = vi.hoisted(() => ({
@@ -28,6 +30,10 @@ const api = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api/supplementDrafts', () => ({ supplementDraftsApi: api }))
+
+// 核验页里的修复入口用 useRouter；这里给一个最小 mock，避免 jsdom 里没有路由上下文。
+const router = vi.hoisted(() => ({ push: vi.fn() }))
+vi.mock('vue-router', () => ({ useRouter: () => router }))
 
 import SupplementDraftFlow from './SupplementDraftFlow.vue'
 
@@ -118,6 +124,41 @@ function deferred<T>(): {
     resolve = res
   })
   return { promise, resolve }
+}
+
+function reviewFor(draft: SupplementDraftView): SupplementDraftReview {
+  return {
+    draft,
+    blockers: [],
+    warnings: [],
+    completeness: draft.completeness
+  }
+}
+
+function verificationFor(ok = true): SupplementWriteVerification {
+  return {
+    ok,
+    checkedAt: '2026-11-21T03:00:00.000Z',
+    fields: [
+      {
+        key: 'basic.name',
+        label: '原料名称',
+        target: 'ingredient.name',
+        expected: '铜',
+        actual: '铜',
+        ok: true
+      }
+    ],
+    features: [
+      {
+        code: 'RECIPE',
+        label: '配方可选',
+        ok,
+        severity: ok ? 'INFO' : 'ERROR',
+        detail: ok ? '主映射 + 营养档案 VERIFIED' : '缺少主映射'
+      }
+    ]
+  }
 }
 
 async function openEditor(wrapper: ReturnType<typeof mount>): Promise<void> {
@@ -330,6 +371,83 @@ describe('草稿流程导航守卫', () => {
     expect(wrapper.find('[data-action="back"]').exists()).toBe(true)
     expect(wrapper.find('[data-action="reload"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('加载草稿失败')
+    wrapper.unmount()
+  })
+
+  it('进入审核屏后写入失败留在审核屏，并显示后端原因', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate.mockResolvedValue(reviewFor(draft))
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(true)
+
+    api.finalize.mockRejectedValueOnce({
+      response: { status: 400, data: { message: '写入前校验发现新的阻断项' } }
+    })
+    await wrapper.find('[data-action="finalize"]').trigger('click')
+    await flushPromises()
+
+    // 失败不能跳到核验页，也不能把审核屏藏起来。
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('写入前校验发现新的阻断项')
+    expect(wrapper.find('[data-finalize-overlay]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('写入中显示不可关闭遮罩，成功后进入核验页', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate.mockResolvedValue(reviewFor(draft))
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+
+    const pending = deferred<{
+      ingredientId: string
+      nutritionFoodId: string
+      evidenceId: string
+      verification: SupplementWriteVerification
+    }>()
+    api.finalize.mockReturnValueOnce(pending.promise)
+
+    await wrapper.find('[data-action="finalize"]').trigger('click')
+    await flushPromises()
+
+    const overlay = wrapper.find('[data-finalize-overlay]')
+    expect(overlay.exists()).toBe(true)
+    expect(overlay.text()).toContain('校验')
+    expect(overlay.text()).toContain('写原料')
+    expect(overlay.text()).toContain('回读核验')
+    // 写入中不能返回编辑。
+    expect(wrapper.find('[data-action="back"]').attributes('disabled')).toBeDefined()
+
+    pending.resolve({
+      ingredientId: 'ingredient-1',
+      nutritionFoodId: 'nutrition-1',
+      evidenceId: 'evidence-1',
+      verification: verificationFor()
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-finalize-overlay]').exists()).toBe(false)
+    expect(wrapper.find('[data-verification-screen]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('已写入并核验通过')
     wrapper.unmount()
   })
 })

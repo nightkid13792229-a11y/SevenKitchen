@@ -52,60 +52,101 @@
       />
     </template>
 
-    <!-- 最终审核（Task 16 会换成完整页面） -->
-    <el-card
-      v-else-if="view === 'review'"
-      shadow="never"
-      class="draft-flow__placeholder"
-    >
-      <template #header>
-        <span class="draft-flow__placeholder-title">最终审核</span>
-      </template>
-
-      <template v-if="review">
-        <p class="draft-flow__summary">
-          完整性：已填 {{ review.completeness.filledRequired }}/{{
-            review.completeness.totalRequired
-          }}
-          项必填；阻断项 {{ review.blockers.length }} 条，提醒项
-          {{ review.warnings.length }} 条。
-        </p>
-      </template>
+    <!-- 最终审核 -->
+    <template v-else-if="view === 'review'">
       <el-alert
-        v-else
-        :title="error ?? '没有拿到校验结果'"
-        type="warning"
+        v-if="error"
+        :title="error"
+        type="error"
         :closable="false"
         show-icon
+        class="draft-flow__alert"
       />
 
-      <p class="draft-flow__summary">
-        完整审核与逐条确认页面还没接入；可以先返回编辑继续补全，草稿内容不会丢。
-      </p>
+      <DraftReview
+        v-if="review && draft"
+        :review="review"
+        :draft="draft"
+        :acknowledged="acknowledged"
+        :finalizing="finalizing"
+        @finalize="handleFinalize"
+        @back="backToEditor"
+        @update:acknowledged="handleAcknowledged"
+      />
 
-      <div class="draft-flow__placeholder-actions">
-        <el-button @click="backToEditor">返回编辑</el-button>
-        <el-button text @click="returnToList">返回草稿列表</el-button>
-        <el-button type="primary" disabled @click="handleFinalize">
-          确认写入
-        </el-button>
+      <el-card v-else shadow="never" class="draft-flow__empty">
+        <el-alert
+          :title="error ?? '没有拿到校验结果，请返回编辑页重新点「最终审核」'"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <div class="draft-flow__empty-actions">
+          <el-button data-action="review-back" @click="backToEditor">
+            返回编辑
+          </el-button>
+          <el-button text @click="returnToList">返回草稿列表</el-button>
+        </div>
+      </el-card>
+    </template>
+
+    <!-- 写入后核验 -->
+    <template v-else>
+      <el-alert
+        v-if="error"
+        :title="error"
+        type="error"
+        :closable="false"
+        show-icon
+        class="draft-flow__alert"
+      />
+
+      <DraftVerification
+        v-if="verification && draft"
+        :verification="verification"
+        :draft="draft"
+        :reverifying="reverifying"
+        @reverify="handleReverify"
+      />
+
+      <el-card v-else shadow="never" class="draft-flow__empty">
+        <el-alert
+          :title="error ?? '没有拿到核验结果，请返回草稿列表重试'"
+          type="warning"
+          :closable="false"
+          show-icon
+        />
+        <div class="draft-flow__empty-actions">
+          <el-button type="primary" @click="returnToList">
+            返回草稿列表
+          </el-button>
+        </div>
+      </el-card>
+    </template>
+
+    <!-- 写入中：不可关闭，避免以为写入已经结束 -->
+    <div
+      v-if="finalizing"
+      class="draft-flow__finalize-mask"
+      data-finalize-overlay
+      role="alertdialog"
+      aria-modal="true"
+      aria-busy="true"
+      aria-label="正在写入正式数据"
+    >
+      <div class="draft-flow__finalize-panel">
+        <h3 class="draft-flow__finalize-title">正在写入正式数据…</h3>
+        <ol class="draft-flow__finalize-steps">
+          <li v-for="(step, index) in FINALIZE_STEPS" :key="step">
+            <span class="draft-flow__finalize-step-no">{{ index + 1 }}</span>
+            <span>{{ step }}</span>
+          </li>
+        </ol>
+        <p class="draft-flow__finalize-hint">
+          全部步骤在同一个事务里：中途失败会回滚，不会留下半成品，草稿会保留。请勿关闭页面。
+        </p>
       </div>
-    </el-card>
-
-    <!-- 写入后核验（Task 16 会换成完整页面） -->
-    <el-card v-else shadow="never" class="draft-flow__placeholder">
-      <template #header>
-        <span class="draft-flow__placeholder-title">写入核验</span>
-      </template>
-
-      <p class="draft-flow__summary">
-        写入核验结果页还没接入；写入成功后应逐项显示字段与功能是否真的生效。
-      </p>
-
-      <div class="draft-flow__placeholder-actions">
-        <el-button type="primary" @click="returnToList">返回草稿列表</el-button>
-      </div>
-    </el-card>
+    </div>
 
     <!-- AI 重填 diff：必须选一次「采用所选 / 保留我的」 -->
     <DraftAiDiffDialog
@@ -134,6 +175,7 @@ import { onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   supplementDraftsApi,
+  type SupplementDraftAcknowledgedWarning,
   type SupplementDraftSummary
 } from '@/api/supplementDrafts'
 import {
@@ -143,6 +185,8 @@ import {
 } from '@/utils/apiError'
 import SupplementDraftList from './SupplementDraftList.vue'
 import SupplementDraftEditor from './SupplementDraftEditor.vue'
+import DraftReview from './DraftReview.vue'
+import DraftVerification from './DraftVerification.vue'
 import DraftAiDiffDialog from './DraftAiDiffDialog.vue'
 import {
   applyDraftAiSelection,
@@ -153,6 +197,16 @@ import { useSupplementDraft } from './useSupplementDraft'
 
 type FlowView = 'list' | 'editor' | 'review' | 'verification'
 
+/** 写入遮罩上的步骤（spec §4.5）；不可点击、不可关闭，只表达进度。 */
+const FINALIZE_STEPS = [
+  '校验',
+  '写原料',
+  '写营养',
+  '写证据/标签',
+  '归组',
+  '回读核验'
+] as const
+
 const view = ref<FlowView>('list')
 const selectedDraftId = ref<string | null>(null)
 
@@ -160,10 +214,15 @@ const drafts = ref<SupplementDraftSummary[]>([])
 const listLoading = ref(false)
 const listError = ref('')
 const creating = ref(false)
+/** 审核屏勾选中的提醒 ackKey；点「确认写入」时写回草稿 payload。 */
+const acknowledged = ref<string[]>([])
+/** 只重跑功能核验的 loading（composable 没有单独的 reverifying 状态）。 */
+const reverifying = ref(false)
 
 const {
   draft,
   review,
+  verification,
   loading,
   dirty,
   saving,
@@ -183,6 +242,7 @@ const {
   validate,
   finalize,
   discard,
+  reverify,
   reset
 } = useSupplementDraft(selectedDraftId)
 
@@ -474,7 +534,35 @@ async function handleReview(): Promise<void> {
   if (!result) return
   // 校验期间如果已经切走（reset/打开别的草稿），不要把视图拉到旧草稿的审核屏。
   if (selectedDraftId.value !== idAtStart) return
+  if (!review.value) return
+  // 每次进入审核屏都重新逐条确认；上一次的勾选不能带进来。
+  acknowledged.value = []
   view.value = 'review'
+}
+
+/**
+ * 审核屏勾选提醒 → 写回草稿 payload。
+ *
+ * 后端 finalize 只认 `payload.review.acknowledgedWarnings`（ackKey 拆分回
+ * `code` + `paramsHash`），所以前端必须把勾选结果落进草稿，不能只留在本地。
+ */
+function handleAcknowledged(keys: string[]): void {
+  acknowledged.value = [...keys]
+  const current = draft.value
+  if (!current) return
+  current.payload.review.acknowledgedWarnings = keys.map(acknowledgementOf)
+}
+
+/** ackKey 形如 `CODE:paramsHash`；没有冒号就是纯 code。 */
+function acknowledgementOf(key: string): SupplementDraftAcknowledgedWarning {
+  const separator = key.indexOf(':')
+  if (separator <= 0) {
+    return { code: key, paramsHash: '' }
+  }
+  return {
+    code: key.slice(0, separator),
+    paramsHash: key.slice(separator + 1)
+  }
 }
 
 /** 编辑页「放弃草稿」：确认后走 composable 的 discard，再回列表。 */
@@ -494,15 +582,46 @@ async function handleEditorDiscard(): Promise<void> {
   await returnToList()
 }
 
-/** 最终写入（Task 16 的审核页接上按钮后启用）。 */
+/**
+ * 最终写入。
+ *
+ * - 成功且拿到核验报告 → 切到核验页；
+ * - 成功但报告缺失 → 留在审核屏提示（不能假装成功）；
+ * - 失败 → 留在审核屏，error 由 composable 设置、页面顶部显示。
+ */
 async function handleFinalize(): Promise<void> {
+  if (finalizing.value) return
   const idAtStart = selectedDraftId.value
   if (!idAtStart) return
   const result = await finalize()
   if (!result) return
   // 同 validate：写入结果只属于发起它的那张草稿。
   if (selectedDraftId.value !== idAtStart) return
+  if (!verification.value) {
+    ElMessage.warning('写入已完成，但还没有拿到核验报告；请刷新草稿后再核验')
+    return
+  }
   view.value = 'verification'
+}
+
+/** 核验页「重新核验」：只重跑功能核验，不再次写数据。 */
+async function handleReverify(): Promise<void> {
+  if (reverifying.value) return
+  const idAtStart = selectedDraftId.value
+  if (!idAtStart) return
+  reverifying.value = true
+  try {
+    const result = await reverify()
+    if (!result) return
+    if (selectedDraftId.value !== idAtStart) return
+    if (result.ok) {
+      ElMessage.success('重新核验通过')
+    } else {
+      ElMessage.warning('已重新核验，仍有功能未生效')
+    }
+  } finally {
+    reverifying.value = false
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -514,11 +633,15 @@ async function returnToList(): Promise<void> {
   view.value = 'list'
   selectedDraftId.value = null
   aiDiff.value = null
+  acknowledged.value = []
+  reverifying.value = false
   reset()
   await refreshList()
 }
 
+/** 审核屏返回编辑；写入进行中禁止返回（遮罩也不可关闭）。 */
 function backToEditor(): void {
+  if (finalizing.value) return
   view.value = 'editor'
 }
 
@@ -544,27 +667,77 @@ onMounted(() => {
   flex: 1;
 }
 
-.draft-flow__placeholder {
+.draft-flow__empty {
   border-radius: 10px;
 }
 
-.draft-flow__placeholder-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f2733;
-}
-
-.draft-flow__summary {
-  margin: 0 0 10px;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: #5b6470;
-}
-
-.draft-flow__placeholder-actions {
+.draft-flow__empty-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.draft-flow__finalize-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgb(17 24 39 / 55%);
+}
+
+.draft-flow__finalize-panel {
+  width: min(460px, 100%);
+  padding: 24px;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgb(15 23 42 / 24%);
+}
+
+.draft-flow__finalize-title {
+  margin: 0 0 14px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2733;
+}
+
+.draft-flow__finalize-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin: 0 0 14px;
+  padding: 0;
+  list-style: none;
+}
+
+.draft-flow__finalize-steps li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: #1f2733;
+}
+
+.draft-flow__finalize-step-no {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #ecf5ff;
+  font-size: 11px;
+  font-weight: 600;
+  color: #409eff;
+}
+
+.draft-flow__finalize-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #5b6470;
 }
 </style>

@@ -5,6 +5,7 @@ describe('callDeepSeekTools · 思考内容', () => {
 
   afterEach(() => {
     global.fetch = originalFetch;
+    jest.restoreAllMocks();
   });
 
   it('读取 reasoning_content，供下一轮 assistant 消息回传', async () => {
@@ -45,3 +46,43 @@ describe('callDeepSeekTools · 思考内容', () => {
     expect(result.toolCalls[0]?.function.name).toBe('read_draft');
   });
 });
+
+  it('思考模式 400 时自动降级关闭思考重试，并记录供应商原因', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 400,
+        text: async () =>
+          JSON.stringify({ error: { message: 'thinking is not supported' } }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          choices: [{ message: { content: 'ok', tool_calls: [] } }],
+        }),
+      });
+    global.fetch = fetchMock as any;
+
+    const result = await callDeepSeekTools({
+      baseUrl: 'https://example.com',
+      model: 'deepseek-test',
+      apiKey: 'key',
+      requestTimeoutMs: 1000,
+      messages: [],
+      tools: [],
+      thinking: 'enabled',
+    });
+
+    expect(result.thinkingFallback).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(fetchMock.mock.calls[0][1].body);
+    const secondBody = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(firstBody.thinking).toBeUndefined();
+    expect(secondBody.thinking).toEqual({ type: 'disabled' });
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('thinking is not supported'),
+    );
+  });

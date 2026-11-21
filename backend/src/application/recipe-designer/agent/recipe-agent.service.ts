@@ -826,6 +826,7 @@ export class RecipeAgentService implements OnModuleInit {
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
     let lastAssessHadGaps = false;
+    let thinkingFallbackDisabled = false;
     const verifiedCitationIds = new Set<string>();
     /**
      * 每次运行的第一轮强制读设计上下文。
@@ -869,12 +870,31 @@ export class RecipeAgentService implements OnModuleInit {
         return;
       }
 
-      const thinkingEnabled = shouldEnableThinking(
-        phase,
-        toolCalls,
-        lastAssessHadGaps,
-        editsSinceAssess,
-      );
+      const isFirstModelCall = firstModelCall;
+      let forcedTool = isFirstModelCall
+        ? 'read_design_context'
+        : forceAsk
+          ? 'ask'
+          : forceProposeTool;
+      // 防止盲改：连续改配方 20 次还没评估，先强制跑一次评估。
+      if (
+        !forcedTool &&
+        phase === 'DESIGN' &&
+        editsSinceAssess >= MAX_EDITS_BETWEEN_ASSESS
+      ) {
+        forcedTool = 'assess';
+      }
+      // 强制工具选择时先不开思考：首轮 read_design_context / 强制评估都是
+      // 机械动作，不需要推理，也能绕开“thinking + tool_choice”不兼容的网关。
+      const thinkingEnabled =
+        !thinkingFallbackDisabled &&
+        !forcedTool &&
+        shouldEnableThinking(
+          phase,
+          toolCalls,
+          lastAssessHadGaps,
+          editsSinceAssess,
+        );
       const callModel = (forcedTool: string | null) =>
         callDeepSeekTools({
           baseUrl: config.baseUrl,
@@ -890,21 +910,6 @@ export class RecipeAgentService implements OnModuleInit {
             ? { type: 'function', function: { name: forcedTool } }
             : 'auto',
         });
-
-      const isFirstModelCall = firstModelCall;
-      let forcedTool = isFirstModelCall
-        ? 'read_design_context'
-        : forceAsk
-          ? 'ask'
-          : forceProposeTool;
-      // 防止盲改：连续改配方 20 次还没评估，先强制跑一次评估。
-      if (
-        !forcedTool &&
-        phase === 'DESIGN' &&
-        editsSinceAssess >= MAX_EDITS_BETWEEN_ASSESS
-      ) {
-        forcedTool = 'assess';
-      }
       let response: DeepSeekToolsResult;
       try {
         response = await callModel(forcedTool);
@@ -919,6 +924,13 @@ export class RecipeAgentService implements OnModuleInit {
         );
         messages = stripImageContent(messages);
         response = await callModel(forcedTool);
+      }
+
+      if (response.thinkingFallback) {
+        thinkingFallbackDisabled = true;
+        this.logger.warn(
+          '思考模式被供应商拒绝，本次运行剩余调用已降级为关闭思考',
+        );
       }
 
       if (forcedTool) {

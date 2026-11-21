@@ -47,6 +47,8 @@ export interface DeepSeekToolsResult {
   usage: DeepSeekToolsUsage | null;
   /** 思考模式下模型返回的 reasoning_content；非思考调用为 null */
   reasoningContent?: string | null;
+  /** 本次是否因为供应商 400 从思考模式降级到关闭思考 */
+  thinkingFallback?: boolean;
 }
 
 export interface DeepSeekToolsOptions {
@@ -134,6 +136,22 @@ export async function callDeepSeekTools(
       }
 
       if (!response.ok) {
+        // 思考模式和强制工具选择在部分供应商/网关上不兼容，会直接 400。
+        // 先记录供应商给的真实原因（截断），再降级为关闭思考重试一次；
+        // 不把响应体透给前端，避免泄露供应商内部信息。
+        if (options.thinking === 'enabled' && response.status === 400) {
+          const detail = await readProviderErrorDetail(response);
+          console.warn(
+            `[deepseek-tools] 思考模式 HTTP 400，降级关闭思考重试${
+              detail ? `：${detail}` : ''
+            }`,
+          );
+          const fallback = await callDeepSeekTools({
+            ...options,
+            thinking: 'disabled',
+          });
+          return { ...fallback, thinkingFallback: true };
+        }
         if (isRetryableStatus(response.status) && attempt < MAX_ATTEMPTS) {
           continue;
         }
@@ -161,6 +179,23 @@ export async function callDeepSeekTools(
   }
 
   throw new BadRequestException('AI 工具调用失败');
+}
+
+async function readProviderErrorDetail(response: Response): Promise<string> {
+  try {
+    const text = await response.text();
+    if (!text) return '';
+    try {
+      const body = JSON.parse(text);
+      const detail =
+        body?.error?.message ?? body?.message ?? body?.error?.code ?? '';
+      return String(detail).slice(0, 300);
+    } catch {
+      return text.slice(0, 300);
+    }
+  } catch {
+    return '';
+  }
 }
 
 function parseDeepSeekToolsResponse(

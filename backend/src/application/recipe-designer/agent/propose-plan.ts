@@ -75,31 +75,10 @@ export interface AgentSelection {
 }
 
 const PROPOSE_PLAN_DESCRIPTION =
-  '提交本单营养方案与约束，等用户确认。只在方案确认阶段使用；提交后本次运行暂停。' +
-  'summary 只写方案定位，不要复述年龄/体重/品种/BCS（编辑器已经展示）；理由与建议写 rationale。' +
-  'constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的数值上下限（例如心脏病控钠）；' +
-  '营养评估已经覆盖的通用蛋白/脂肪/钙磷等上下限不要重复写。每条带 key、label、单位、依据和来源。' +
-  '非数值约束（禁用食材、工艺、餐次等）放 nonNutrient，文案形式。' +
-  'nonNutrient 必须覆盖会限制食材选择的非数值条件：忌口/过敏、质地/纤维/产气、工艺/形态、餐次；' +
-  '需要低渣时写清避免豆类/粗纤维/菌藻等，让选材阶段能直接执行。' +
-  'summary 和 rationale 都不要复述档案：年龄、体重、品种、BCS、性别、检验值；不要提药物、用药、处方或剂量，疾病名可以写。' +
-  '只列比 FEDIAF 2025 默认评估更严的那一侧；默认下限不要写，表格只保留疾病特异性边界。' +
-  'MAINTAIN 目标不要列 energyDensity；只有减重/增重/特殊能量需求才列，并给出真正有约束力的上限。' +
-  '钠只有在比 FEDIAF 2025 上限 0.55 g/1000 kcal 更严时才列；与默认相同不要列。' +
-  '胰腺炎与肿瘤蛋白目标冲突时以胰腺炎安全为先：蛋白上限不超过 30% DM；30–45% DM 只写进 rationale 标待确认，不要作为硬约束。' +
-  '不要写“每日总热量/kcal 目标”；需要控制能量时用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。';
+  '提交营养方案与约束，等用户确认。方案内容、格式与约束取舍按 recipe-plan Skill 执行；提交后本次运行暂停。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
-  '提交食材候选，等用户确认。只在选材阶段使用；提交后本次运行暂停。' +
-  '选材阶段只列食材，不要列补剂：补剂要等食谱评估出营养缺口后，在配方编辑阶段再补。' +
-  '按营养与忌口自由选食材，不要查原料库，也不要填写库 ID；提交后系统会按名称自动匹配原料库，没匹配到才标库外。' +
-  `按 CFCT 固定 15 类分组（${CFCT_CLASS_PROMPT}），每个适用类型至少 2 个候选。` +
-  '选材前先逐条读已确认方案（含 nonNutrient），任何候选违反一条就淘汰；方案约束优先级最高，不要按疾病名做选材特判。' +
-  '只有用户明确说“最终确认/就按这份清单/确认选材”时才把 confirmed 设为 true；此时只列用户确认的食材，不要补替代候选；confirmed=true 时不受“每类至少 2 个”限制；' +
-  '如果确认清单与方案硬约束冲突，先指出冲突并询问，不要把 confirmed 设为 true。' +
-  '15 类是词表，不是必须每类都填：只在合格食材里分组，每个适用类型至少 2 个；凑不出就放进 skippedCategories，写清违反的是哪条方案约束；' +
-  '不要用补剂、水、加工品、高脂坚果或高碘海藻凑数。' +
-  '严禁把方案忌口食材（牛、羊、鸡、鸡蛋及其制品）列为候选，也不要为了凑类型去列禁忌食材。';
+  '提交食材候选，等用户确认。选材规则按 recipe-selection Skill 执行；confirmed=true 表示用户已最终确认这份清单。';
 
 export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
   type: 'function',
@@ -109,18 +88,14 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
     parameters: {
       type: 'object',
       properties: {
-        summary: {
-          type: 'string',
-          description: '方案定位；不要复述年龄/体重/品种/BCS',
-        },
+        summary: { type: 'string', description: '方案摘要' },
         rationale: {
           type: 'string',
           description: '方案制定的理由与建议；纯文本',
         },
         constraints: {
           type: 'array',
-          description:
-            '只放疾病特异性/比 FEDIAF 2025 默认评估更严的数值约束；通用项不要放',
+          description: '数值约束',
           items: {
             type: 'object',
             properties: {
@@ -152,7 +127,7 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
         },
         nonNutrient: {
           type: 'array',
-          description: '非数值约束，文案形式，展示在表格后面',
+          description: '非数值约束',
           items: {
             type: 'object',
             properties: {
@@ -217,10 +192,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
             properties: {
               kind: { type: 'string' },
               name: { type: 'string' },
-              foodCategory: {
-                type: 'string',
-                description: 'CFCT 分类；建议用固定 15 类原词',
-              },
+              foodCategory: { type: 'string', description: 'CFCT 分类' },
               reason: { type: 'string' },
             },
             required: ['name', 'reason'],
@@ -229,8 +201,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
         },
         confirmed: {
           type: 'boolean',
-          description:
-            '用户明确最终确认这份清单时 true；会直接进入配方编辑阶段',
+          description: '用户已最终确认这份清单',
         },
         skippedCategories: {
           type: 'array',

@@ -176,31 +176,6 @@ export class SupplementFinalizeService {
     }
 
     const review = await this.reviewService.validate(user.id, draftId);
-    if (review.blockers.length > 0) {
-      throw new BadRequestException({
-        message: `有 ${review.blockers.length} 个阻断项，暂时不能写入：${review.blockers
-          .map((blocker) => blocker.message)
-          .join('；')}`,
-        blockers: review.blockers,
-        warnings: review.warnings,
-      });
-    }
-
-    // AI 的 warnings 只做展示，永远不参与门禁；这里只认校验服务产出的固定 ackKey。
-    const unacknowledged = this.findUnacknowledgedWarnings(
-      review.draft.payload,
-      review.warnings,
-    );
-    if (unacknowledged.length > 0) {
-      throw new BadRequestException({
-        message: `还有 ${unacknowledged.length} 条提醒项没有确认，请逐条勾选「我知道了」再写入：${unacknowledged
-          .map((warning) => warning.message)
-          .join('；')}`,
-        blockers: review.blockers,
-        warnings: review.warnings,
-      });
-    }
-
     const draft = review.draft;
     const payload = draft.payload;
     const createInput: CreateSupplementIngredientInput = {
@@ -208,8 +183,9 @@ export class SupplementFinalizeService {
       createdBy: user.id,
     };
 
-    // 重复建档预检（spec §8.2-3）：validate 已经查过一次；这里再确认一遍，
-    // 防并发/上下文过期，并给出 409 + 已有记录（写入服务自己的预检是最后一道）。
+    // 重复建档预检（spec §8.2-3）：必须先于阻断门禁 —— 同名同品牌同规格已存在是
+    // 「去用已有记录」的 409，不是普通的 400。validate 里的 DUPLICATE_INGREDIENT
+    // 阻断项留给审核页展示，这里不把它当 400；真正拦写入以库里的实际记录为准。
     const duplicate = await this.prisma.ingredient.findFirst({
       where: {
         type: 'SUPPLEMENT',
@@ -225,7 +201,35 @@ export class SupplementFinalizeService {
           duplicate,
         )}`,
       );
-      throw new ConflictException(duplicateMessage(duplicate));
+      throw this.buildDuplicateConflictError(duplicate);
+    }
+
+    const blockers = review.blockers.filter(
+      (blocker) => blocker.code !== 'DUPLICATE_INGREDIENT',
+    );
+    if (blockers.length > 0) {
+      throw new BadRequestException({
+        message: `有 ${blockers.length} 个阻断项，暂时不能写入：${blockers
+          .map((blocker) => blocker.message)
+          .join('；')}`,
+        blockers: review.blockers,
+        warnings: review.warnings,
+      });
+    }
+
+    // AI 的 warnings 只做展示，永远不参与门禁；这里只认校验服务产出的固定 ackKey。
+    const unacknowledged = this.findUnacknowledgedWarnings(
+      payload,
+      review.warnings,
+    );
+    if (unacknowledged.length > 0) {
+      throw new BadRequestException({
+        message: `还有 ${unacknowledged.length} 条提醒项没有确认，请逐条勾选「我知道了」再写入：${unacknowledged
+          .map((warning) => warning.message)
+          .join('；')}`,
+        blockers: review.blockers,
+        warnings: review.warnings,
+      });
     }
 
     let outcome: {
@@ -319,7 +323,15 @@ export class SupplementFinalizeService {
       features: [],
     };
 
-    await this.draftService.saveVerification(draftId, user.id, verification);
+    // 数据已经提交：报告没存上不能把「写入成功」报成失败（reverify 可重新生成报告）。
+    try {
+      await this.draftService.saveVerification(draftId, user.id, verification);
+    } catch (error) {
+      this.logger.warn(
+        `[supplement-finalize] 核验报告写入失败 draft=${draftId}：` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
 
     return {
       ingredientId: outcome.created.ingredientId,
@@ -557,10 +569,14 @@ export class SupplementFinalizeService {
           ? ingredient.properties
           : {},
       },
+      // 两个营养落点各取各的：配方设计器读 nutrition_data，等价组/浓度解析读原料档案。
+      ingredientProfile: {
+        nutrients: this.flattenNutritionProfile(ingredient.nutritionProfile),
+      },
       nutritionFood: {
         status: nutritionFood.status,
         category: nutritionFood.category,
-        nutrients: this.flattenNutritionProfile(ingredient.nutritionProfile),
+        nutrients: this.flattenNutritionProfile(nutritionFood.nutritionData),
         defaultSupplementTargets: nutritionFood.defaultSupplementTargets,
         primaryMapping: mapping.isPrimary,
         yieldRate: mapping.yieldRate,
@@ -659,6 +675,7 @@ export class SupplementFinalizeService {
           image_url: input.imageUrl ?? null,
         },
       },
+      ingredientProfile: { nutrients: perUnitNutrients },
       nutritionFood: {
         status: 'VERIFIED',
         category: 'SUPPLEMENT',
@@ -704,6 +721,27 @@ export class SupplementFinalizeService {
     return derived;
   }
 
+  /**
+   * 重复建档的 409：body 里带已有 id/名称，审核页可以直接给「去用这条记录」的入口。
+   * 预检与 P2002 兜底共用同一个响应形状。
+   */
+  private buildDuplicateConflictError(
+    existing: {
+      id: string;
+      name: string;
+      brand: string | null;
+      productModel: string | null;
+    } | null,
+  ): ConflictException {
+    return new ConflictException({
+      message: existing
+        ? duplicateMessage(existing)
+        : '同名的补剂或营养档案已存在；刷新页面后重试，若仍失败请联系管理员',
+      ingredientId: existing?.id ?? null,
+      name: existing?.name ?? null,
+    });
+  }
+
   /** P2002 → 409：把撞上的那条查出来写进提示，人才能判断是不是同一款。 */
   private async buildDuplicateConflict(
     input: CreateSupplementIngredientInput,
@@ -725,10 +763,6 @@ export class SupplementFinalizeService {
       })} existing=${JSON.stringify(existing)}`,
     );
 
-    return new ConflictException(
-      existing
-        ? duplicateMessage(existing)
-        : '同名的补剂或营养档案已存在；刷新页面后重试，若仍失败请联系管理员',
-    );
+    return this.buildDuplicateConflictError(existing);
   }
 }

@@ -153,6 +153,9 @@ function snapshot(): DirectVerificationSnapshot {
         image_url: 'https://img.example.com/x.jpg',
       },
     },
+    ingredientProfile: {
+      nutrients: { 'fattyAcids.epa': 325 },
+    },
     nutritionFood: {
       status: 'VERIFIED',
       category: 'SUPPLEMENT',
@@ -377,6 +380,7 @@ describe('buildDirectVerification', () => {
         'ingredient.diyEnabled',
         'ingredient.procurementEnabled',
         'ingredient.shelfLifeMonths',
+        'ingredient.openedShelfLifeDays',
         'ingredient.storageCondition',
         'ingredient.isOilBased',
         'ingredient.supplementRetailEnabled',
@@ -398,6 +402,7 @@ describe('buildDirectVerification', () => {
         'nutrition.status',
         'nutrition.category',
         'nutrition.nutrients.fattyAcids.epa',
+        'ingredientProfile.nutrients.fattyAcids.epa',
         'nutrition.defaultSupplementTargets',
         'nutrition.primaryMapping',
         'nutrition.yieldRate',
@@ -460,6 +465,71 @@ describe('buildDirectVerification', () => {
       findField(servingResult, 'properties.serving_units_per_dose').ok,
     ).toBe(false);
     expect(servingResult.mismatches.join('；')).toContain('每份多少');
+  });
+
+  it('营养写进两处：任何一处缺值/写错都算不通过，两处都对才通过', () => {
+    // 两处都对
+    expect(buildDirectVerification(snapshot(), snapshot()).ok).toBe(true);
+
+    // 营养档案（配方设计器读的那份）少一个值
+    const missingInFood = snapshot();
+    delete (missingInFood.nutritionFood.nutrients as Record<string, number>)[
+      'fattyAcids.epa'
+    ];
+    const missingFoodResult = buildDirectVerification(
+      snapshot(),
+      missingInFood,
+    );
+    expect(
+      findField(missingFoodResult, 'nutrition.nutrients.fattyAcids.epa').ok,
+    ).toBe(false);
+    expect(
+      findField(missingFoodResult, 'ingredientProfile.nutrients.fattyAcids.epa')
+        .ok,
+    ).toBe(true);
+    expect(missingFoodResult.ok).toBe(false);
+
+    // 原料档案那一份写错（营养档案对）
+    const wrongProfile = snapshot();
+    wrongProfile.ingredientProfile.nutrients['fattyAcids.epa'] = 320;
+    const wrongProfileResult = buildDirectVerification(
+      snapshot(),
+      wrongProfile,
+    );
+    expect(
+      findField(
+        wrongProfileResult,
+        'ingredientProfile.nutrients.fattyAcids.epa',
+      ).ok,
+    ).toBe(false);
+    expect(
+      findField(wrongProfileResult, 'nutrition.nutrients.fattyAcids.epa').ok,
+    ).toBe(true);
+    expect(wrongProfileResult.mismatches.join('；')).toContain(
+      '原料档案营养素值',
+    );
+  });
+
+  it('价格按 Decimal(14,6) 归一：0.1234567 落库成 0.123457 不算不一致', () => {
+    const expected = snapshot();
+    expected.ingredient.currentPricePerPurchaseUnit = 0.1234567;
+    const actual = snapshot();
+    actual.ingredient.currentPricePerPurchaseUnit = 0.123457;
+
+    const result = buildDirectVerification(expected, actual);
+    expect(findField(result, 'ingredient.currentPricePerPurchaseUnit').ok).toBe(
+      true,
+    );
+
+    // 真的差 1 分钱仍然要报出来
+    const wrong = snapshot();
+    wrong.ingredient.currentPricePerPurchaseUnit = 0.1234;
+    expect(
+      findField(
+        buildDirectVerification(expected, wrong),
+        'ingredient.currentPricePerPurchaseUnit',
+      ).ok,
+    ).toBe(false);
   });
 
   it('数字精确比较：差一个小数点也算不一致', () => {

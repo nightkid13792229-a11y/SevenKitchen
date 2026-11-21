@@ -231,6 +231,15 @@ export interface DirectVerificationIngredient {
  */
 export interface DirectVerificationSnapshot {
   ingredient: DirectVerificationIngredient;
+  /**
+   * `ingredient.nutrition_profile` 里的每单位值。
+   *
+   * 补剂营养有两个落点：原料档案（配方设计器读）和营养档案（等价组/浓度解析读）。
+   * 两边都写、都可能单独写坏，所以两个 sink 都要核验。
+   */
+  ingredientProfile: {
+    nutrients: Record<string, number>;
+  };
   nutritionFood: {
     status: string;
     category: string;
@@ -306,6 +315,25 @@ function formatValue(value: unknown): string {
   return text.length > 200 ? `${text.slice(0, 200)}…` : text;
 }
 
+/**
+ * 金额落库精度：`current_price_per_purchase_unit` 是 `Decimal(14, 6)`。
+ *
+ * 草稿里可能是 0.1234567，写进库里会变成 0.123457；直接用 `Object.is` 会假失败，
+ * 所以这一项在比较前按 6 位小数归一。其他数值（营养含量、份量）仍精确比较。
+ */
+const PRICE_DECIMALS = 6;
+
+function roundToDecimals(value: number, decimals: number): number {
+  const factor = 10 ** decimals;
+  return Math.round(value * factor) / factor;
+}
+
+function normalizePrice(value: unknown): unknown {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? roundToDecimals(value, PRICE_DECIMALS)
+    : value;
+}
+
 /** `properties` 里没写的键按 null 计（建档服务对空值不写键）。 */
 function readProperty(properties: UnknownRecord, key: string): unknown {
   const value = properties[key];
@@ -317,6 +345,8 @@ const INGREDIENT_ROWS: Array<{
   label: string;
   target: string;
   read: (snapshot: DirectVerificationSnapshot) => unknown;
+  /** 落库会改精度的字段（目前只有 Decimal 价格）在比较前归一。 */
+  normalize?: (value: unknown) => unknown;
 }> = [
   {
     key: 'ingredient.name',
@@ -377,6 +407,7 @@ const INGREDIENT_ROWS: Array<{
     label: '当前采购价',
     target: 'ingredient.current_price_per_purchase_unit',
     read: (s) => s.ingredient.currentPricePerPurchaseUnit,
+    normalize: normalizePrice,
   },
   {
     key: 'ingredient.diyEnabled',
@@ -552,7 +583,14 @@ export function buildDirectVerification(
   };
 
   for (const row of INGREDIENT_ROWS) {
-    add(row.key, row.label, row.target, row.read(expected), row.read(actual));
+    const normalize = row.normalize ?? ((value: unknown) => value);
+    add(
+      row.key,
+      row.label,
+      row.target,
+      normalize(row.read(expected)),
+      normalize(row.read(actual)),
+    );
   }
 
   for (const row of PROPERTY_ROWS) {
@@ -580,16 +618,24 @@ export function buildDirectVerification(
     actual.nutritionFood.category,
   );
 
+  // 营养值有两个落点，都要和草稿折算值一致：任一写坏都可能让配方/等价组读到错的数。
   for (const [fieldPath, expectedValue] of Object.entries(
     expected.nutritionFood.nutrients,
   )) {
     const field = findNutritionField(fieldPath);
     add(
       `nutrition.nutrients.${fieldPath}`,
-      `营养素值 · ${field?.label ?? fieldPath}`,
+      `营养档案营养素值 · ${field?.label ?? fieldPath}`,
       `nutrition_food.nutrition_data.${fieldPath}`,
       expectedValue,
       actual.nutritionFood.nutrients[fieldPath],
+    );
+    add(
+      `ingredientProfile.nutrients.${fieldPath}`,
+      `原料档案营养素值 · ${field?.label ?? fieldPath}`,
+      `ingredient.nutrition_profile.${fieldPath}`,
+      expectedValue,
+      actual.ingredientProfile.nutrients[fieldPath],
     );
   }
 

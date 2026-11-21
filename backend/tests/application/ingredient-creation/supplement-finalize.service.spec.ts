@@ -629,7 +629,19 @@ describe('SupplementFinalizeService.finalize', () => {
     expect(result.verification.ok).toBe(true);
   });
 
-  it('重复建档预检命中时返回 409，不开始事务', async () => {
+  it('正常重复建档返回 409（不是 400），body 带已有 id 与名称，且不开始事务', async () => {
+    // 审核校验也会报重复阻断项；finalize 必须以「预检命中的实际记录」为准返回 409。
+    const duplicateBlocker: SupplementDraftIssue = {
+      code: 'DUPLICATE_INGREDIENT',
+      level: 'BLOCKER',
+      message: '同名同品牌同规格的补剂已存在',
+    };
+    reviewServiceMock.validate.mockResolvedValue({
+      draft: draftView(),
+      blockers: [duplicateBlocker],
+      warnings: [],
+      completeness: COMPLETENESS,
+    });
     prismaMock.ingredient.findFirst.mockResolvedValue({
       id: 'ing-existing',
       name: '鱼油',
@@ -640,9 +652,31 @@ describe('SupplementFinalizeService.finalize', () => {
     const error = await captureError(() => service.finalize(user, 'draft-1'));
 
     expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toMatchObject({
+      ingredientId: 'ing-existing',
+      name: '鱼油',
+    });
     expect(String(error.message)).toContain('已经有同名同规格的补剂');
-    expect(String(error.message)).toContain('鱼油');
     expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('DUPLICATE_INGREDIENT 阻断项本身不再被当成 400：以库里实际记录为准', async () => {
+    // 校验上下文过期/记录已删：只剩重复阻断项、但库里查不到 → 允许写入。
+    const duplicateBlocker: SupplementDraftIssue = {
+      code: 'DUPLICATE_INGREDIENT',
+      level: 'BLOCKER',
+      message: '同名同品牌同规格的补剂已存在',
+    };
+    reviewServiceMock.validate.mockResolvedValue({
+      draft: draftView(),
+      blockers: [duplicateBlocker],
+      warnings: [],
+      completeness: COMPLETENESS,
+    });
+
+    const result = await service.finalize(user, 'draft-1');
+
+    expect(result.verification.ok).toBe(true);
   });
 
   it('事务里撞唯一键（P2002）时返回 409 并带上已有记录', async () => {
@@ -660,6 +694,10 @@ describe('SupplementFinalizeService.finalize', () => {
     const error = await captureError(() => service.finalize(user, 'draft-1'));
 
     expect(error).toBeInstanceOf(ConflictException);
+    expect((error as ConflictException).getResponse()).toMatchObject({
+      ingredientId: 'ing-existing',
+      name: '鱼油',
+    });
     expect(String(error.message)).toContain('鱼油');
     expect(String(error.message)).toContain('NOW FOODS');
     expect(draftServiceMock.saveVerification).not.toHaveBeenCalled();
@@ -679,6 +717,38 @@ describe('SupplementFinalizeService.finalize', () => {
     expect(draftServiceMock.saveVerification).not.toHaveBeenCalled();
     // 事务体已经跑到置最终态/写审计；真实 Prisma 会把它们一起回滚。
     expect(draftServiceMock.markFinalized).toHaveBeenCalled();
+  });
+
+  it('核验报告没存上不影响已提交的写入：仍返回成功 id 与报告', async () => {
+    draftServiceMock.saveVerification.mockRejectedValue(
+      new Error('report write failed'),
+    );
+
+    const result = await service.finalize(user, 'draft-1');
+
+    expect(result).toMatchObject({
+      ingredientId: 'ing-1',
+      nutritionFoodId: 'nf-1',
+      evidenceId: 'ev-1',
+    });
+    expect(result.verification.ok).toBe(true);
+    expect(draftServiceMock.markFinalized).toHaveBeenCalled();
+  });
+
+  it('营养档案的 nutrition_data 写错时判为回读不一致（配方设计器读这处）', async () => {
+    tx.nutritionFood.findUnique.mockResolvedValue({
+      ...nutritionFoodRow(),
+      nutritionData: {
+        ...profile(),
+        fattyAcids: { epa: 300 },
+      },
+    });
+
+    const error = await captureError(() => service.finalize(user, 'draft-1'));
+
+    expect(error).toBeInstanceOf(InternalServerErrorException);
+    expect(String(error.message)).toContain('营养档案营养素值');
+    expect(draftServiceMock.saveVerification).not.toHaveBeenCalled();
   });
 
   it('已写入的草稿重复调用是幂等的：直接返回已有 id 与已存报告', async () => {

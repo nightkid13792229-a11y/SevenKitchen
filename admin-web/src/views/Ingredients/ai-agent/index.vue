@@ -116,7 +116,7 @@
             :closable="false"
             show-icon
             title="原料已写入正式库"
-            description="以下是写入前的对话记录，仅供追溯；以右侧绿色核验/已写入状态为准。"
+            description="AI 写入值与人工改动已记入创建记录；对话本身不保存，以右侧已写入状态为准。"
           />
 
           <el-empty

@@ -691,6 +691,45 @@ describe('IngredientCreationCommitService', () => {
     expect(store.audits).toHaveLength(1);
   });
 
+  it('有 AI 写入基线时，审计记录 AI 原值与人工改后的最终值', async () => {
+    const draft = buildDraft({
+      aiBaseline: {
+        profiles: {
+          'src-usda-raw': {
+            'macros.crudeProtein': {
+              value: 25,
+              unit: 'g',
+              at: '2026-11-21T10:00:00.000Z',
+            },
+          },
+        },
+        ingredient: {},
+        updatedAt: '2026-11-21T10:00:00.000Z',
+      },
+    });
+    const { service, store } = await createHarness({ draft });
+
+    await service.commit(baseInput);
+
+    const audit = store.audits[0] as {
+      changes: {
+        fields: Array<Record<string, unknown>>;
+        aiBaseline: unknown;
+      };
+    };
+    const field = audit.changes.fields.find(
+      (row) => row.fieldPath === 'macros.crudeProtein',
+    );
+    expect(field).toMatchObject({
+      change: 'VALUE_CHANGED',
+      aiValue: 25,
+      finalValue: 20.4,
+    });
+    expect(audit.changes.aiBaseline).toMatchObject({
+      updatedAt: '2026-11-21T10:00:00.000Z',
+    });
+  });
+
   it('原料名按 NFKC + 空白归一后查重、加锁、入库', async () => {
     const { service, prisma, queryRawLog } = await createHarness();
     const ingredient = { ...ingredientDraft, name: '  Chicken　Liver  ' };

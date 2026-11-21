@@ -24,6 +24,10 @@ import {
   INGREDIENT_PROPERTY_KEY_BY_FIELD,
 } from '../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
+import type {
+  AiBaseline,
+  AiFieldBaseline,
+} from '../../domain/ingredient-creation/ai-baseline';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   canonicalChannelCode,
@@ -151,6 +155,14 @@ interface AuditChanges {
    * 就用这份清单把「哪些格子是人改的」带进审计。
    */
   ingredientFields: IngredientCardField[];
+  /** 原料卡上人工改过的字段：AI 原值 vs 最终值（2026-11-21）。 */
+  ingredientFieldChanges: Array<{
+    field: IngredientCardField;
+    aiValue: unknown;
+    finalValue: unknown;
+  }>;
+  /** 本次提交时草稿里的 AI 写入基线（没有就是 null）。 */
+  aiBaseline: AiBaseline | null;
   /**
    * 2026-11-21 起授权写入即确认：审计要能回答「谁在什么时候确认可用」。
    */
@@ -413,6 +425,8 @@ function buildAuditChanges(
 
   profiles.forEach((profile, profileIndex) => {
     const baseline = findAiProposalForProfile(draft, profile);
+    const profileBaseline =
+      draft.payload.aiBaseline?.profiles?.[profile.sourceRecordId];
     const finalByPath = new Map<string, NutritionEvidenceEntry>();
     for (const entry of profile.entries) {
       if (entry && typeof entry.fieldPath === 'string') {
@@ -428,17 +442,39 @@ function buildAuditChanges(
     for (const fieldPath of finalByPath.keys()) {
       fieldPaths.add(fieldPath);
     }
+    for (const fieldPath of Object.keys(profileBaseline ?? {})) {
+      fieldPaths.add(fieldPath);
+    }
 
     for (const fieldPath of fieldPaths) {
       const ai = baseline?.rows.get(fieldPath) ?? null;
       const aiCandidates = baseline?.conflicts.get(fieldPath) ?? null;
+      const base = profileBaseline?.[fieldPath] ?? null;
       const final = finalByPath.get(fieldPath) ?? null;
-      const aiValue = ai?.value ?? null;
+      const aiValue = base
+        ? typeof base.value === 'number'
+          ? base.value
+          : null
+        : (ai?.value ?? null);
+      const aiUnit = base?.unit ?? ai?.unit ?? null;
       const finalValue = readFiniteNumber(final?.finalValue);
       const finalUnit = final ? readNonEmptyString(final.unit) : null;
 
       let change: FieldChangeKind | null = null;
-      if (aiCandidates && finalValue !== null) {
+      if (base) {
+        // 2026-11-21：优先用 AI 写工具留下的基线，能分清「AI 原值 → 人改成什么」。
+        if (finalValue === null) {
+          if (aiValue !== null) {
+            change = 'REMOVED_FROM_FINAL';
+          }
+        } else if (
+          aiValue === null ||
+          !numbersEqual(aiValue, finalValue) ||
+          (aiUnit !== null && finalUnit !== null && aiUnit !== finalUnit)
+        ) {
+          change = 'VALUE_CHANGED';
+        }
+      } else if (aiCandidates && finalValue !== null) {
         change = 'CONFLICT_RESOLVED';
       } else if (finalValue === null) {
         if (aiValue !== null) {
@@ -471,8 +507,8 @@ function buildAuditChanges(
         fieldPath,
         change,
         aiValue,
-        aiUnit: ai?.unit ?? null,
-        aiSourceRecordId: ai?.sourceRecordId ?? null,
+        aiUnit,
+        aiSourceRecordId: ai?.sourceRecordId ?? profile.sourceRecordId,
         aiCandidates: aiCandidates ? [...aiCandidates] : null,
         finalValue,
         finalUnit,
@@ -484,10 +520,24 @@ function buildAuditChanges(
   });
 
   const exceptions = draft.payload.verify?.exceptions;
+  const ingredientFields = readIngredientManualFields(draft);
+  const baselineIngredient: Record<string, AiFieldBaseline> =
+    draft.payload.aiBaseline?.ingredient ?? {};
+  const finalIngredient: Record<string, unknown> = isRecord(
+    draft.payload.ingredient,
+  )
+    ? (draft.payload.ingredient as Record<string, unknown>)
+    : {};
   return {
     fields,
     exceptions: Array.isArray(exceptions) ? exceptions : [],
-    ingredientFields: readIngredientManualFields(draft),
+    ingredientFields,
+    ingredientFieldChanges: ingredientFields.map((field) => ({
+      field,
+      aiValue: baselineIngredient[field]?.value ?? null,
+      finalValue: finalIngredient[field] ?? null,
+    })),
+    aiBaseline: draft.payload.aiBaseline ?? null,
     confirmation: {
       mode: 'AUTHORIZE_WRITES_VERIFIED',
       verifiedAt: confirmation.verifiedAt,

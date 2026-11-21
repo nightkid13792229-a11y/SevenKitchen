@@ -6,6 +6,7 @@ import type {
 } from '../../domain/ingredient-creation/preparation-state';
 import type { CoverageCategory } from '../../domain/ingredient-creation/state-coverage';
 import type { SearchPlan } from '../../domain/ingredient-creation/search-plan';
+import type { AiBaseline } from '../../domain/ingredient-creation/ai-baseline';
 import type { NameClassification } from './ingredient-name-classifier.service';
 
 /**
@@ -462,6 +463,11 @@ export interface IngredientCreationDraftPayload {
    * 汇报块由它生成，不让模型复述数字；同一库多轮（换词重查）会有多条。
    */
   searchReport?: SearchReportEntry[];
+  /**
+   * AI 写入基线（2026-11-21）：只由 AI 写工具更新，人改不覆盖。
+   * 提交审计用它比较「AI 原值 vs 最终值」。
+   */
+  aiBaseline?: AiBaseline;
 }
 
 export interface SearchReportEntry {

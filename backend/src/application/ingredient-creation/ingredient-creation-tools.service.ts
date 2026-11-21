@@ -37,6 +37,10 @@ import {
   sourceValuesMatch,
 } from '../../domain/ingredient-creation/source-consistency';
 import {
+  mergeIngredientBaseline,
+  mergeProfileBaseline,
+} from '../../domain/ingredient-creation/ai-baseline';
+import {
   NUTRITION_FIELD_CATALOG,
   type NutritionFieldDefinition,
 } from '../../domain/ingredient/nutrition-field-catalog';
@@ -2400,6 +2404,8 @@ export class IngredientCreationToolsService {
 
     const draft = await this.draftService.get(draftId);
     let profiles = readProfiles(draft);
+    let aiBaseline = draft.payload.aiBaseline;
+    let baselineTouched = false;
 
     let profileIndex = explicitProfileIndex;
     if (profileIndex === null) {
@@ -2485,6 +2491,22 @@ export class IngredientCreationToolsService {
 
       profiles = write.profiles;
       applied += 1;
+      const writtenProfile = profiles[profileIndex];
+      if (writtenProfile) {
+        aiBaseline = mergeProfileBaseline(
+          aiBaseline,
+          writtenProfile.sourceRecordId,
+          [
+            {
+              fieldPath: validation.fieldPath,
+              finalValue: validation.value,
+              unit: validation.field.unit,
+            },
+          ],
+          new Date().toISOString(),
+        );
+        baselineTouched = true;
+      }
       if (write.changed) {
         writtenFieldPaths.push(validation.fieldPath);
       }
@@ -2492,7 +2514,10 @@ export class IngredientCreationToolsService {
 
     // 部分成功也要落库：失败项跳过，成功项已在 profiles 里。
     if (applied > 0) {
-      await this.draftService.patch(draftId, draft.step, { profiles });
+      await this.draftService.patch(draftId, draft.step, {
+        profiles,
+        ...(baselineTouched ? { aiBaseline } : {}),
+      });
     }
 
     // 一条都没写进去：把逐条错误当成本次工具失败返回，模型必须按错误改；
@@ -2765,7 +2790,20 @@ export class IngredientCreationToolsService {
     }
 
     if (changed.length > 0) {
-      await this.draftService.patch(draftId, draft.step, { ingredient: next });
+      const baselineFields = Object.fromEntries(
+        changed.map((field) => [
+          field,
+          (next as unknown as Record<string, unknown>)[field],
+        ]),
+      );
+      await this.draftService.patch(draftId, draft.step, {
+        ingredient: next,
+        aiBaseline: mergeIngredientBaseline(
+          draft.payload.aiBaseline,
+          baselineFields,
+          new Date().toISOString(),
+        ),
+      });
     }
 
     return {

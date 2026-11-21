@@ -316,6 +316,9 @@ describe('writeNutrition · 来源数值与人工值保护', () => {
     expect(result.ok).toBe(true);
     const patched = draftService.patch.mock.calls.at(-1)?.[2] as {
       profiles?: Array<{ entries: Array<Record<string, unknown>> }>;
+      aiBaseline?: {
+        profiles?: Record<string, Record<string, unknown>>;
+      };
     };
     expect(patched.profiles?.[0]?.entries[0]).toMatchObject({
       fieldPath: 'macros.crudeProtein',
@@ -324,5 +327,8 @@ describe('writeNutrition · 来源数值与人工值保护', () => {
       sourceUnit: 'g',
       status: 'DIRECT',
     });
+    expect(
+      patched.aiBaseline?.profiles?.['rec-1']?.['macros.crudeProtein'],
+    ).toMatchObject({ value: 10, unit: 'g' });
   });
 });

@@ -406,7 +406,7 @@ Expected: FAIL — modules missing.
 
 - `buildSupplementProfile`: start from `createEmptyNutritionProfile()`, set `rawBasisType` by `baseUnit` (`PER_SERVING` for PCS / `PER_1_G` / `PER_1_ML`), set `amountUnitLabel`/`servingUnitLabel`, `sourceType: 'SUPPLEMENT_LABEL'`, and write per-unit values (`serving / servingUnitsPerDose`). Invalid serving/values are skipped; validation blocks them.
 - Basic validation includes the name form-word warning, brand/model/channel length checks, and `openedShelfLifeDays` (if present, must be a positive integer; otherwise optional).
-- Basic validation uses `supplementNutrientGroups` from the backend field catalog (`nutrition-field-catalog`) to validate field paths; it must not import frontend constants.
+- Basic validation uses `findNutritionField` / the backend `nutrition-field-catalog` to validate field paths; it must not import frontend constants.
 - `isSupplementUnitOneToOne` for display/base; `Number.isInteger` for PCS.
 - Codes are fixed and used by the UI; do not put raw field paths in user-facing messages except as a hint.
 
@@ -501,7 +501,7 @@ bash scripts/session.sh commit -m "feat(supplement): 服务端草稿 CRUD" \
 
 - [ ] **Step 1: Write failing feature-validation tests**
 
-Cover: duplicate; catalog exact → pass, non-exact → warning with candidates (not blocker); retail on with ERROR; retail off without reason; DIY on without link; group not approved/singleton/skip; global shop/equivalence off warnings; missing evidence images → warning (not blocker). Assert levels and codes.
+Cover: duplicate; catalog exact → pass, non-exact → warning with candidates (not blocker); retail on with ERROR; retail off without reason; shelfLifeMonths present but invalid (0/negative/decimal); noSaleReason not in the four-value whitelist; DIY on without link; DIY platform not in the allowed whitelist; storageCondition >200; purchaseUnit >50; group not approved/singleton/skip; global shop/equivalence off warnings; missing evidence images → warning (not blocker). Assert levels and codes.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -514,8 +514,10 @@ Expected: FAIL — function/service missing.
   - Duplicate → `DUPLICATE_INGREDIENT` blocker with existing name.
   - Catalog: exact match in either catalog → pass; exact absent → `LABEL_NAME_UNVERIFIED` warning with up to 5 substring candidates (never a blocker; the human acknowledges).
   - Map catalog issues: any `ERROR` when retail enabled → blocker `RETAIL_BLOCKED_BY_ISSUES` + the issue messages; `WARN` when retail enabled → warning. Filter `EQUIVALENCE_*` (handled separately) and `DUPLICATE_NAME` (handled by the duplicate check) to avoid duplicate warnings.
-  - Retail off + no reason → `NO_SALE_REASON_REQUIRED` blocker.
-  - DIY on + no link/platform → `DIY_LINK_REQUIRED` blocker.
+  - Retail off + no reason → `NO_SALE_REASON_REQUIRED` blocker; reason not in SELF_MADE/BULK/NO_SUPPLY/UNDECIDED → `NO_SALE_REASON_INVALID` blocker.
+  - Retail shelfLifeMonths present but not a positive integer → `SHELF_LIFE_INVALID` blocker (the catalog issue only checks missing, not invalid).
+  - DIY on + no link/platform → `DIY_LINK_REQUIRED` blocker; platform not in TAOBAO/JD/PINDUODUO/IHERB/OTHER → `DIY_PLATFORM_INVALID` blocker.
+  - `storageCondition` >200 chars → `STORAGE_CONDITION_TOO_LONG` blocker; `purchaseUnit` >50 chars → `PURCHASE_UNIT_TOO_LONG` blocker (finalize bypasses the old DTO).
   - Group: not found or inactive/disabled → blocker; not APPROVED or memberCount <= 1 → warning; `__SKIP__` → warning.
   - Config shop/equivalence off → warnings.
   - Evidence: if either front or label image is missing → `EVIDENCE_MISSING` warning (AI drafting requires both, but manual entry may not).

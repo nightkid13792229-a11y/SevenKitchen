@@ -53,4 +53,20 @@ describe('selection synthesis fallback context', () => {
     expect(text).toContain('只列 FOOD，不要列补剂');
     expect(text).toContain('系统会按名称匹配原料库');
   });
+
+  it('does not hard-code a specific order taboo list', () => {
+    const messages = buildSelectionSynthesisMessages({
+      systemPrompt: 'system',
+      phaseLine: 'select',
+      userMessage: '选材',
+      planJson: '{"summary":"plan"}',
+      designContextJson: null,
+      candidateDigest: '',
+    });
+    const text = messages.map((m) => String(m.content)).join('\n');
+
+    expect(text).not.toContain('牛、羊、鸡、鸡蛋');
+    expect(text).toContain('只按已确认方案');
+    expect(text).toContain('不要自行添加通用食材禁忌');
+  });
 });

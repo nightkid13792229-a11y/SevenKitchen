@@ -6,9 +6,15 @@ import {
 describe('medication-free plan text', () => {
   it('removes medication sentences but keeps nutrition content', () => {
     const text =
-      '低脂、限钠、抗炎优先。用药按兽医处方，溃速平与潘飞龙不调整剂量。每日 3 餐，少量多餐。';
+      '低脂、限钠、抗炎优先。用药按兽医处方，不调整剂量。每日 3 餐，少量多餐。';
     expect(stripMedicationSentences(text)).toBe(
       '低脂、限钠、抗炎优先。每日 3 餐，少量多餐。',
+    );
+  });
+
+  it('removes a medication sentence without relying on a specific product name', () => {
+    expect(stripMedicationSentences('某产品按处方使用。继续喂食。')).toBe(
+      '继续喂食。',
     );
   });
 

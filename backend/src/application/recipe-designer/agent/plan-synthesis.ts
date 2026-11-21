@@ -11,19 +11,17 @@ import type { DeepSeekToolsMessage } from '../deepseek-tools-chat';
  * 这里按关键词相关度 + 最近读取排序，并在开头附“本次读过的文档/页码索引”。
  */
 
+/**
+ * 证据片段排序的通用信号：来源标识、表格、带单位的数值。
+ *
+ * 这里刻意不放任何具体疾病/营养素的关键词权重：那会让某一类病例的页面
+ * 永远排在前面，对其它病例形成隐性偏向。具体该看什么，由模型的方案推理
+ * 和已确认方案决定，排序只做“更像证据的页面优先”。
+ */
 const EVIDENCE_KEYWORDS: Array<[RegExp, number]> = [
-  [/胰腺炎|pancreatitis/gi, 8],
-  [/脂肪|fat/gi, 5],
-  [/蛋白|protein/gi, 5],
-  [/钠|sodium/gi, 4],
-  [/磷|phosphorus/gi, 4],
-  [/钙|calcium/gi, 3],
-  [/能量密度|energy density/gi, 3],
   [/FEDIAF/gi, 6],
-  [/Table 67-3|table 36-4/gi, 8],
-  [/EPA|DHA|omega-3|n-3/gi, 3],
-  [/心脏|cardiac|heart/gi, 3],
-  [/肿瘤|cancer|neoplasia/gi, 3],
+  [/Table\s*\d|表\s*\d/gi, 4],
+  [/\d+(?:\.\d+)?\s*(?:%|g|mg|μg|ug|mcg|IU|kcal|MJ)/gi, 2],
 ];
 
 interface EvidenceChunk {
@@ -184,9 +182,9 @@ export function buildPlanSynthesisMessages(input: {
       '请直接调用 propose_plan 提交方案。summary 和 rationale 只写营养方案，不复述年龄/体重/品种/BCS/性别/检验值，不提药物/用药/处方/剂量；' +
       '理由与建议写 rationale。constraints 只放疾病特异性、或比 FEDIAF 2025 默认评估更严的那一侧；' +
       '默认下限、通用蛋白/脂肪/钙磷等上下限不要重复写。非数值约束放 nonNutrient，用文案；nonNutrient 要覆盖会限制食材选择的质地/纤维/产气、忌口/过敏、工艺/形态、餐次，需要低渣时写清避免豆类/粗纤维/菌藻等。' +
-      'MAINTAIN 不要列 energyDensity；钠只有比 FEDIAF 上限 0.55 g/1000 kcal 更严才列；' +
-      '胰腺炎与肿瘤蛋白冲突时以胰腺炎安全为先，蛋白上限不超过 30% DM，30–45% 只写理由并标待确认。' +
-      '不要计算每日总热量；如果确实需要控制能量，用 key=energyDensity、unit=KCAL_PER_100G 或 KCAL_PER_KG 的约束。' +
+      'MAINTAIN 不要列 energyDensity；钠/蛋白等具体阈值按已确认方案、FEDIAF 标准或知识库原文，不要写死通用阈值。' +
+      '不同疾病目标冲突时，按知识库/兽医意见处理，先标待确认，不要自行写死优先级。' +
+      '不要计算每日总热量；能量密度用 nonNutrient 文案，不要用评估引擎不支持的 KCAL_PER_* 单位。' +
       '不要继续检索，不要调用其他工具。',
   });
 

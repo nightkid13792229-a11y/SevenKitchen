@@ -88,4 +88,22 @@ describe('plan synthesis fallback context', () => {
     expect(String(messages[4].content)).toContain('证据摘录');
     expect(String(messages[5].content)).toContain('propose_plan');
   });
+
+  it('does not hard-code a specific disease policy in the fallback prompt', () => {
+    const messages = buildPlanSynthesisMessages({
+      systemPrompt: 'system',
+      phaseLine: 'plan',
+      userMessage: '给这只狗做方案',
+      designContextJson: null,
+      evidenceDigest: '',
+    });
+    const text = messages.map((message) => String(message.content)).join('\n');
+
+    expect(text).not.toContain('0.55');
+    expect(text).not.toContain('30% DM');
+    expect(text).not.toContain('30–45%');
+    expect(text).not.toContain('胰腺炎与肿瘤');
+    expect(text).toContain('知识库');
+    expect(text).toContain('待确认');
+  });
 });

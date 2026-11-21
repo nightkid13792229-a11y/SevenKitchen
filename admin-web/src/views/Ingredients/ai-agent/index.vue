@@ -2528,7 +2528,10 @@ function markChecksStale() {
 
 async function loadDraft(draftId: string) {
   reportAcknowledged.value = false
-  resetClosingForm()
+  // 只有换了一份草稿才清采购表单；同一份草稿跑完一轮后保留人刚填的采购价。
+  if (state.draftId !== draftId) {
+    resetClosingForm()
+  }
   draftLoading.value = true
   draftError.value = ''
   // 换草稿时先清掉上一份的报告，避免用别人的 fresh 判定这一页。

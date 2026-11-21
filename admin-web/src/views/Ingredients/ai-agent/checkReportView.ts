@@ -18,6 +18,16 @@ import type {
   ExceptionRecord
 } from '@/types/ingredientCreation'
 
+/**
+ * 报告来源的页面文案（2026-11-21）。
+ *
+ * 自动核验和人工点「核验」跑的是同一套规则、同一份内容；人改过内容后报告会
+ * 自动过期。所以自动报告不是「AI 自检」，不能写「不算授权依据」。
+ */
+export function reportTriggerLabel(trigger: 'USER' | 'AGENT'): string {
+  return trigger === 'USER' ? '人工核验' : '系统自动核验（与人工核验同规则）'
+}
+
 /** 两页的固定称呼：原因文案与弹窗标题共用，避免一处写「原料卡」一处写「原料档案」。 */
 const DOMAIN_LABELS: Record<CheckDomain, string> = {
   INGREDIENT: '原料档案',

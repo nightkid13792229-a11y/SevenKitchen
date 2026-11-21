@@ -167,16 +167,22 @@ export const ingredientCreationApi = {
     id: string,
     input: {
       primaryProfileIndex: number
+      /** 人已勾选「我已核对两页报告与采购价」（2026-11-21，服务端硬要求）。 */
+      reportAcknowledged: boolean
       /**
        * 建档必须一起提交的采购商品（2026-11-07 硬门禁）。
        * 它是原料成本的唯一初始来源：没有它，这条原料建出来就是 0 元。
        */
       procurementSku: {
         name?: string
+        purchaseChannel?: string
         purchaseUnit: string
+        /** 规格原文（识别用），订单截图匹配靠它。 */
+        productModel?: string
         packCount: number
         netContentPerPack: number
         currentPurchasePrice: number
+        sourceScreenshotUrl?: string
       }
     }
   ): Promise<AuthorizeResult> =>

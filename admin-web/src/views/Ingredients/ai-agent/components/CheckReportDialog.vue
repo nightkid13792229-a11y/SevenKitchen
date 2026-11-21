@@ -17,7 +17,7 @@
           :type="run.trigger === 'USER' ? 'success' : 'info'"
           effect="plain"
         >
-          {{ run.trigger === 'USER' ? '人工核验' : 'AI 自检（不算授权依据）' }}
+          {{ run.trigger === 'USER' ? '人工核验' : reportTriggerLabel(run.trigger) }}
         </el-tag>
       </div>
     </template>
@@ -155,7 +155,7 @@
     <template #footer>
       <div class="check-dialog__footer">
         <span class="check-dialog__hint">
-          授权只认人点「核验此页」跑出来的报告；AI 自检不算。
+          授权采用当前内容的核验报告；改过内容需重跑，自动核验与人工核验同规则。
         </span>
         <div class="check-dialog__buttons">
           <el-button
@@ -184,6 +184,7 @@ import {
   checkDomainLabel,
   checkRunCounts,
   formatCheckedAt,
+  reportTriggerLabel,
   toCheckReportSections
 } from '../checkReportView'
 

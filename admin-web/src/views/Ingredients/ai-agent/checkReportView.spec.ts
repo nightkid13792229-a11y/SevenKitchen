@@ -8,6 +8,7 @@ import {
   checkRunCounts,
   formatCheckedAt,
   gateState,
+  reportTriggerLabel,
   staleBannerText,
   toAuthorizeReasons,
   toCheckReportSections,
@@ -545,5 +546,16 @@ describe('报告分区与计数', () => {
     expect(formatCheckedAt(null)).toBe('—')
     expect(formatCheckedAt('not-a-date')).toBe('—')
     expect(formatCheckedAt('2026-10-26T10:00:00.000Z')).not.toContain('Invalid')
+  })
+})
+
+
+describe('报告来源文案', () => {
+  it('系统自动核验与人工核验同规则，不再写“不算授权依据”', () => {
+    expect(reportTriggerLabel('AGENT')).toBe(
+      '系统自动核验（与人工核验同规则）'
+    )
+    expect(reportTriggerLabel('USER')).toBe('人工核验')
+    expect(reportTriggerLabel('AGENT')).not.toContain('不算')
   })
 })

@@ -43,7 +43,7 @@
             <span>肉类、内脏、水产、蛋、蔬果、谷物</span>
           </button>
           <button
-            class="line-gate__option line-gate__option--muted"
+            class="line-gate__option"
             type="button"
             @click="pickLine('SUPPLEMENT')"
           >
@@ -73,9 +73,10 @@
           >
             等你回答
           </el-tag>
-          <span class="agent-panel__draft">
-            草稿：<code>{{ state.draftId || '运行后创建' }}</code>
+          <span v-if="state.draftId" class="agent-panel__draft">
+            草稿：<code>{{ shortId(state.draftId) }}</code>
           </span>
+          <span v-else class="agent-panel__draft">草稿：运行后创建</span>
         </div>
 
         <div ref="bodyRef" class="agent-panel__body">
@@ -541,9 +542,6 @@
           <div class="review-panel__head-top">
             <div class="review-panel__title">
               <b>草稿审核</b>
-              <span v-if="draft" class="review-panel__step">
-                当前站点 {{ draft.step }}
-              </span>
             </div>
             <div
               v-if="activeTab === 'ingredient'"
@@ -554,13 +552,6 @@
             </div>
           </div>
           <div class="review-stats">
-            <el-tag
-              size="small"
-              :type="conflictCount > 0 ? 'danger' : 'info'"
-              effect="plain"
-            >
-              冲突 {{ conflictCount }} 项
-            </el-tag>
             <el-tag
               size="small"
               :type="commitResult || gate.ready ? 'success' : 'info'"
@@ -1035,25 +1026,11 @@
             </el-alert>
 
             <el-alert
-              v-if="verifyError"
-              type="error"
-              :closable="false"
-              show-icon
-              title="确认可用失败（后端返回原文）"
-            >
-              <p class="review-error-text">{{ verifyError }}</p>
-            </el-alert>
-
-            <el-alert
               v-if="commitResult"
               type="success"
               :closable="false"
               show-icon
-              :title="
-                verified
-                  ? '已写入，原料与营养档案已确认可用'
-                  : '已写入正式库，营养档案当前是「待验证」'
-              "
+              title="已写入，原料与营养档案已确认可用"
             >
               <p class="review-commit-result">
                 原料 {{ shortId(commitResult.ingredientId) }} ·
@@ -1063,17 +1040,17 @@
               <p class="review-commit-result">
                 授权时间 {{ formatCheckedAt(commitResult.authorizedAt) }}
               </p>
-              <p v-if="!verified" class="review-error-text">
-                {{
-                  isAdmin
-                    ? '点「确认可用」后，这些档案才会进入配方链路。'
-                    : ADMIN_ONLY_TIP
-                }}
-              </p>
             </el-alert>
           </div>
 
           <footer class="review-footer">
+            <el-checkbox
+              v-if="!commitResult"
+              v-model="reportAcknowledged"
+              class="review-ack"
+            >
+              我已核对两页报告与采购价
+            </el-checkbox>
             <el-button
               type="primary"
               size="large"
@@ -1081,17 +1058,7 @@
               :disabled="!canAuthorize"
               @click="handleAuthorize"
             >
-              授权写入正式库
-            </el-button>
-            <el-button
-              v-if="commitResult"
-              type="success"
-              size="large"
-              :loading="verifying"
-              :disabled="!isAdmin || verified || verifying"
-              @click="handleVerify"
-            >
-              确认可用
+              授权写入并确认可用
             </el-button>
             <span class="review-footer__hint">{{ authorizeHint }}</span>
           </footer>
@@ -1334,12 +1301,10 @@ import {
   type ClosingFieldKey
 } from './procurementClosing'
 import { indexHtmlPathOf, isStaleBundle } from './staleBundle'
-import { nutritionFoodApi } from '@/api/ingredients'
 import {
   ingredientTagApi,
   type IngredientTag
 } from '@/api/ingredientTags'
-import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
 import { useUserStore } from '@/store/user'
 import {
   INGREDIENT_CARD_FIELDS,
@@ -1373,7 +1338,6 @@ import type {
 } from '@/types/ingredientCreation'
 import {
   applyProfileCellEdit,
-  countPlanConflicts,
   markIngredientFieldManual,
   resolveRawPrimaryProfileIndex,
   toCommitInput,
@@ -1454,7 +1418,6 @@ interface AgentRunRecord {
 
 const route = useRoute()
 const router = useRouter()
-const isAdmin = useIsAdmin()
 const userStore = useUserStore()
 
 const pageRef = ref<HTMLElement | null>(null)
@@ -1985,9 +1948,19 @@ function reloadForNewVersion(): void {
 }
 
 
-const verifyError = ref('')
-const verifying = ref(false)
-const verified = ref(false)
+/**
+ * 2026-11-21：自动核验可以算授权依据，但授权前必须由人勾选「已核对两页报告」。
+ * 任何一次保存/核验刷新都会把它重置为 false，逼人重新确认当前内容。
+ */
+const reportAcknowledged = ref(false)
+
+// 草稿内容一变（AI 写入 / 人工改格 / 登记例外），确认自动作废。
+watch(
+  () => draft.value?.updatedAt,
+  () => {
+    reportAcknowledged.value = false
+  }
+)
 
 const saveError = ref('')
 const saveFailed = ref(false)
@@ -2109,9 +2082,6 @@ const nutritionZeroCount = computed(() =>
 const nutritionReviewCount = computed(
   () => nutritionEmptyCount.value + nutritionZeroCount.value
 )
-const conflictCount = computed(() =>
-  countPlanConflicts(draft.value?.payload)
-)
 
 /** 两页摘要：`fresh` 只认服务端 GET /checks 的判断，不在前端重算哈希。 */
 const ingredientCheck = computed(() =>
@@ -2161,7 +2131,8 @@ const canAuthorize = computed(
     !submitting.value &&
     !staleBundle.value &&
     closingReady.value &&
-    gate.value.ready
+    gate.value.ready &&
+    reportAcknowledged.value
 )
 
 /**
@@ -2190,9 +2161,7 @@ watch(showProcurementCard, (visible) => {
 
 const authorizeHint = computed(() => {
   if (commitResult.value) {
-    return verified.value
-      ? '已确认可用，配方里现在能选到这些档案。'
-      : '已写入正式库；确认可用后才会进入配方链路。'
+    return '已写入并确认可用，配方里现在能选到这些档案。'
   }
   // 旧页面先拦：这条不解决，点下去只会拿到一句跟页面无关的后端拒绝理由。
   if (staleBundle.value) {
@@ -2209,7 +2178,9 @@ const authorizeHint = computed(() => {
       ? `去下面把「采购商品」填完：${closingStateLabel.value}`
       : '先把原料档案填完、两页核验通过，下方会出现「这条原料的采购商品」。'
   }
-  return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
+  return reportAcknowledged.value
+    ? '授权前，所有内容只在草稿里；写入时同时确认可用。'
+    : '勾选「我已核对两页报告与采购价」后才能写入。'
 })
 
 /**
@@ -2427,6 +2398,7 @@ async function refreshChecks(
  * fresh=true 放行；页签横幅会如实说报告已过期。
  */
 function markChecksStale() {
+  reportAcknowledged.value = false
   const view = checksView.value
   if (!view) {
     return
@@ -2438,6 +2410,7 @@ function markChecksStale() {
 }
 
 async function loadDraft(draftId: string) {
+  reportAcknowledged.value = false
   draftLoading.value = true
   draftError.value = ''
   // 换草稿时先清掉上一份的报告，避免用别人的 fresh 判定这一页。
@@ -2462,6 +2435,8 @@ async function loadDraft(draftId: string) {
 }
 
 async function handleRun() {
+  // 新一轮会让草稿内容变化，先取消「已核对」确认。
+  reportAcknowledged.value = false
   // 线路没定、或者选了补剂，一个请求都不发：闸门不是提示，是硬拦。
   if (line.value !== 'FOOD') {
     return
@@ -3338,7 +3313,7 @@ async function confirmAuthorize(profileCount: number): Promise<boolean> {
     `写入 1 条原料 + ${profileCount} 份营养档案。`,
     ...summaries,
     ...exceptionLines,
-    '写入后原料与营养档案都是「待验证」，确认可用是另一个动作。'
+    '写入时同时确认可用：营养档案直接进配方链路。'
   ]
 
   try {
@@ -3425,8 +3400,6 @@ async function handleAuthorize() {
 
   submitting.value = true
   submitError.value = ''
-  verifyError.value = ''
-  verified.value = false
 
   try {
     await saveQueue
@@ -3495,13 +3468,15 @@ async function handleAuthorize() {
 
     const result = await ingredientCreationApi.authorize(draftId, {
       primaryProfileIndex,
+      reportAcknowledged: true,
       procurementSku: buildClosingSkuInput({
         ...closingForm,
         sourceScreenshotUrl: shotSourceUrl.value
       })
     })
     commitResult.value = result
-    ElMessage.success('已写入正式库，营养档案当前是「待验证」')
+    reportAcknowledged.value = false
+    ElMessage.success('已写入并确认可用，配方里现在能选到这些档案')
   } catch (error) {
     const reasons = toAuthorizeReasons(error)
     if (reasons.length > 0) {
@@ -3514,47 +3489,6 @@ async function handleAuthorize() {
   } finally {
     submitting.value = false
   }
-}
-
-/** 确认可用：对授权返回的每个 nutritionFoodId 一个一个验证，失败逐条留原文。 */
-async function handleVerify() {
-  if (!isAdmin.value) {
-    ElMessage.warning(ADMIN_ONLY_TIP)
-    return
-  }
-
-  const nutritionFoodIds = commitResult.value?.nutritionFoodIds ?? []
-  if (nutritionFoodIds.length === 0) {
-    verifyError.value = '这次授权没有返回营养档案，无法确认可用'
-    return
-  }
-
-  verifying.value = true
-  verifyError.value = ''
-
-  const failures: string[] = []
-  for (const nutritionFoodId of nutritionFoodIds) {
-    try {
-      await nutritionFoodApi.verify(nutritionFoodId)
-    } catch (error) {
-      failures.push(
-        `${shortId(nutritionFoodId)}：${getApiErrorMessage(
-          error,
-          '确认可用失败，请稍后重试'
-        )}`
-      )
-    }
-  }
-
-  verifying.value = false
-
-  if (failures.length === 0) {
-    verified.value = true
-    ElMessage.success('已确认可用，配方里现在能选到这些档案')
-    return
-  }
-
-  verifyError.value = failures.join('\n')
 }
 
 function goBackToList() {

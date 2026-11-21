@@ -1,6 +1,9 @@
 import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { IngredientCheckRunService } from '../../../src/application/ingredient-creation/ingredient-check-run.service';
+import {
+  CHECK_RULES_VERSION,
+  IngredientCheckRunService,
+} from '../../../src/application/ingredient-creation/ingredient-check-run.service';
 import { IngredientCreationCheckService } from '../../../src/application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import type {
@@ -537,8 +540,14 @@ describe('IngredientCreationCheckService', () => {
   });
 
   it('latestChecks 用当前草稿判断两域报告是否新鲜', async () => {
-    const ingredientRun = { id: 'run-ingredient' } as never;
-    const nutritionRun = { id: 'run-nutrition' } as never;
+    const ingredientRun = {
+      id: 'run-ingredient',
+      rulesVersion: CHECK_RULES_VERSION.INGREDIENT,
+    } as never;
+    const nutritionRun = {
+      id: 'run-nutrition',
+      rulesVersion: CHECK_RULES_VERSION.NUTRITION,
+    } as never;
     checkRunService.latestRuns.mockResolvedValue({
       INGREDIENT: ingredientRun,
       NUTRITION: nutritionRun,
@@ -562,8 +571,26 @@ describe('IngredientCreationCheckService', () => {
     );
   });
 
+  it('规则版本不是当前版本 → fresh=false（旧报告不能授权）', async () => {
+    checkRunService.latestRuns.mockResolvedValue({
+      INGREDIENT: {
+        id: 'run-old',
+        rulesVersion: 'ingredient-card-v1',
+      } as never,
+      NUTRITION: null,
+    });
+    checkRunService.isFresh.mockReturnValue(true);
+
+    const view = await service.latestChecks('draft-1');
+
+    expect(view.fresh.ingredient).toBe(false);
+  });
+
   it('latestChecks 没有报告的一域 fresh 为 false', async () => {
-    const ingredientRun = { id: 'run-ingredient' } as never;
+    const ingredientRun = {
+      id: 'run-ingredient',
+      rulesVersion: CHECK_RULES_VERSION.INGREDIENT,
+    } as never;
     checkRunService.latestRuns.mockResolvedValue({
       INGREDIENT: ingredientRun,
       NUTRITION: null,

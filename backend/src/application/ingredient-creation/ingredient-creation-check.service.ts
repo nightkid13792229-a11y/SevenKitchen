@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
+  CHECK_RULES_VERSION,
   IngredientCheckRunService,
   type CheckDomain,
   type CheckRunView,
@@ -16,7 +17,7 @@ import type {
 /**
  * `GET drafts/:id/checks` 的返回体：两域各自的最新报告 + 是否还对得上当前草稿。
  *
- * `fresh` 为 false 有两种情况：没跑过（报告为 null）或跑完之后草稿又改过。
+ * `fresh` 为 false：没跑过（null）、跑完之后草稿又改过、或报告的规则版本不是当前版本。
  */
 export interface IngredientDraftChecksView {
   ingredient: CheckRunView | null;
@@ -134,14 +135,25 @@ export class IngredientCreationCheckService {
       ingredient: runs.INGREDIENT,
       nutrition: runs.NUTRITION,
       fresh: {
-        ingredient: runs.INGREDIENT
-          ? this.checkRunService.isFresh(runs.INGREDIENT, draft)
-          : false,
-        nutrition: runs.NUTRITION
-          ? this.checkRunService.isFresh(runs.NUTRITION, draft)
-          : false,
+        ingredient: this.isCurrentRun('INGREDIENT', runs.INGREDIENT, draft),
+        nutrition: this.isCurrentRun('NUTRITION', runs.NUTRITION, draft),
       },
     };
+  }
+
+  /**
+   * 报告能不能当授权依据：内容没改过（哈希相等）且规则版本是当前版本。
+   * 规则升级后旧报告不能再用，即使内容没改。
+   */
+  private isCurrentRun(
+    domain: CheckDomain,
+    run: CheckRunView | null,
+    draft: IngredientCreationDraft,
+  ): boolean {
+    if (!run || run.rulesVersion !== CHECK_RULES_VERSION[domain]) {
+      return false;
+    }
+    return this.checkRunService.isFresh(run, draft);
   }
 
   private evaluateDraft(

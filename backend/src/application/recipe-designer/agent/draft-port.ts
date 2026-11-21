@@ -350,11 +350,42 @@ export class RecipeDraftPort {
       resolution.overrides,
     );
     const raw = result?.assessment ?? null;
+    const groups = Array.isArray(raw?.groupedEntries) ? raw.groupedEntries : [];
+    const gaps = groups
+      .filter((entry: any) => {
+        const status = String(entry?.status ?? '');
+        return status === 'DEFICIENT' || status === 'EXCESS';
+      })
+      .slice(0, 12)
+      .map((entry: any) => {
+        const value = toNumber(entry.currentValue ?? entry.value);
+        const min = toNumber(entry.minValue ?? entry.min);
+        const max = toNumber(entry.maxValue ?? entry.max);
+        const status = String(entry.status ?? '');
+        return {
+          key: String(entry.nutrientKey ?? entry.key ?? ''),
+          label: String(entry.label ?? entry.name ?? ''),
+          status,
+          value,
+          min,
+          max,
+          unit: String(entry.unit ?? ''),
+          deficit:
+            status === 'DEFICIENT' && min !== null && value !== null
+              ? Math.max(0, min - value)
+              : status === 'EXCESS' && max !== null && value !== null
+                ? Math.max(0, value - max)
+                : null,
+        };
+      });
     return {
       assessment: raw?.summary
         ? {
-            summary: raw.summary,
-            gaps: Array.isArray(raw.summary.gaps) ? raw.summary.gaps : [],
+            isCompliant:
+              raw.isCompliant === true ||
+              String(raw.overallStatus ?? '').toUpperCase() === 'COMPLIANT',
+            counts: raw.summary,
+            gaps,
           }
         : null,
       overrides: resolution.overrides,

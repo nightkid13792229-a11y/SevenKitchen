@@ -290,7 +290,7 @@ interface SupplementDraftPayload {
 - `draftId`：草稿 id
 - `ingredientId`：新建原料 id
 - `nutritionFoodIds`：营养档案 id
-- `proposals`：`aiSnapshot`（AI 原提案）
+- `proposals`：`aiSnapshot`（AI 原提案）；其中 `aiSnapshot.proposedDecisions` 保留 AI 原始决定，`aiSnapshot.decisions` 是合并后实际生效的决定，两者都要留，避免“生效值”覆盖“AI 当初提了什么”
 - `changes`：`manualFields` + 人改后的值（只存改过的路径，避免整份重复）
 - `committedBy` / `committedAt`
 

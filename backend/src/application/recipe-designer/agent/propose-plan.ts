@@ -44,8 +44,6 @@ export interface AgentNutritionPlan {
   summary: string;
   /** 方案制定的理由与建议；纯文本。 */
   rationale?: string;
-  /** 饲喂餐次；属于饲喂安排，不是热量目标。不填也能提交。 */
-  mealsPerDay?: number;
   /** 只放疾病特异性/比默认评估更严的数值约束；通用项不要放。 */
   constraints: AgentPlanConstraint[];
   /** 非数值约束，文案形式，展示在约束表格后面。 */
@@ -119,10 +117,8 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
           type: 'string',
           description: '方案制定的理由与建议；纯文本',
         },
-        mealsPerDay: { type: 'integer', minimum: 1, maximum: 6 },
         constraints: {
           type: 'array',
-          minItems: 1,
           description:
             '只放疾病特异性/比 FEDIAF 2025 默认评估更严的数值约束；通用项不要放',
           items: {
@@ -173,7 +169,7 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
         },
         notes: { type: 'string' },
       },
-      required: ['summary', 'constraints'],
+      required: ['summary'],
       additionalProperties: false,
     },
   },
@@ -216,7 +212,6 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
         summary: { type: 'string' },
         items: {
           type: 'array',
-          minItems: 1,
           items: {
             type: 'object',
             properties: {
@@ -228,7 +223,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
               },
               reason: { type: 'string' },
             },
-            required: ['kind', 'name', 'foodCategory', 'reason'],
+            required: ['name', 'reason'],
             additionalProperties: false,
           },
         },
@@ -251,7 +246,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
         },
         notes: { type: 'string' },
       },
-      required: ['summary', 'items'],
+      required: ['summary'],
       additionalProperties: false,
     },
   },
@@ -266,34 +261,12 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   const rationale = rationaleRaw
     ? stripMedicationSentences(rationaleRaw)
     : undefined;
-  const mealsPerDay =
-    input.mealsPerDay === undefined || input.mealsPerDay === null
-      ? undefined
-      : Number(input.mealsPerDay);
-  if (
-    mealsPerDay !== undefined &&
-    (!Number.isInteger(mealsPerDay) || mealsPerDay < 1 || mealsPerDay > 6)
-  ) {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      'mealsPerDay 必须是 1–6 的整数',
-    );
-  }
   const rawConstraints = Array.isArray(input.constraints)
     ? input.constraints
     : [];
-  if (rawConstraints.length === 0) {
-    throw new AgentToolError('INVALID_ARGUMENT', 'constraints 不能为空');
-  }
   const constraints = rawConstraints.map((entry, index) =>
     normalizeConstraint(entry, index),
   );
-  if (constraints.length === 0) {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      'constraints 不能为空（只列疾病特异性/比默认评估更严的约束）',
-    );
-  }
   for (const constraint of constraints) {
     if (
       constraint.min !== null &&
@@ -317,7 +290,6 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   return {
     summary,
     ...(rationale ? { rationale } : {}),
-    ...(mealsPerDay !== undefined ? { mealsPerDay } : {}),
     constraints,
     nonNutrient,
     ...(readOptionalText(input.notes, 2000)
@@ -334,9 +306,6 @@ export function normalizeSelection(raw: unknown): AgentSelection {
     stripMedicationSentences(readText(input.summary, 'summary', 4000)) ||
     '食材候选';
   const rawItems = Array.isArray(input.items) ? input.items : [];
-  if (rawItems.length === 0) {
-    throw new AgentToolError('INVALID_ARGUMENT', 'items 不能为空');
-  }
   const items = rawItems.map((entry, index) =>
     normalizeSelectionItem(entry, index),
   );
@@ -376,9 +345,6 @@ export function summarizePlan(plan: AgentNutritionPlan): string {
   const lines = [`【方案待确认】${plan.summary}`];
   if (plan.rationale) {
     lines.push('理由与建议：', plan.rationale);
-  }
-  if (plan.mealsPerDay) {
-    lines.push(`每日 ${plan.mealsPerDay} 餐。`);
   }
   lines.push(
     `数值约束 ${plan.constraints.length} 条，见上方方案卡表格（仅列疾病特异性/比默认评估更严的项；通用项以营养评估为准）。`,
@@ -459,11 +425,7 @@ function normalizeSelectionItem(
   const input = isRecord(entry) ? entry : {};
   const kind = input.kind === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
   const name = readText(input.name, `items[${index}].name`, 120);
-  const foodCategory = readText(
-    input.foodCategory,
-    `items[${index}].foodCategory`,
-    40,
-  );
+  const foodCategory = readOptionalText(input.foodCategory, 40) ?? '未分类';
   const reason =
     stripMedicationSentences(
       readText(input.reason, `items[${index}].reason`, 1000),

@@ -88,13 +88,13 @@ function positiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
-const MAX_TOOL_CALLS = positiveInt(process.env.AGENT_MAX_TOOL_CALLS, 80);
+const MAX_TOOL_CALLS = positiveInt(process.env.AGENT_MAX_TOOL_CALLS, 160);
 /** 方案/选材阶段先收口，避免在检索里把预算烧光。 */
 /** 方案/选材阶段单次读页的 token 预算上限（默认 20k 太大）。 */
 const EARLY_PHASE_READ_BUDGET = 12000;
 const MAX_NO_PROGRESS_ASSESSMENTS = 3;
 /** 一次运行最长多久。 */
-const MAX_RUN_MS = positiveInt(process.env.AGENT_MAX_RUN_MS, 6 * 60 * 1000);
+const MAX_RUN_MS = positiveInt(process.env.AGENT_MAX_RUN_MS, 12 * 60 * 1000);
 /** 回灌给模型的历史条数（只含用户与助手）。 */
 const HISTORY_MESSAGES = 200;
 

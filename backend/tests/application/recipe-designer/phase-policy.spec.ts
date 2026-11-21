@@ -27,6 +27,8 @@ describe('recipe agent phase policy', () => {
     expect(tools).toContain('propose_selection');
     expect(tools).toContain('revise_plan');
     expect(tools).not.toContain('find_food');
+    expect(tools).not.toContain('read_draft');
+    expect(tools).not.toContain('kb_find');
     expect(tools).not.toContain('propose_plan');
     expect(tools).not.toContain('edit_recipe');
     expect(tools).not.toContain('assess');
@@ -56,7 +58,7 @@ describe('recipe agent phase policy', () => {
   });
 
   it('only forces propose near the resource budget', () => {
-    const forceAt = PHASE_TOOL_BUDGET.PLAN - 6;
+    const forceAt = PHASE_TOOL_BUDGET.PLAN - 12;
     expect(forceAt).toBeLessThan(PHASE_TOOL_BUDGET.PLAN);
     expect(forceProposeToolFor('PLAN', forceAt - 1)).toBeNull();
     expect(forceProposeToolFor('PLAN', forceAt)).toBe('propose_plan');

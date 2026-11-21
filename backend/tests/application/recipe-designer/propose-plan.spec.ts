@@ -46,10 +46,9 @@ describe('propose_plan normalization', () => {
     expect(normalized.constraints[0].max).toBeNull();
   });
 
-  it('rejects an empty constraint list', () => {
-    expect(() => normalizePlan({ ...plan, constraints: [] })).toThrow(
-      'constraints 不能为空',
-    );
+  it('accepts a plan with no numeric constraints', () => {
+    const normalized = normalizePlan({ ...plan, constraints: [] });
+    expect(normalized.constraints).toEqual([]);
   });
 
   it('rejects a constraint whose min is greater than max', () => {
@@ -100,6 +99,11 @@ describe('propose_selection normalization', () => {
     });
     expect(normalized.items[0].kind).toBe('SUPPLEMENT');
     expect(normalized.items[0].foodCategory).toBe('油脂类');
+  });
+
+  it('accepts an empty selection list', () => {
+    const normalized = normalizeSelection({ summary: '没有合适食材' });
+    expect(normalized.items).toEqual([]);
   });
 
   it('keeps skipped category reasons without a CFCT enum check', () => {

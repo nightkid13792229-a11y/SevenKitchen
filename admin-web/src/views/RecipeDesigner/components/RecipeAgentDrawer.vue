@@ -59,9 +59,6 @@
             营养方案{{ session.planConfirmedAt ? "（已确认）" : "（待确认）" }}
           </div>
           <div class="agent-plan__summary">{{ planSummary }}</div>
-          <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
-            每日 {{ session.plan.mealsPerDay }} 餐
-          </div>
           <table class="agent-plan__table">
             <thead>
               <tr>

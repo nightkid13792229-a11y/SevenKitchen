@@ -1768,6 +1768,25 @@ const closingForm = reactive({
   productModel: ''
 })
 
+/** 切换/恢复草稿时清掉上一份的采购商品，避免把 A 的价带到 B。 */
+function resetClosingForm(): void {
+  Object.assign(closingForm, {
+    name: '',
+    purchaseChannel: '',
+    purchaseUnit: '',
+    packCount: 1,
+    netContentPerPack: undefined,
+    currentPurchasePrice: undefined,
+    productModel: ''
+  })
+  shotSourceUrl.value = null
+  shotMissing.value = []
+  closingAiFilled.value = []
+  closingLowConfidence.value = []
+  shotError.value = ''
+  shotDragging.value = false
+}
+
 const closingBaseUnitLabel = computed(() =>
   closingBaseUnitOf(
     ((draft.value?.payload as any)?.ingredient?.baseUnit ?? null) as
@@ -2509,6 +2528,7 @@ function markChecksStale() {
 
 async function loadDraft(draftId: string) {
   reportAcknowledged.value = false
+  resetClosingForm()
   draftLoading.value = true
   draftError.value = ''
   // 换草稿时先清掉上一份的报告，避免用别人的 fresh 判定这一页。

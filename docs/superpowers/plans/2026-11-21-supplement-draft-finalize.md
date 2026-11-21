@@ -20,7 +20,7 @@
 - 草稿存服务端、按创建人私有；只有手动“放弃”才清掉；不自动过期；进入页面先看列表，不自动打开上一张。
 - 最终写入必须是一个事务；有阻断项或未确认提醒项就不写；失败时草稿保留，不能留半成品。
 - 写入后必须核验；功能核验不通过时页面不能显示“全部成功”。
-- 旧流程保留：admin-web `VITE_SUPPLEMENT_DRAFT_FLOW` 默认 `false`；后端新接口仅管理员可用，`SUPPLEMENT_DRAFT_FLOW=false` 时返回 404，便于回滚。
+- 旧流程保留：admin-web `VITE_SUPPLEMENT_DRAFT_FLOW` 默认 `false`；后端新接口仅管理员可用，只有 `SUPPLEMENT_DRAFT_FLOW=true` 才启用，未设置/false 时返回 404（默认关，便于回滚）。
 - 用户可见文案用中文；后端错误信息用中文。
 - 联调期间不要跑 backend `npm run build`（会删 `dist` 弄死本机后端）；用 `npx tsc --noEmit` 自检。
 
@@ -915,7 +915,7 @@ bash scripts/session.sh commit -m "feat(supplement): 写入后功能核验与重
   - `POST .../:id/reverify`
   - `POST .../:id/recommend-groups`
 - All guarded by `AuthGuard, AdminGuard`; `@CurrentUser()` passes `userId`.
-- `SUPPLEMENT_DRAFT_FLOW=false` → 404 for all routes (test with env).
+- Only `SUPPLEMENT_DRAFT_FLOW=true` enables routes; unset/false → 404 for all routes (test with env). Normal delegation tests set env true.
 
 - [ ] **Step 1: Write the failing controller test**
 
@@ -930,7 +930,7 @@ Expected: FAIL — controller missing.
 
 - DTOs use `class-validator`: `CreateSupplementDraftDto { name? }`, `UpdateSupplementDraftDto { name?; payload: object; manualFields?: string[]; expectedUpdatedAt?: string }`, `AiFillSupplementDraftDto { frontImageUrl; labelImageUrl; productUrl?; selectionNote? }`, `FinalizeSupplementDraftDto { expectedUpdatedAt? }`.
 - Controller uses `@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))`.
-- Feature check: if `process.env.SUPPLEMENT_DRAFT_FLOW === 'false'`, throw `NotFoundException`.
+- Feature check: if `process.env.SUPPLEMENT_DRAFT_FLOW !== 'true'`, throw `NotFoundException('补剂草稿流程未开启')`; add `SUPPLEMENT_DRAFT_FLOW=false` to `backend/.env.example` so deploy env is explicit.
 - Register controller and new services in `app.module.ts`.
 
 - [ ] **Step 4: Run controller test + typecheck**

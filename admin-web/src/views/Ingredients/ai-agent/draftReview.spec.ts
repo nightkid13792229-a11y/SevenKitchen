@@ -10,7 +10,6 @@ import { PROFILE_FIELD_DEFINITIONS } from './ingredientProfileRules'
 import {
   applyProfileCellEdit,
   countPendingRows,
-  countPlanConflicts,
   markIngredientFieldManual,
   resolveRawPrimaryProfileIndex,
   toCheckSummary,
@@ -393,25 +392,6 @@ describe('审核页 · 营养档案映射', () => {
 
     expect(groups).toEqual([])
     expect(countPendingRows(groups)).toBe(0)
-  })
-
-  it('冲突数直接取缝合方案里未裁决的冲突', () => {
-    expect(countPlanConflicts(payload)).toBe(2)
-    expect(countPlanConflicts({})).toBe(0)
-  })
-
-  it('人在营养格里手工填了冲突字段后，不再继续算作冲突', () => {
-    // 审核页直接改档案、不走 resolve 接口，mergePlan.conflicts 不会自动清空。
-    const withCalcium = applyProfileCellEdit(
-      payload.profiles ?? [],
-      1,
-      'minerals.calcium',
-      10
-    )
-
-    expect(
-      countPlanConflicts({ ...payload, profiles: withCalcium })
-    ).toBe(1)
   })
 })
 

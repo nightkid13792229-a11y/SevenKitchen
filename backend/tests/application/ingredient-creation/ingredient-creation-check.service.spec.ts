@@ -303,7 +303,8 @@ describe('IngredientCreationCheckService', () => {
     expect(mismatch?.message).toContain('20');
   });
 
-  it('人改过的 profile entries 参与终检：非法单位 → UNIT_MISMATCH（拦死）', async () => {    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
+  it('人改过的 profile entries 参与终检：非法单位 → UNIT_MISMATCH（拦死）', async () => {
+    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
     draftService.get.mockResolvedValue(humanEditedIronDraft());
 
     const result = await service.runCheck('draft-1');

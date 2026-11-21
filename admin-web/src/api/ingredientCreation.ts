@@ -17,8 +17,6 @@ import type {
   SupplementLinkPreviewDto,
   CheckDomain,
   CheckRunView,
-  CommitIngredientCreationInput,
-  CommitIngredientCreationResult,
   CreationStep,
   FinalCheckResult,
   IngredientAgentRunResult,
@@ -196,13 +194,6 @@ export const ingredientCreationApi = {
     }
   ): Promise<AuthorizeResult> =>
     api.post(`${BASE}/drafts/${id}/authorize`, input),
-
-  /** 旧提交入口（后端已与 authorize 共用同一闸门）；页面只调 authorize。 */
-  commit: (
-    id: string,
-    input: CommitIngredientCreationInput
-  ): Promise<CommitIngredientCreationResult> =>
-    api.post(`${BASE}/drafts/${id}/commit`, input),
 
   /**
    * Agent 起草循环：给一句话，让 AI 在草稿上受控地查库 / 写字段 / 跑终检。

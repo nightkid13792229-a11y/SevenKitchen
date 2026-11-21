@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import {
   applyRecognizedDraft,
   buildClosingSkuInput,
-  buildCreateSkuPayload,
   closingBaseUnitLabel,
   computeClosingState,
   formatCostPreview,
@@ -50,28 +49,6 @@ describe('AI 建档收尾 · 采购商品', () => {
         purchaseUnit: '袋'
       }),
     ).toBe('MISSING_PRICE')
-  })
-
-  it('提交体只带「人话」字段，换算交给服务端算', () => {
-    const payload = buildCreateSkuPayload({
-      name: '山姆 糙米',
-      purchaseChannel: '山姆会员店',
-      purchaseUnit: '袋',
-      packCount: 1,
-      netContentPerPack: 500,
-      currentPurchasePrice: 39.9,
-    })
-
-    expect(payload).toEqual({
-      name: '山姆 糙米',
-      purchaseChannel: '山姆会员店',
-      purchaseUnit: '袋',
-      packCount: 1,
-      netContentPerPack: 500,
-      currentPurchasePrice: 39.9,
-    })
-    // 前端不自己算换算：算错一次，库存差几十倍
-    expect(payload).not.toHaveProperty('purchaseToBaseRatio')
   })
 
   it('换算预览按「整箱价 ÷（件数×每件净含量）」显示', () => {
@@ -123,6 +100,8 @@ describe('AI 建档收尾 · 采购商品', () => {
     })
     expect(payload.productModel).toBe('500g/袋')
     expect(payload.purchaseUnit).toBe('袋')
+    // 前端不自己算换算：算错一次，库存差几十倍（换算由服务端算）
+    expect(payload).not.toHaveProperty('purchaseToBaseRatio')
   })
 })
 

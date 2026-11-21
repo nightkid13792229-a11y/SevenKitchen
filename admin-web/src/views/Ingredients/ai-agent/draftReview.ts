@@ -486,41 +486,6 @@ export function countPendingRows(groups: readonly ProfileGroup[]): number {
   return groups.reduce((total, group) => total + group.pendingCount, 0)
 }
 
-/**
- * 顶部「冲突 N 项」：缝合方案里还没裁决、且营养档案里也确实没有值的冲突。
- *
- * 审核页直接改营养格，不走「裁决冲突」接口，`mergePlan.conflicts` 不会自动清空；
- * 只按它计数会把已经手工填好的字段一直算成冲突，所以要以当前档案为准过滤。
- */
-export function countPlanConflicts(
-  payload: IngredientCreationDraftPayload | null | undefined
-): number {
-  const conflicts = payload?.mergePlan?.conflicts
-  if (!Array.isArray(conflicts) || conflicts.length === 0) {
-    return 0
-  }
-
-  const filledFieldPaths = new Set<string>()
-  for (const profile of payload?.profiles ?? []) {
-    for (const entry of profile?.entries ?? []) {
-      if (
-        entry &&
-        typeof entry.fieldPath === 'string' &&
-        toFiniteNumber(entry.finalValue) !== null
-      ) {
-        filledFieldPaths.add(entry.fieldPath)
-      }
-    }
-  }
-
-  return conflicts.filter(
-    (conflict) =>
-      Boolean(conflict) &&
-      typeof conflict.fieldPath === 'string' &&
-      !filledFieldPaths.has(conflict.fieldPath)
-  ).length
-}
-
 export type CheckState = 'PASS' | 'BLOCK' | 'UNKNOWN'
 
 export interface CheckSummary {

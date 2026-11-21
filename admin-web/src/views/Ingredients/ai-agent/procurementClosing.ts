@@ -49,32 +49,6 @@ export function computeClosingState(input: ClosingInput): ClosingState {
   return 'READY'
 }
 
-export interface ClosingForm {
-  name: string
-  purchaseChannel: string
-  purchaseUnit: string
-  packCount: number
-  netContentPerPack: number
-  currentPurchasePrice: number | null
-  /** 规格原文（识别用，供订单截图匹配）。 */
-  productModel?: string
-}
-
-/**
- * 提交体：只发「人话」字段。
- * `purchaseToBaseRatio` 由服务端算（件数 × 净含量）—— 前端算错一次，库存就差几十倍。
- */
-export function buildCreateSkuPayload(form: ClosingForm) {
-  return {
-    name: form.name.trim(),
-    purchaseChannel: form.purchaseChannel,
-    purchaseUnit: form.purchaseUnit,
-    packCount: form.packCount,
-    netContentPerPack: form.netContentPerPack,
-    currentPurchasePrice: form.currentPurchasePrice,
-  }
-}
-
 /**
  * 输入框下方的实时换算：**整箱价 ÷（件数 × 每件净含量）**。
  *

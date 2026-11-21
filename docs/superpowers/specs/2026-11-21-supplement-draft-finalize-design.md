@@ -74,9 +74,11 @@
 ### 4.2 新建草稿
 
 1. 新建后进入草稿编辑页。
-2. 传正面图、标签图（可先传一张），贴商品链接/选品依据（可空）。
-3. 点“让 AI 起草”（或首次传完两张图后自动触发一次）。
-   - 至少有一张图或一个商品链接才允许起草；都没有时按钮禁用，提示“先传图或贴商品链接”。
+2. 传正面图、标签图（可先传一张，先传哪张都行），贴商品链接/选品依据（可空）。
+3. 点“让 AI 起草”（或首次满足条件后自动触发一次）。
+   - **AI 完整起草需要：标签图 + （正面图 或 商品链接）**。标签图负责营养，正面图/链接负责名称、规格、剂型、价格。
+   - 只有一张图时可以先存草稿、手填；AI 按钮提示补另一张图或商品链接，不强行跑。
+   - 不修改共享的 `read-label-images` 两张图契约；新编排层在调用前自己判断“够不够起草”。
    - 起草中按钮转圈，草稿自动保存；关掉页面不会丢已保存内容。
 4. AI 填完后，页面按区块展示：已填、没找到、AI 的判断和理由。
 5. 人从任意区块开始核对/修改；所有修改自动存草稿。
@@ -273,8 +275,8 @@ interface SupplementDraftPayload {
     selectionNote: string
   }
   review: {
-    /** 人已确认的提醒项 code */
-    acknowledgedWarnings: string[]
+    /** 人已确认的提醒项：code + 关键参数哈希 */
+    acknowledgedWarnings: Array<{ code: string; paramsHash: string }>
   }
 }
 ```
@@ -301,7 +303,7 @@ interface SupplementDraftPayload {
 - 选品依据（可选，人从 DSH 选品 Skill 粘过来）
 - 当前草稿（重跑时）
 - 允许值：营养字段目录、单位、物理形态、添加时机、标签词表、不上架原因、平台
-- 目录：饲料添加剂目录、饲料原料目录（含 dogAllowed/scope）
+- 目录：饲料添加剂目录（有 dogAllowed/scope）、饲料原料目录（只有名字/分类，没有 dogAllowed）
 - 业务规则：补剂商城配置、等价组列表/推荐、包材匹配规则、价格试算
 - 当前草稿里人改过的字段（manualFields）
 
@@ -379,7 +381,8 @@ interface SupplementAiDraft {
 | 名称 | 名称结尾带剂型词（胶囊/片/粉剂…） | 提醒 | 建议只写物质名；可确认后继续 |
 | 基本 | 品牌/规格/渠道长度 | 阻断 | 按现有 DTO 限制 |
 | 单位 | 物理形态 → 基准单位一致：粉=G、液体=ML、胶囊/片=PCS | 阻断 | 手填/ AI 都要过 |
-| 单位 | 展示单位与基准单位 1:1（粒/片/胶囊/平勺 ↔ PCS；g ↔ G；ml ↔ ML） | 阻断 | 复用上架页 `isSupplementUnitOneToOne` |
+| 单位 | 展示单位与基准单位 1:1（粒/片/胶囊/平勺 ↔ PCS；g ↔ G；ml ↔ ML） | 阻断 | 复用上架页 `isSupplementUnitOneToOne`，但该函数当前不认“胶囊”，需扩展别名并回归上架/报价/下单/预占/分装 |
+| 单位 | “份” | 阻断/提醒 | “份”不是 1:1 单位，补剂展示单位不应提供；旧数据兼容，但新草稿不允许选 |
 | 单位 | PCS 的每份量必须是正整数 | 阻断 | 胶囊不能 1.5 粒 |
 | 单位 | 粉/液体每份量 > 0，可小数 | 阻断 | 0.9 g / 2.5 ml |
 | 营养 | 至少一个营养素 > 0 | 阻断 | 全 0 等于没营养 |
@@ -394,7 +397,8 @@ interface SupplementAiDraft {
 | 标签 | 标签分类必选 | 阻断 | 合规字段 |
 | 标签 | 标签名称至少 1 个 | 阻断 | |
 | 标签 | 标签名称在目录内 | 阻断/提醒 | 目录有候选但不在其中：阻断，必须选候选；目录完全没有候选：提醒 + 人确认 |
-| 标签 | dogAllowed=false | 阻断 | 不允许用于犬的添加剂不能进犬粮；如业务上允许“仅生产不销售”，再单独讨论 |
+| 标签 | 添加剂 dogAllowed=false | 阻断（待拍板） | 只对《饲料添加剂目录》生效；《饲料原料目录》没有 dogAllowed。是否允许“仅生产不销售”见 §16.2 |
+| 标签 | 目录候选 | 阻断/提醒 | 只把“完全相同/规范化后相同”算候选；子串匹配只作建议，不能因为“有几百条子串”就判阻断 |
 | 标签 | 添加时机必须是允许值 | 阻断 | |
 | 上架 | 上架=开 时，保质期必填 | 阻断 | |
 | 上架 | 上架=开 时，物理形态不能是液体 | 阻断 | 液体暂不支持分装 |
@@ -423,7 +427,9 @@ interface SupplementAiDraft {
 - 审核屏黄色提醒项必须逐条勾选“我知道了”，写入 `review.acknowledgedWarnings`。
 - 阻断项不提供“仍然写入”；只能改数据或改开关意向。
 - 若 AI 决定“上架=开”但硬校验不过，审核屏应显示“AI 想上架，但被 X 阻断”，并提供“让 AI 改成不上架/去补 X”两个动作；不能静默改。
-- 提醒项的确认要带“关键参数”（例如等价组 id、DIY 平台），不能只记一个 code；改动会影响该提醒的字段后，对应确认自动失效，避免“确认了旧的、新的没看”。
+- 提醒项 code 只允许来自 §7.2 的固定表；AI 的 warnings 只能引用固定 code，AI 自己造的 warning 只展示、不参与 finalize 门禁。
+- 提醒项的确认要带“关键参数”（例如等价组 id、DIY 平台），存 `{ code, paramsHash }`，不能只记一个 code；改动会影响该提醒的字段后，对应确认自动失效，避免“确认了旧的、新的没看”。
+- AI 重跑后清空所有提醒确认，重新逐条确认。
 
 ## 8. 最终写入
 
@@ -651,6 +657,7 @@ interface SupplementWriteVerification {
 | POST | `/admin/ingredient-creation/supplement-drafts/:id/finalize` | 一次性写入 + 核验 |
 | GET | `/admin/ingredient-creation/supplement-drafts/:id/verification` | 重新读核验报告 |
 | POST | `/admin/ingredient-creation/supplement-drafts/:id/reverify` | 只重跑功能核验（不写数据） |
+| POST | `/admin/ingredient-creation/supplement-drafts/:id/recommend-groups` | 草稿态等价组推荐（无 ingredientId，按草稿营养/单位/形态算） |
 
 复用现有接口：
 
@@ -676,7 +683,7 @@ interface SupplementWriteVerification {
 | 产品规格 | 是 | 否 | `ingredient.product_model` | ≤100 |
 | 采购渠道 | 是 | 否 | `ingredient.purchase_channel` | ≤200 |
 | 基准单位 | 是 | 是 | `ingredient.base_unit` | PCS/G/ML；与剂型一致 |
-| 展示单位 | 是 | 是 | `ingredient.unit_display_label` | 与基准单位 1:1 |
+| 展示单位 | 是 | 是 | `ingredient.unit_display_label` | 与基准单位 1:1；“胶囊”要加入 PCS 别名，“份”不作为展示单位 |
 | 物理形态 | 是 | 是 | `ingredient.physical_form` | 粉/片/胶囊/液体 |
 | 每份多少 | 是 | 是 | `ingredient.properties.serving_units_per_dose` | PCS 正整数；粉/液体 >0 小数 |
 | 采购单位 | 是 | 是 | `ingredient.purchase_unit` | 非空 |
@@ -702,7 +709,7 @@ interface SupplementWriteVerification {
 | 字段 | AI | 必填 | 生产落点 | 校验/备注 |
 |---|---|---|---|---|
 | 标签分类 | 是 | 是 | `ingredient.properties.label_category` | FEED_MATERIAL/FEED_ADDITIVE |
-| 标签名称 | 是 | 是 | `ingredient.properties.label_names` | 目录规范名；dogAllowed |
+| 标签名称 | 是 | 是 | `ingredient.properties.label_names` | 添加剂查目录 + dogAllowed；原料目录只查名字 |
 | 标签名称依据 | 是 | 否 | `ingredient.properties.label_name_source` | 说明 |
 | 标签分类标签 | 是 | 是 | `ingredient.properties.tags` + `ingredient_tag_assignment` | 允许词表 |
 | 是否允许用于犬 | 目录 | — | 不落库 | 校验/提醒；false 阻断 |
@@ -774,6 +781,7 @@ interface SupplementWriteVerification {
 
 - 新增 `supplement_creation_draft` 表和枚举。
 - **必须改 `supplement_label_evidence.serving_units_per_dose` 的类型**：当前 schema 是 `Int`，而粉/液体每份是 0.9 g / 2.5 ml。写入 `0.9` 时 Prisma 会拒绝或截断，导致粉/液体建档在证据那一步失败。改成 `Float` 或 `Decimal(10,4)`，配 migration 和测试；旧的整数数据不受影响。
+- 同一条迁移要覆盖旧 `POST /supplements` 路径：它现在也把 0.9 写进这个 Int 列；不修的话，旧接口对粉/液体同样是坏的。
 - 旧 Web 页面（两段式）保留一个版本，用开关控制：
   - 后端 env `SUPPLEMENT_DRAFT_FLOW=true`、admin-web 构建变量 `VITE_SUPPLEMENT_DRAFT_FLOW=true` 时新页面走草稿；
   - 两边同值，默认关；验证通过后再开；关闭时回旧流程。
@@ -854,8 +862,10 @@ interface SupplementWriteVerification {
 9. 写入前校验和写入后核验共用同一套纯函数；草稿阶段不依赖 `ingredientId`。
 10. 必须改证据表的 `serving_units_per_dose` 类型，否则粉/液体每份小数写不进去。
 11. 营养档案的 `rawBasisType` 按 baseUnit 写（PCS/G/ML），不要统一 `PER_SERVING`；否则粉/液体浓度解析会失败。
-12. 提醒项确认带关键参数；字段改动会让对应确认失效。
-13. 功能核验失败时提供 `reverify`，不再重复写入。
+12. `isSupplementUnitOneToOne` 增加“胶囊”别名；“份”不作为补剂展示单位；同步回归上架/报价/下单/预占/分装。
+13. 提醒项 code 固定来自 §7.2；AI 只能引用，不能自造；AI 重跑清空已确认。
+14. 提醒项确认带关键参数；字段改动会让对应确认失效。
+15. 功能核验失败时提供 `reverify`，不再重复写入。
 
 ### 16.2 需要老板拍板
 

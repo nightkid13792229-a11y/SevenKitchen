@@ -93,7 +93,9 @@ describe('supplement creation draft schema', () => {
 
   it('migration creates the table and alters the evidence column', () => {
     expect(sql).toContain('CREATE TABLE "supplement_creation_draft"');
-    expect(sql).toContain('"serving_units_per_dose" DOUBLE PRECISION');
+    expect(sql).toContain(
+      'ALTER COLUMN "serving_units_per_dose" TYPE DOUBLE PRECISION',
+    );
   });
 });
 ```

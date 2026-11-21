@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import type { AgentPhase } from './phase-policy';
 
 const PHASE_SKILLS: Record<AgentPhase, string[]> = {
@@ -23,8 +23,9 @@ function loadSkill(name: string): string {
   const cached = cache.get(name);
   if (cached !== undefined) return cached;
   const candidates = [
-    join(process.cwd(), 'assets', 'skills', name, 'SKILL.md'),
-    join(process.cwd(), 'dist', 'assets', 'skills', name, 'SKILL.md'),
+    resolve(__dirname, '../../../../skills', name, 'SKILL.md'),
+    join(process.cwd(), 'skills', name, 'SKILL.md'),
+    join(process.cwd(), 'dist', 'skills', name, 'SKILL.md'),
   ];
   for (const path of candidates) {
     if (!existsSync(path)) continue;

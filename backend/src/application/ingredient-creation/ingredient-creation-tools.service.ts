@@ -38,6 +38,7 @@ import {
   SOURCE_BASIS_LABELS,
   sourceBasisToPer100gScale,
   sourceValuesMatch,
+  toPer100gValue,
 } from '../../domain/ingredient-creation/source-consistency';
 import {
   mergeIngredientBaseline,
@@ -2934,7 +2935,7 @@ export class IngredientCreationToolsService {
     }
     // 证据行存「可比值」（每 100g）：页面「来源 x → 档案 y」与审计都按它比较，
     // 否则每 1g 的来源会显示成 0.1 g → 10 g 的假差异。
-    const sourceValue = rawSourceValue * scale;
+    const sourceValue = toPer100gValue(rawSourceValue, scale);
     if (!sourceValuesMatch(value, sourceValue)) {
       const basisNote =
         scale === 100 ? '（按每 1g 记录，已换算成每 100g）' : '';

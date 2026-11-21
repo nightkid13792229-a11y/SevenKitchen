@@ -6,6 +6,7 @@ import {
   checkProfileSourceConsistency,
   collectSourceConsistencyValues,
   readSourceBasis,
+  toPer100gValue,
   type SourceConsistencyRecord,
 } from '../../../src/domain/ingredient-creation/source-consistency';
 
@@ -181,6 +182,12 @@ describe('checkProfileSourceConsistency', () => {
 });
 
 describe('来源口径换算与人工档案豁免', () => {
+  it('换算成每 100g 时去掉浮点尾巴：0.1×100 就是 10', () => {
+    expect(toPer100gValue(0.1, 100)).toBe(10);
+    expect(toPer100gValue(0.25, 100)).toBe(25);
+    expect(toPer100gValue(12.34, 1)).toBe(12.34);
+  });
+
   it('每 1g 的来源按 ×100 等价比较：不再误拦', () => {
     const items = checkProfileSourceConsistency(
       [profile([entry('macros.crudeProtein', 25)])],

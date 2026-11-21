@@ -88,6 +88,20 @@ export const SOURCE_BASIS_LABELS: Readonly<Record<SourceBasis, string>> = {
  * 本流程不换算，按设计直接拒绝。返回 null 的调用方必须当「不可用」处理，
  * 不能悄悄按 1 倍算——那会把每份的营养值当成每 100g 写进档案。
  */
+/**
+ * 把来源值换算成「每 100g」的可比值。
+ *
+ * 用 `toPrecision(12)` 去掉浮点尾巴：0.1 × 100 会算出
+ * 10.000000000000002，直接展示/比较会把人工吓一跳。
+ * 1 倍时原样返回，不改动本来就精确的每 100g 来源值。
+ */
+export function toPer100gValue(value: number, scale: number): number {
+  if (scale === 1) {
+    return value;
+  }
+  return Number((value * scale).toPrecision(12));
+}
+
 export function sourceBasisToPer100gScale(basis: SourceBasis): number | null {
   if (basis === 'PER_100_G') {
     return 1;
@@ -228,7 +242,8 @@ export function checkProfileSourceConsistency(
       }
 
       // 每 1g 的来源要 ×100 才是每 100g 的可比值（见 sourceBasisToPer100gScale）。
-      const comparableSource = scale === null ? sourceValue : sourceValue * scale;
+      const comparableSource =
+        scale === null ? sourceValue : toPer100gValue(sourceValue, scale);
       if (!sourceValuesMatch(entry.finalValue, comparableSource)) {
         items.push({
           code: 'SOURCE_VALUE_MISMATCH',

@@ -4,10 +4,14 @@
  * 输入是抓取代理吐出来的 markdown 纯文本，不是 HTML。页面里的排版噪声
  * （星号、†、♢、紧贴数字的百分号、断行）都当真——它们就是原文。
  *
- * 这里只做两件事：**找出成分表区块**、**把每一行拆成"名字 + 数值 + 单位"**。
- * 名字翻成规范字段路径、单位换算，都不在这里做（前者查别名表，后者由前端按自己的
- * 单位表做），免得两处各修一份。
+ * 这里做三件事：找出成分表区块、把每一行拆成"名字 + 数值 + 单位"、
+ * 把数值换算到档案字段的单位（`Taurine 875 mg` → 0.875 g）。
+ *
+ * 换算必须在这里做一次：档案按字段单位存（牛磺酸按克），
+ * 不换算就会把 875 塞进 g 字段，整份营养放大 1000 倍。
  */
+
+import { findNutritionField } from './nutrition-field-catalog';
 
 export interface ParsedNutrient {
   /** 规范字段路径；认不出的不进这个数组 */
@@ -257,6 +261,33 @@ function cleanName(raw: string): string {
     .trim()
 }
 
+/**
+ * 标签单位 → 档案字段单位。
+ *
+ * 标签写 `Taurine 875 mg`，而档案里牛磺酸按克记（g）。
+ * 不换算的话会往 g 字段里塞 875，整份营养放大 1000 倍。
+ */
+const UNIT_TO_MG: Record<string, number> = {
+  mcg: 0.001,
+  'µg': 0.001,
+  'μg': 0.001,
+  mg: 1,
+  g: 1000,
+  kg: 1000000
+};
+
+export function convertToFieldUnit(value: number, fromUnit: string, fieldUnit: string): number {
+  const from = UNIT_TO_MG[fromUnit.toLowerCase()];
+  const to = UNIT_TO_MG[fieldUnit.toLowerCase()];
+  if (!from || !to || from === to) {
+    return value;
+  }
+  const inMg = value * from;
+  const converted = inMg / to;
+  // 换算后可能变成 0.875 这种小数，保留 6 位避免浮点尾巴
+  return Math.round(converted * 1e6) / 1e6;
+}
+
 export function parseSupplementLabel(text: string): ParsedLabel {
   const lines = text.split(/\r?\n/)
   const start = lines.findIndex((line) => FACTS_HEADER.test(line))
@@ -380,7 +411,10 @@ export function parseSupplementLabel(text: string): ParsedLabel {
       unrecognized.push(name)
       continue
     }
-    nutrients.push({ fieldPath, value, unit, rawName: name })
+    // 换算成档案字段的单位：Taurine 875 mg → 0.875 g（档案里牛磺酸按克记）
+    const fieldUnit = findNutritionField(fieldPath)?.unit ?? unit;
+    const normalizedValue = convertToFieldUnit(value, unit, fieldUnit);
+    nutrients.push({ fieldPath, value: normalizedValue, unit: fieldUnit, rawName: name })
   }
 
   return { nutrients, unrecognized }

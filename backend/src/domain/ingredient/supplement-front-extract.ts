@@ -20,7 +20,8 @@ export interface FrontFields {
 const FORM_RULES: { form: FrontPhysicalForm; unit: string; pattern: RegExp }[] = [
   { form: 'CAPSULE', unit: '粒', pattern: /soft\s*gel|capsule|胶囊|胶丸/i },
   { form: 'TABLET', unit: '片', pattern: /tablet|caplet|chewable|片剂|咀嚼片|含片/i },
-  { form: 'POWDER', unit: '平勺', pattern: /powder|粉剂|粉末/i },
+  // 粉剂按克记账：单位展示名跟基准单位一致，别写"平勺"
+  { form: 'POWDER', unit: 'g', pattern: /powder|粉剂|粉末/i },
   { form: 'LIQUID', unit: 'ml', pattern: /liquid|drops?|softgel liquid|液体|滴剂|口服液|\bml\b/i },
 ];
 
@@ -42,12 +43,18 @@ function guessBrand(text: string): string | null {
   return first;
 }
 
+/** 商品页/包装上的「规格」行：8 盎司（227 克）、180 粒/瓶、59 ml… */
+const SPEC_LINE = /(?:规格|净含量|净重|含量)\s*[:：]\s*([^\n]+)/;
+
 export function extractFrontFields(text: string): FrontFields {
   const source = String(text ?? '');
   const modelMatch = source.match(MODEL_PATTERN);
+  const specMatch = source.match(SPEC_LINE);
   const productModel = modelMatch
     ? `${modelMatch[1].replace(/,/g, '')} ${modelMatch[2].replace(/\s+/g, ' ')}`
-    : null;
+    : specMatch
+      ? specMatch[1].trim()
+      : null;
 
   const rule = FORM_RULES.find((item) => item.pattern.test(source));
 

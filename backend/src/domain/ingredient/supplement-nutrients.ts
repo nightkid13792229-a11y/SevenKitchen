@@ -65,6 +65,24 @@ const NUTRIENT_ZH: Record<string, string> = {
   'vitamins.choline': '胆碱',
   'fattyAcids.epa': 'EPA',
   'fattyAcids.dha': 'DHA',
+  // 氨基酸（牛磺酸在《饲料添加剂品种目录》里就叫「牛磺酸」，
+  // 之前查不到就是因为中文名退回成了 taurine）
+  'aminoAcids.taurine': '牛磺酸',
+  'aminoAcids.arginine': '精氨酸',
+  'aminoAcids.lysine': '赖氨酸',
+  'aminoAcids.methionine': '蛋氨酸',
+  'aminoAcids.cystine': '胱氨酸',
+  'aminoAcids.tryptophan': '色氨酸',
+  'aminoAcids.threonine': '苏氨酸',
+  'aminoAcids.leucine': '亮氨酸',
+  'aminoAcids.isoleucine': '异亮氨酸',
+  'aminoAcids.valine': '缬氨酸',
+  'aminoAcids.phenylalanine': '苯丙氨酸',
+  'aminoAcids.tyrosine': '酪氨酸',
+  'aminoAcids.histidine': '组氨酸',
+  'aminoAcids.glycine': '甘氨酸',
+  'aminoAcids.proline': '脯氨酸',
+  'aminoAcids.glutamicAcid': '谷氨酸',
 };
 
 /**

@@ -83,7 +83,18 @@ export interface LabelIntakeResult {
 }
 
 const COUNT_IN_TEXT =
-  /(\d[\d,]*)\s*(tablets?|capsules?|soft\s*gels?|veg(?:gie)?\s*caps?|vegcaps?|lozenges?|片|粒|胶囊|kg|g|ml|毫升|克)/i;
+  /(\d[\d,]*)\s*(tablets?|capsules?|soft\s*gels?|veg(?:gie)?\s*caps?|vegcaps?|lozenges?|片|粒|胶囊|kg|g|ml|毫升|克|oz|盎司|lb|磅)/i;
+
+/** 非克单位换算成克（粉剂按克记账）。 */
+const TO_GRAMS: Record<string, number> = {
+  kg: 1000,
+  g: 1,
+  克: 1,
+  oz: 28.3495,
+  盎司: 28.3495,
+  lb: 453.592,
+  磅: 453.592
+};
 
 /**
  * 「180 CAPSULES」→ 180；「500 g」→ 500。
@@ -91,12 +102,22 @@ const COUNT_IN_TEXT =
  */
 export function parseCountFromTitle(productModel: string | null): number | null {
   const text = String(productModel ?? '');
+  // 同一条里既有「8 盎司」又有「227 克」时，优先取克数（厂商标的整数更准）
+  const gramsFirst = text.match(/(\d[\d,]*)\s*克/);
+  if (gramsFirst) {
+    const grams = Number(gramsFirst[1].replace(/,/g, ''));
+    if (Number.isFinite(grams) && grams > 0) {
+      return grams;
+    }
+  }
   const match = text.match(COUNT_IN_TEXT);
   if (!match) {
     return null;
   }
   const unit = match[2].toLowerCase();
-  const value = Number(match[1].replace(/,/g, '')) * (unit === 'kg' ? 1000 : 1);
+  const raw = Number(match[1].replace(/,/g, ''));
+  const factor = TO_GRAMS[unit] ?? 1;
+  const value = Math.round(raw * factor * 100) / 100;
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 

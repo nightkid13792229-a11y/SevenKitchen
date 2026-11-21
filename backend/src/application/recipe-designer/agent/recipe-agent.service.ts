@@ -1371,7 +1371,7 @@ export class RecipeAgentService implements OnModuleInit {
  * - DESIGN：第一轮/刚拿到评估缺口/连续改多次时开，机械工具调用时关。
  * - RECIPE_AGENT_THINKING=off 可整体关闭。
  */
-function shouldEnableThinking(
+export function shouldEnableThinking(
   phase: AgentPhase,
   toolCalls: number,
   lastAssessHadGaps: boolean,

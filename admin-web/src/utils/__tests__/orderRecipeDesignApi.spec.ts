@@ -79,6 +79,21 @@ describe('订单设计 API 路径', () => {
 
     expect(transport.post).toHaveBeenCalledWith(
       '/recipe-designer/orders/CR20261022001/designs/design-1/ready',
+      {},
+    )
+  })
+
+  it('非合规配方加入待提交时带审核说明', async () => {
+    transport.post.mockResolvedValue({ status: 'READY' })
+    await orderRecipeDesignApi.markReady(
+      'CR20261022001',
+      'design-1',
+      '配方未完全合规，已人工审核',
+    )
+
+    expect(transport.post).toHaveBeenCalledWith(
+      '/recipe-designer/orders/CR20261022001/designs/design-1/ready',
+      { reviewNote: '配方未完全合规，已人工审核' },
     )
   })
 

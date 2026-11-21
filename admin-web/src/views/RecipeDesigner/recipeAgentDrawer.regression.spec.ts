@@ -35,3 +35,17 @@ describe('AI 设计对话 · 预处理写法比对', () => {
     expect(drawerSource).toContain('preparationMethod: change.before')
   })
 })
+
+describe('AI 设计对话 · 完成交接', () => {
+  it('完成态显示完成卡和上线检查入口', () => {
+    expect(drawerSource).toContain('设计完成')
+    expect(drawerSource).toContain('打开上线检查')
+    expect(drawerSource).toContain('finishReadiness')
+    expect(drawerSource).toContain("session?.status === 'COMPLETED'")
+  })
+
+  it('把运行状态通知编辑器，并在卸载时清掉自己的定时器', () => {
+    expect(drawerSource).toContain('running-changed')
+    expect(drawerSource).toContain('onBeforeUnmount')
+  })
+})

@@ -20,6 +20,19 @@ describe('redactDrugDoses', () => {
     expect(result.redactions).toBe(0);
   });
 
+  it('营养目标里的 mg/kg 干物质不脱敏', () => {
+    const text = '锌 15 mg/kg 干物质；维生素 D 500 IU/kg DM。';
+    const result = redactDrugDoses(text);
+    expect(result.text).toBe(text);
+    expect(result.redactions).toBe(0);
+  });
+
+  it('药物剂量仍然脱敏', () => {
+    const result = redactDrugDoses('泼尼松 1 mg/kg，每日一次。');
+    expect(result.text).toContain('按兽医处方');
+    expect(result.text).not.toContain('1 mg/kg');
+  });
+
   it('只说"不涉及剂量"不动', () => {
     const text = '本食谱不涉及药物剂量，用药按兽医处方。';
     expect(redactDrugDoses(text).redactions).toBe(0);

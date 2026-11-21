@@ -104,3 +104,13 @@ describe('订单设计工作台 · 管理员最终提交 / 员工等待', () => 
     expect(workspace).toContain('orderRecipeDesignApi.submitDesigns(targetOrderId)')
   })
 })
+
+describe('订单设计工作台 · 加入待提交后又改过', () => {
+  it('槽位标红，并阻止最终提交', () => {
+    expect(workspace).toContain('slot.stale')
+    expect(workspace).toContain('有新改动未重新入仓')
+    expect(workspace).toContain('staleSlots')
+    expect(workspace).toContain('请重新加入待提交')
+    expect(workspace).toContain(':disabled="staleSlots.length > 0"')
+  })
+})

@@ -250,3 +250,12 @@ describe('编辑器 · 上线检查入口', () => {
     expect(editor).not.toContain('本次上线检查基于服务器上已保存的版本')
   })
 })
+
+describe('上线检查 · 非合规审核说明', () => {
+  it('定制单评估未完全合规时先填审核说明再入仓', () => {
+    expect(drawerSource).toContain('REVIEW_REQUIRED')
+    expect(drawerSource).toContain('审核说明不能为空')
+    expect(drawerSource).toContain('orderRecipeDesignApi.markReady')
+    expect(drawerSource).toContain('reviewNote')
+  })
+})

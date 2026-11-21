@@ -11,7 +11,7 @@
  * 营养目标的 `% DM`、`mg/dl`、`g/1000kcal` 不受影响。
  */
 const DOSE_PATTERNS: RegExp[] = [
-  /\d+(?:\.\d+)?\s*(?:[-–~～]\s*\d+(?:\.\d+)?)?\s*(?:mg|μg|ug|mcg|IU|ml)\s*\/\s*kg(?:\s*(?:\/|每)\s*(?:天|日|次))?/gi,
+  /\d+(?:\.\d+)?\s*(?:[-–~～]\s*\d+(?:\.\d+)?)?\s*(?:mg|μg|ug|mcg|IU|ml)\s*\/\s*kg(?!\s*(?:DM|干物质|kcal|千卡))(?:\s*(?:\/|每)\s*(?:天|日|次))?/gi,
   /(?:每日|每天)\s*\d+(?:\.\d+)?\s*(?:mg|μg|ug|mcg|IU|ml)/gi,
   /\d+(?:\.\d+)?\s*(?:mg|μg|ug|mcg|IU|ml)\s*\/\s*次/gi,
   /(?:每次|一次)\s*\d+(?:\.\d+)?\s*(?:mg|μg|ug|mcg|IU|ml)/gi,

@@ -171,6 +171,31 @@ describe('OrderRecipeDesignService', () => {
   });
 
   describe('getWorkspace', () => {
+    it('marks a READY slot stale when the draft revision moved after staging', async () => {
+      prisma.orderRecipeDesign.findMany.mockResolvedValue([
+        buildSlot({
+          id: 'design-stale',
+          status: 'READY',
+          recipeId: 'recipe-row-stale',
+          stagedContentRevision: 2,
+          designDraft: {
+            name: '改过后的食谱',
+            updatedAt: new Date('2026-10-22T03:00:00.000Z'),
+            contentRevision: 3,
+          },
+        }),
+      ]);
+
+      const workspace = await service.getWorkspace('CR202610220001');
+
+      expect(workspace.slots[0]).toMatchObject({
+        designId: 'design-stale',
+        stagedContentRevision: 2,
+        currentContentRevision: 3,
+        stale: true,
+      });
+    });
+
     it('returns the order context, progress and slot list', async () => {
       prisma.orderRecipeDesign.findMany.mockResolvedValue([
         buildSlot(),
@@ -207,6 +232,9 @@ describe('OrderRecipeDesignService', () => {
             recipeId: null,
             sourceRecipeId: 'recipe-source',
             stageWarning: STAGE_WARNING,
+            stagedContentRevision: null,
+            currentContentRevision: null,
+            stale: false,
             updatedAt: new Date('2026-10-22T01:30:00.000Z'),
           },
           {
@@ -218,6 +246,9 @@ describe('OrderRecipeDesignService', () => {
             recipeId: 'recipe-row-2',
             sourceRecipeId: null,
             stageWarning: null,
+            stagedContentRevision: null,
+            currentContentRevision: null,
+            stale: false,
             updatedAt: new Date('2026-10-22T03:00:00.000Z'),
           },
         ],
@@ -1492,11 +1523,13 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
       customerId: 'customer-1',
       dogId: 'dog-1',
       operatorId: 'admin-1',
+      reviewNote: '测试审核说明',
     });
 
     expect(result).toEqual({
       recipeRowId: 'recipe-row-1',
       recipeId: 'draft-1',
+      contentRevision: 0,
     });
 
     const createCall = prisma.recipe.create.mock.calls[0][0];
@@ -1547,6 +1580,7 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
       customerId: 'customer-1',
       dogId: 'dog-1',
       operatorId: 'admin-1',
+      reviewNote: '测试审核说明',
     });
 
     expect(result.recipeRowId).toBe('recipe-row-1');
@@ -1567,6 +1601,7 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
       customerId: 'customer-1',
       dogId: 'dog-1',
       operatorId: 'admin-1',
+      reviewNote: '测试审核说明',
     });
 
     const createCall = prisma.recipe.create.mock.calls[0][0];
@@ -1575,6 +1610,18 @@ describe('RecipeDesignerService · publishOrderDesignSlot', () => {
       where: { id: 'draft-1' },
       data: { energyDensityKcalPerKg: 1310, totalWeightG: 1000 },
     });
+  });
+
+  it('requires a review note when the assessment is not compliant', async () => {
+    await expect(
+      service.publishOrderDesignSlot({
+        draftId: 'draft-1',
+        customerId: 'customer-1',
+        dogId: 'dog-1',
+        operatorId: 'admin-1',
+      }),
+    ).rejects.toThrow('配方未完全合规');
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
   it('refuses a draft bound to another dog', async () => {

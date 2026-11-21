@@ -291,7 +291,12 @@ describe('RecipeDesignerController · order design delegation', () => {
     });
 
     await expect(
-      controller.stageOrderDesign('CR202610220001', 'design-1', adminUser),
+      controller.stageOrderDesign(
+        'CR202610220001',
+        'design-1',
+        {},
+        adminUser,
+      ),
     ).resolves.toEqual({
       code: 0,
       data: { status: 'READY', recipeId: 'recipe-row-1', readyCount: 1 },
@@ -301,6 +306,29 @@ describe('RecipeDesignerController · order design delegation', () => {
       'CR202610220001',
       'design-1',
       'admin-1',
+      undefined,
+    );
+  });
+
+  it('passes the review note through when staging a non-compliant design', async () => {
+    orderRecipeDesignService.stageDraft.mockResolvedValue({
+      status: 'READY',
+      recipeId: 'recipe-row-1',
+      readyCount: 1,
+    });
+
+    await controller.stageOrderDesign(
+      'CR202610220001',
+      'design-1',
+      { reviewNote: '已人工审核' },
+      adminUser,
+    );
+
+    expect(orderRecipeDesignService.stageDraft).toHaveBeenCalledWith(
+      'CR202610220001',
+      'design-1',
+      'admin-1',
+      '已人工审核',
     );
   });
 

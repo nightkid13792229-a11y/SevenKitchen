@@ -24,7 +24,9 @@
   "devDependencies": {
     "@types/node": "^24.10.1",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.6.0",
     "@vue/tsconfig": "^0.8.1",
+    "jsdom": "^29.1.1",
     "sass-embedded": "^1.97.3",
     "typescript": "~5.9.3",
     "unplugin-vue-components": "^32.1.0",

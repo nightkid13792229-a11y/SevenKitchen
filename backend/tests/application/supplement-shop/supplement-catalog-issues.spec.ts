@@ -111,7 +111,7 @@ describe('evaluateSupplementIssues', () => {
       {
         code: 'STORAGE_MISSING',
         level: 'WARN',
-        message: '未填写储存条件，标签上的「储存注意事项」会留空',
+        message: '未填写储存条件，标签会用默认「避光、密封、阴凉干燥处保存」；如有特殊储存要求请补充',
       },
     ]);
   });
@@ -311,7 +311,7 @@ describe('evaluateSupplementIssues', () => {
       {
         code: 'STORAGE_MISSING',
         level: 'WARN',
-        message: '未填写储存条件，标签上的「储存注意事项」会留空',
+        message: '未填写储存条件，标签会用默认「避光、密封、阴凉干燥处保存」；如有特殊储存要求请补充',
       },
       {
         code: 'UNIT_INCONSISTENT',

@@ -3,6 +3,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import {
   isIngredientCardFieldKey,
   isIngredientManualField,
+  readIngredientCardFieldValue,
 } from '../../domain/ingredient-creation/ingredient-card-fields';
 import {
   computeCatalogCoverage,
@@ -2790,10 +2791,16 @@ export class IngredientCreationToolsService {
     }
 
     if (changed.length > 0) {
+      // 基线按**草稿存储口径**读：可食部的公共名与存储名不同（见
+      // readIngredientCardFieldValue），直接读公共名会记下 undefined。
       const baselineFields = Object.fromEntries(
         changed.map((field) => [
           field,
-          (next as unknown as Record<string, unknown>)[field],
+          // 卡字段按存储口径读；工具还允许写 nameEn 这类不在人工白名单里的键，
+          // 它们没有名称映射，原样记。
+          isIngredientManualField(field)
+            ? readIngredientCardFieldValue(next, field)
+            : (next as unknown as Record<string, unknown>)[field],
         ]),
       );
       await this.draftService.patch(draftId, draft.step, {

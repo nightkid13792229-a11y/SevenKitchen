@@ -182,6 +182,43 @@ export const INGREDIENT_CARD_FIELDS: readonly IngredientCardFieldDef[] =
 export const INGREDIENT_CARD_FIELD_KEYS: readonly IngredientCardFieldKey[] =
   INGREDIENT_CARD_FIELDS.map((field) => field.key);
 
+/** 草稿里「公共名与存储名不同」的字段映射（目前只有可食部）。 */
+function readStoredCardField(
+  ingredient: Record<string, unknown>,
+  field: IngredientManualField,
+): unknown {
+  if (field !== 'edibleYieldPercent') {
+    return ingredient[field];
+  }
+  // 可食部：页面上 10–100 的百分数，草稿里 0.1–1 的比例；审计要拿百分数比较。
+  const rate = ingredient.edibleYieldRate;
+  if (typeof rate !== 'number' || !Number.isFinite(rate)) {
+    return null;
+  }
+  // 保留两位小数：页面输入精度就是两位，避免 0.6012 * 100 变成 60.119999…
+  return Math.round(rate * 10000) / 100;
+}
+
+/**
+ * 审计/基线读原料卡的一格值：**按草稿存储口径**返回，缺失或不合法返回 null。
+ *
+ * 为什么不能直接 `ingredient[field]`：可食部的公共名是 `edibleYieldPercent`，
+ * 草稿里存 `edibleYieldRate`。直接读公共名会永远拿到 undefined，AI 写的可食部
+ * 在「AI 原值 vs 人工改动」里就变成 null/null，审计答不出这个字段改没改。
+ */
+export function readIngredientCardFieldValue(
+  ingredient: unknown,
+  field: IngredientManualField,
+): unknown {
+  if (!ingredient || typeof ingredient !== 'object' || Array.isArray(ingredient)) {
+    return null;
+  }
+  return readStoredCardField(
+    ingredient as Record<string, unknown>,
+    field,
+  );
+}
+
 /** 人工字段白名单：15 个可见键 + category。 */
 export const INGREDIENT_MANUAL_FIELD_KEYS: readonly IngredientManualField[] = [
   ...INGREDIENT_CARD_FIELD_KEYS,

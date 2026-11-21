@@ -219,6 +219,32 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
     });
   });
 
+  it('写可食部时把百分数记进 AI 基线，审计才能按百分数比较', async () => {
+    const { tools, draftService } = createTools({
+      ingredient: {
+        name: '鸡肝',
+        type: 'FOOD',
+        baseUnit: 'G',
+        edibleYieldRate: 0.5,
+        manualFields: [],
+      },
+    });
+
+    const result = await executeIngredient(tools, { edibleYieldPercent: 62 });
+
+    expect(result.ok).toBe(true);
+    const payload = draftService.patch.mock.calls[0][2] as {
+      aiBaseline: {
+        ingredient: Record<string, { value: unknown; unit: string | null }>;
+      };
+    };
+    // 草稿里存 0.62；基线记的是 AI 当时写的百分数 62，不是 undefined。
+    expect(payload.aiBaseline.ingredient.edibleYieldPercent).toMatchObject({
+      value: 62,
+      unit: null,
+    });
+  });
+
   it('草稿已有原料卡时只改传入字段，其余保持原值', async () => {
     const { tools, draftService } = createTools({
       ingredient: {

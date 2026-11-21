@@ -22,6 +22,7 @@ import {
   EDIBLE_YIELD_RATE_PROPERTY_KEY,
   INGREDIENT_MANUAL_FIELD_KEYS,
   INGREDIENT_PROPERTY_KEY_BY_FIELD,
+  readIngredientCardFieldValue,
 } from '../../domain/ingredient-creation/ingredient-card-fields';
 import type { PreparationState } from '../../domain/ingredient-creation/preparation-state';
 import type {
@@ -535,7 +536,9 @@ function buildAuditChanges(
     ingredientFieldChanges: ingredientFields.map((field) => ({
       field,
       aiValue: baselineIngredient[field]?.value ?? null,
-      finalValue: finalIngredient[field] ?? null,
+      // 按**草稿存储口径**读（可食部公共名是百分数、草稿存比例），
+      // 直接读公共名会永远拿到 null，审计就答不出这个字段改没改。
+      finalValue: readIngredientCardFieldValue(finalIngredient, field) ?? null,
     })),
     aiBaseline: draft.payload.aiBaseline ?? null,
     confirmation: {

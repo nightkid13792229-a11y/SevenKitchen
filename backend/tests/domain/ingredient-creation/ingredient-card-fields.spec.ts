@@ -5,6 +5,7 @@ import {
   INGREDIENT_CARD_FIELD_KEYS,
   INGREDIENT_PROPERTY_KEY_BY_FIELD,
   isIngredientCardFieldKey,
+  readIngredientCardFieldValue,
 } from 'src/domain/ingredient-creation/ingredient-card-fields';
 
 /** 展示顺序：按组排列，组内顺序与设计稿一致。 */
@@ -93,5 +94,53 @@ describe('食材原料卡字段契约', () => {
     expect(isIngredientCardFieldKey('nope')).toBe(false);
     expect(isIngredientCardFieldKey(undefined)).toBe(false);
     expect(isIngredientCardFieldKey(42)).toBe(false);
+  });
+});
+
+/**
+ * 审计/基线读原料卡值时，必须按「草稿存储名」取值。
+ *
+ * 可食部是唯一公共名与存储名不同的字段：页面上是 `edibleYieldPercent`（10–100），
+ * 草稿里存 `edibleYieldRate`（0.1–1）。以前直接读公共名，AI 写的可食部在审计里
+ * 永远是 null——正是「AI 原值 vs 人工改动」最该说清的字段之一。
+ */
+describe('readIngredientCardFieldValue', () => {
+  it('普通字段原样读', () => {
+    const card = { name: '鸡肝', baseUnit: 'G', weightG: 120 };
+    expect(readIngredientCardFieldValue(card, 'name')).toBe('鸡肝');
+    expect(readIngredientCardFieldValue(card, 'baseUnit')).toBe('G');
+    expect(readIngredientCardFieldValue(card, 'weightG')).toBe(120);
+  });
+
+  it('可食部按比例换回百分数；浮点噪声不冒出来', () => {
+    expect(
+      readIngredientCardFieldValue(
+        { edibleYieldRate: 0.6 },
+        'edibleYieldPercent',
+      ),
+    ).toBe(60);
+    expect(
+      readIngredientCardFieldValue(
+        { edibleYieldRate: 0.6012 },
+        'edibleYieldPercent',
+      ),
+    ).toBe(60.12);
+    expect(
+      readIngredientCardFieldValue(
+        { edibleYieldRate: 0.3333 },
+        'edibleYieldPercent',
+      ),
+    ).toBe(33.33);
+  });
+
+  it('没有存过 / 值不合法时返回 null', () => {
+    expect(readIngredientCardFieldValue({}, 'edibleYieldPercent')).toBeNull();
+    expect(
+      readIngredientCardFieldValue(
+        { edibleYieldRate: '0.6' },
+        'edibleYieldPercent',
+      ),
+    ).toBeNull();
+    expect(readIngredientCardFieldValue(null, 'name')).toBeNull();
   });
 });

@@ -711,7 +711,7 @@ describe('IngredientCreationCommitService', () => {
 
     await service.commit(baseInput);
 
-    const audit = store.audits[0] as {
+    const audit = store.audits[0] as unknown as {
       changes: {
         fields: Array<Record<string, unknown>>;
         aiBaseline: unknown;
@@ -728,6 +728,48 @@ describe('IngredientCreationCommitService', () => {
     expect(audit.changes.aiBaseline).toMatchObject({
       updatedAt: '2026-11-21T10:00:00.000Z',
     });
+  });
+
+  it('原料卡审计按存储字段读可食部：AI 原值 60 → 最终 62', async () => {
+    const draft = buildDraft({
+      aiBaseline: {
+        profiles: {},
+        ingredient: {
+          edibleYieldPercent: {
+            value: 60,
+            unit: null,
+            at: '2026-11-21T10:00:00.000Z',
+          },
+        },
+        updatedAt: '2026-11-21T10:00:00.000Z',
+      },
+      ingredient: {
+        name: '鸡肝',
+        type: 'FOOD',
+        baseUnit: 'G',
+        unitDisplayLabel: '克',
+        edibleYieldRate: 0.62,
+        manualFields: ['edibleYieldPercent'],
+      },
+    });
+    const { service, store } = await createHarness({ draft });
+
+    await service.commit(baseInput);
+
+    const audit = store.audits[0] as unknown as {
+      changes: {
+        ingredientFields: string[];
+        ingredientFieldChanges: Array<Record<string, unknown>>;
+      };
+    };
+    expect(audit.changes.ingredientFields).toEqual(['edibleYieldPercent']);
+    expect(audit.changes.ingredientFieldChanges).toEqual([
+      {
+        field: 'edibleYieldPercent',
+        aiValue: 60,
+        finalValue: 62,
+      },
+    ]);
   });
 
   it('原料名按 NFKC + 空白归一后查重、加锁、入库', async () => {

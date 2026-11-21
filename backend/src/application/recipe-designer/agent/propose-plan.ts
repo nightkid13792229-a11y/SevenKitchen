@@ -181,6 +181,18 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
   },
 };
 
+export const REVISE_PLAN_TOOL: DeepSeekToolDefinition = {
+  ...PROPOSE_PLAN_TOOL,
+  function: {
+    ...PROPOSE_PLAN_TOOL.function,
+    name: 'revise_plan',
+    description:
+      '用户明确要求修改已确认的营养方案时使用。用户的话是最高优先级，不要以“方案已锁定”拒绝。' +
+      '传入修改后的完整方案；调用后方案立即更新，原选材会被清空，需要重新核对。' +
+      '如果修改涉及硬约束/医学风险，先用一句话说明风险，但仍按用户要求更新。',
+  },
+};
+
 export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
   type: 'function',
   function: {

@@ -25,6 +25,7 @@ describe('recipe agent phase policy', () => {
     const tools = names('SELECT', 'ORDER');
 
     expect(tools).toContain('propose_selection');
+    expect(tools).toContain('revise_plan');
     expect(tools).not.toContain('find_food');
     expect(tools).not.toContain('propose_plan');
     expect(tools).not.toContain('edit_recipe');
@@ -38,6 +39,7 @@ describe('recipe agent phase policy', () => {
     expect(tools).toContain('edit_recipe');
     expect(tools).toContain('assess');
     expect(tools).toContain('write_copy');
+    expect(tools).toContain('revise_plan');
     expect(tools).not.toContain('propose_plan');
     expect(tools).not.toContain('propose_selection');
   });

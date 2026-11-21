@@ -29,7 +29,7 @@ describe('agent tools: knowledge v3', () => {
   });
 
   it('contains the recipe tools, phase tools and knowledge tools', () => {
-    expect(AGENT_TOOLS).toHaveLength(13);
+    expect(AGENT_TOOLS).toHaveLength(14);
     expect(AGENT_TOOLS.map((tool) => tool.function.name)).toEqual([
       'read_design_context',
       'read_draft',
@@ -41,6 +41,7 @@ describe('agent tools: knowledge v3', () => {
       'ask',
       'propose_plan',
       'propose_selection',
+      'revise_plan',
       'kb_catalog',
       'kb_find',
       'kb_read',

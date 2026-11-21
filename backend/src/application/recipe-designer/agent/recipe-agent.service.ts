@@ -17,6 +17,7 @@ import {
   type OnModuleInit,
 } from '@nestjs/common';
 
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/prisma.service';
 import { KnowledgeGatewayService } from '../../knowledge-v3/knowledge-gateway.service';
 import { AgentProviderConfigService } from '../../nutrition-governance/agent-provider-config.service';
@@ -663,6 +664,31 @@ export class RecipeAgentService implements OnModuleInit {
           pendingProposeRepair =
             `${call.function.name} 校验失败：只修正被指出的字段/约束，其余保持不变；` +
             '无法确定的约束删掉，或给一个大致边界并在 basis 写「待确认」。不要重新检索。';
+        }
+
+        // 用户明确要求修改已确认方案：用户的话最高，立即更新方案。
+        if (call.function.name === 'revise_plan' && outcome.ok) {
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: {
+              plan: outcome.data as never,
+              planConfirmedAt: new Date(),
+              selection: Prisma.DbNull,
+              selectionConfirmedAt: null,
+              phase: phase === 'DESIGN' ? 'SELECT' : phase,
+              status: phase === 'DESIGN' ? 'WAITING_USER' : 'RUNNING',
+              ...(phase === 'DESIGN' ? { endedAt: new Date() } : {}),
+            },
+          });
+          if (phase === 'DESIGN') {
+            await this.appendMessage(
+              sessionId,
+              'ASSISTANT',
+              '方案已按你的要求更新；原有选材/配方需要重新核对，已回到选材阶段。',
+            );
+            await this.markWaiting(sessionId);
+            return;
+          }
         }
 
         // 方案/选材提交：落库 + 暂停等用户确认。

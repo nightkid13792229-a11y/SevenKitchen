@@ -19,6 +19,7 @@ import { summarizeDesignContext } from './design-context';
 import {
   PROPOSE_PLAN_TOOL,
   PROPOSE_SELECTION_TOOL,
+  REVISE_PLAN_TOOL,
   normalizePlan,
   normalizeSelection,
   summarizePlan,
@@ -205,6 +206,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   },
   PROPOSE_PLAN_TOOL,
   PROPOSE_SELECTION_TOOL,
+  REVISE_PLAN_TOOL,
   ...KNOWLEDGE_TOOL_DEFINITIONS,
 ];
 
@@ -231,7 +233,8 @@ export async function executeTool(
         return ok(designContext, summarizeDesignContext(designContext));
       }
 
-      case 'propose_plan': {
+      case 'propose_plan':
+      case 'revise_plan': {
         const plan = normalizePlan(args);
         return ok(plan, summarizePlan(plan));
       }

@@ -54,15 +54,17 @@ describe('draft completeness', () => {
     const payload = emptySupplementDraftPayload();
     payload.basic = { ...payload.basic, name: '鱼油' };
     payload.nutrition = {
+      ...payload.nutrition,
       servingNutrients: { 'fattyAcids.epa': 650 },
       defaultTargetFields: ['fattyAcids.epa'],
     };
     payload.label = {
+      ...payload.label,
       labelCategory: 'FEED_ADDITIVE',
       labelNames: ['鱼油'],
       tagNames: ['油脂类'],
     };
-    payload.equivalence = { groupId: '__SKIP__' };
+    payload.equivalence = { ...payload.equivalence, groupId: '__SKIP__' };
     const off = {
       ...payload,
       retail: { ...payload.retail, enabled: false, shelfLifeMonths: null },

@@ -207,9 +207,9 @@ describe('draft completeness', () => {
   it('retail off requires a reason; retail on requires shelf life', () => {
     const payload = emptySupplementDraftPayload();
     payload.basic = { ...payload.basic, name: '鱼油' };
-    payload.nutrition = { servingNutrients: { 'fattyAcids.epa': 650 }, defaultTargetFields: ['fattyAcids.epa'] };
-    payload.label = { labelCategory: 'FEED_ADDITIVE', labelNames: ['鱼油'], tagNames: ['油脂类'] };
-    payload.equivalence = { groupId: '__SKIP__' };
+    payload.nutrition = { ...payload.nutrition, servingNutrients: { 'fattyAcids.epa': 650 }, defaultTargetFields: ['fattyAcids.epa'] };
+    payload.label = { ...payload.label, labelCategory: 'FEED_ADDITIVE', labelNames: ['鱼油'], tagNames: ['油脂类'] };
+    payload.equivalence = { ...payload.equivalence, groupId: '__SKIP__' };
     const off = { ...payload, retail: { ...payload.retail, enabled: false, shelfLifeMonths: null } };
     expect(computeDraftCompleteness(off).missing).toContain('noSaleReason');
     const on = { ...payload, retail: { ...payload.retail, enabled: true, shelfLifeMonths: null } };

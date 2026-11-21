@@ -11,7 +11,7 @@ export type IngredientLine = (typeof INGREDIENT_LINES)[number];
 
 /** 补剂线还没开放：对外一律用这一句，前端原样展示。 */
 export const LINE_NOT_OPEN_MESSAGE =
-  '补剂线还没开放：补剂和食材的字段、计量口径、核验规则都不一样，这条线正在单独做。';
+  '补剂走独立建档流程（选品 → 建档），不在本页的对话起草里处理。';
 
 export interface RequestedLineInput {
   draftId?: string;

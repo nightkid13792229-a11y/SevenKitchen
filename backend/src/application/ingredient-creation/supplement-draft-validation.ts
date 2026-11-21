@@ -61,6 +61,7 @@ export type SupplementDraftIssueCode =
   | 'STORAGE_CONDITION_TOO_LONG'
   | 'PURCHASE_UNIT_TOO_LONG'
   | 'GROUP_INACTIVE'
+  | 'GROUP_NOT_CHOSEN'
   | 'GROUP_NOT_APPROVED'
   | 'GROUP_SINGLETON'
   | 'GROUP_SKIPPED'
@@ -690,9 +691,19 @@ export function validateSupplementDraftFeatures(
     );
   }
 
-  // ⑧ 等价组：存在/启停是阻断，审核状态/成员数是提醒，暂不归组是提醒。
+  // ⑧ 等价组：没表态是阻断，暂不归组是提醒，选了组再查存在/状态/成员数。
+  //    finalize 只按 blockers/warnings + ack 放行，所以「还没选」必须阻断，
+  //    不能只靠完成度提示 —— 否则四段没表态的草稿会直接写进去。
   const groupId = equivalence.groupId;
-  if (groupId === GROUP_SKIPPED_ID) {
+  if (!groupId) {
+    issues.push(
+      blockerIssue(
+        'GROUP_NOT_CHOSEN',
+        '请选择等价组，或明确选「暂不归组」',
+        'equivalence.groupId',
+      ),
+    );
+  } else if (groupId === GROUP_SKIPPED_ID) {
     issues.push(
       warningIssue(
         'GROUP_SKIPPED',
@@ -701,7 +712,7 @@ export function validateSupplementDraftFeatures(
         'equivalence.groupId',
       ),
     );
-  } else if (groupId) {
+  } else {
     const group = context.equivalenceGroup;
     if (!group || !group.isActive || group.status === 'DISABLED') {
       issues.push(

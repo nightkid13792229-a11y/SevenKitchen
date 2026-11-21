@@ -173,7 +173,16 @@ function issueOf(
 
 describe('validateSupplementDraftFeatures', () => {
   it('功能项齐全的草稿没有任何功能问题', () => {
-    expect(featureIssues()).toEqual([]);
+    // 等价组必须明确表态：已选组（APPROVED、2 个成员、浓度 OK）。
+    expect(
+      featureIssues(
+        { equivalence: { groupId: 'group-1' } },
+        {
+          equivalenceGroup: groupContext({ memberCount: 2 }),
+          concentration: { status: 'OK' },
+        },
+      ),
+    ).toEqual([]);
   });
 
   /* ① 重复建档 ------------------------------------------------------ */
@@ -299,7 +308,7 @@ describe('validateSupplementDraftFeatures', () => {
 
   it('过滤 EQUIVALENCE_* 和 DUPLICATE_NAME（由本函数其它规则负责）', () => {
     const issues = featureIssues(
-      {},
+      { equivalence: { groupId: '__SKIP__' } },
       {
         issues: [
           { code: 'EQUIVALENCE_UNGROUPED', level: 'WARN', message: '未归组' },
@@ -313,7 +322,8 @@ describe('validateSupplementDraftFeatures', () => {
       },
     );
 
-    expect(issues).toEqual([]);
+    // 明确选了「暂不归组」，只剩这一条提醒；体检里的等价组/重复项不重复出现。
+    expect(issues.map((issue) => issue.code)).toEqual(['GROUP_SKIPPED']);
   });
 
   it('上架=开 + 体检 ERROR → RETAIL_BLOCKED_BY_ISSUES 阻断，带上体检文案', () => {
@@ -529,7 +539,21 @@ describe('validateSupplementDraftFeatures', () => {
 
   /* ⑦ 等价组 -------------------------------------------------------- */
 
-  it('暂不归组（__SKIP__）→ GROUP_SKIPPED 提醒', () => {
+  it('还没选等价组（null）→ GROUP_NOT_CHOSEN 阻断，不能靠完成度放行', () => {
+    const issues = featureIssues({ equivalence: { groupId: null } });
+
+    const issue = issueOf(issues, 'GROUP_NOT_CHOSEN');
+    expect(issue).toMatchObject({
+      code: 'GROUP_NOT_CHOSEN',
+      level: 'BLOCKER',
+    });
+    expect(issue?.message).toContain('暂不归组');
+    expect(issue?.fieldPath).toBe('equivalence.groupId');
+    expect(issue?.ackKey).toBeUndefined();
+    expect(issueOf(issues, 'GROUP_SKIPPED')).toBeUndefined();
+  });
+
+  it('暂不归组（__SKIP__）→ GROUP_SKIPPED 提醒，且没有 GROUP_NOT_CHOSEN 阻断', () => {
     const issues = featureIssues({
       equivalence: { groupId: '__SKIP__' },
     });
@@ -539,6 +563,17 @@ describe('validateSupplementDraftFeatures', () => {
       level: 'WARNING',
       ackKey: 'GROUP_SKIPPED:__SKIP__',
     });
+    expect(issueOf(issues, 'GROUP_NOT_CHOSEN')).toBeUndefined();
+    expect(issues.some((issue) => issue.level === 'BLOCKER')).toBe(false);
+  });
+
+  it('已选组不受 GROUP_NOT_CHOSEN 影响', () => {
+    const issues = featureIssues(
+      { equivalence: { groupId: 'group-1' } },
+      { equivalenceGroup: groupContext({ memberCount: 2 }) },
+    );
+
+    expect(issueOf(issues, 'GROUP_NOT_CHOSEN')).toBeUndefined();
   });
 
   it('选了组但查不到 / 已停用 / DISABLED → GROUP_INACTIVE 阻断', () => {

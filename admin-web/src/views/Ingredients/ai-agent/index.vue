@@ -10,7 +10,8 @@
             两页各跑一次核验，才能授权写入正式库。
           </template>
           <template v-else>
-            先在 DSH 里跑「补剂选品」Skill 定形态、比价、挑好商品，再回到这里建档：
+            先在 DSH 里跑「补剂选品」Skill
+            定形态、比价、挑好商品，再回到这里建档：
             传正面图和标签图（或手填）、把选品依据贴进来，写完后点「确认可用」才会进配方。
           </template>
         </p>
@@ -38,7 +39,11 @@
           两条线的字段和核验都不一样，选错了后面会白填。
         </p>
         <div class="line-gate__options">
-          <button class="line-gate__option" type="button" @click="pickLine('FOOD')">
+          <button
+            class="line-gate__option"
+            type="button"
+            @click="pickLine('FOOD')"
+          >
             <b>食材类原料</b>
             <span>肉类、内脏、水产、蛋、蔬果、谷物</span>
           </button>
@@ -74,7 +79,7 @@
             等你回答
           </el-tag>
           <span class="agent-panel__draft">
-            草稿：<code>{{ state.draftId || '运行后创建' }}</code>
+            草稿：<code>{{ state.draftId || "运行后创建" }}</code>
           </span>
         </div>
 
@@ -120,7 +125,7 @@
                   {{ formatAgentDuration(run.report.durationMs) }} ·
                   {{
                     formatAgentTokenCount(
-                      run.report.tokensIn + run.report.tokensOut
+                      run.report.tokensIn + run.report.tokensOut,
                     )
                   }}
                   tokens
@@ -136,8 +141,8 @@
                   </span>
                   <span v-if="run.report">结果 {{ run.report.result }}</span>
                   <span v-if="run.report">
-                    输入 {{ formatAgentTokenCount(run.report.tokensIn) }} /
-                    输出 {{ formatAgentTokenCount(run.report.tokensOut) }} tokens
+                    输入 {{ formatAgentTokenCount(run.report.tokensIn) }} / 输出
+                    {{ formatAgentTokenCount(run.report.tokensOut) }} tokens
                   </span>
                 </div>
                 <!-- 每个工具的耗时在下面每一步右侧；失败工具在报告里再汇总一次。 -->
@@ -155,159 +160,172 @@
                 </div>
                 <div
                   v-for="step in run.steps"
-                :key="step.index"
-                class="agent-step"
-                :class="{
-                  'agent-step--running': step.status === 'running',
-                  'agent-step--failed': step.status === 'failed',
-                  'agent-step--empty': step.found === false
-                }"
-              >
-                <span class="agent-step__index">{{ step.index }}</span>
-                <div class="agent-step__body">
-                  <div class="agent-step__head">
-                    <b class="agent-step__label">{{ step.label }}</b>
-                    <code v-if="step.name" class="agent-step__tool">{{ step.name }}</code>
-                    <span v-if="stepSummary(step)" class="agent-step__summary">
-                      {{ stepSummary(step) }}
-                    </span>
-                    <span v-if="step.durationMs !== undefined" class="agent-step__duration">
-                      · {{ formatAgentDuration(step.durationMs) }}
-                    </span>
-                    <el-tag
-                      size="small"
-                      effect="plain"
-                      :type="stepTagType(step)"
+                  :key="step.index"
+                  class="agent-step"
+                  :class="{
+                    'agent-step--running': step.status === 'running',
+                    'agent-step--failed': step.status === 'failed',
+                    'agent-step--empty': step.found === false,
+                  }"
+                >
+                  <span class="agent-step__index">{{ step.index }}</span>
+                  <div class="agent-step__body">
+                    <div class="agent-step__head">
+                      <b class="agent-step__label">{{ step.label }}</b>
+                      <code v-if="step.name" class="agent-step__tool">{{
+                        step.name
+                      }}</code>
+                      <span
+                        v-if="stepSummary(step)"
+                        class="agent-step__summary"
+                      >
+                        {{ stepSummary(step) }}
+                      </span>
+                      <span
+                        v-if="step.durationMs !== undefined"
+                        class="agent-step__duration"
+                      >
+                        · {{ formatAgentDuration(step.durationMs) }}
+                      </span>
+                      <el-tag
+                        size="small"
+                        effect="plain"
+                        :type="stepTagType(step)"
+                      >
+                        {{ stepTagLabel(step) }}
+                      </el-tag>
+                    </div>
+                    <p v-if="step.resultSummary" class="agent-step__result">
+                      {{ step.resultSummary }}
+                    </p>
+                    <p
+                      v-if="step.status === 'failed'"
+                      class="agent-step__error"
                     >
-                      {{ stepTagLabel(step) }}
-                    </el-tag>
-                  </div>
-                  <p v-if="step.resultSummary" class="agent-step__result">
-                    {{ step.resultSummary }}
-                  </p>
-                  <p v-if="step.status === 'failed'" class="agent-step__error">
-                    {{ step.error || '工具执行失败（后端没有给出原因）' }}
-                  </p>
-                  <p v-if="step.record" class="agent-step__record">
-                    {{ step.record.message }}
-                  </p>
-                  <details v-if="step.search" class="agent-step__evidence">
-                    <summary class="agent-step__evidence-summary">
-                      匹配依据 · {{ step.search.message }}
-                    </summary>
-                    <div class="agent-step__evidence-body">
-                      <div class="agent-step__keywords">
-                        <span>本次关键词：</span>
-                        <el-tag
-                          v-for="keyword in step.search.keywords"
-                          :key="keyword"
-                          size="small"
-                          effect="plain"
-                        >
-                          {{ keyword }}
-                        </el-tag>
-                      </div>
-                      <!--
+                      {{ step.error || "工具执行失败（后端没有给出原因）" }}
+                    </p>
+                    <p v-if="step.record" class="agent-step__record">
+                      {{ step.record.message }}
+                    </p>
+                    <details v-if="step.search" class="agent-step__evidence">
+                      <summary class="agent-step__evidence-summary">
+                        匹配依据 · {{ step.search.message }}
+                      </summary>
+                      <div class="agent-step__evidence-body">
+                        <div class="agent-step__keywords">
+                          <span>本次关键词：</span>
+                          <el-tag
+                            v-for="keyword in step.search.keywords"
+                            :key="keyword"
+                            size="small"
+                            effect="plain"
+                          >
+                            {{ keyword }}
+                          </el-tag>
+                        </div>
+                        <!--
                         候选多时先给人看「每个部位组多少条」：收窄问题与这里
                         使用同一份后端 groups，避免「11 条相关」却只显示 5 个。
                       -->
-                      <div
-                        v-if="step.search.groups.length"
-                        class="agent-step__groups"
-                      >
-                        <span class="agent-step__groups-title">分组概览：</span>
-                        <el-tag
-                          v-for="group in step.search.groups"
-                          :key="group.key"
-                          size="small"
-                          effect="plain"
-                          type="info"
-                          class="agent-step__group"
+                        <div
+                          v-if="step.search.groups.length"
+                          class="agent-step__groups"
                         >
-                          {{ group.labelWithCount }}
-                          <template v-if="group.stateLabel">
-                            · {{ group.stateLabel }}
-                          </template>
-                        </el-tag>
-                      </div>
-                      <p v-if="!step.search.found" class="agent-step__empty">
-                        没有找到匹配词条
-                      </p>
-                      <ul v-else class="agent-step__matches">
-                        <li
-                          v-for="(match, matchIndex) in step.search.matches"
-                          :key="matchIndex"
-                          class="agent-step__match"
-                        >
-                          <span class="agent-step__match-name">
-                            {{ match.foodName }}
-                          </span>
-                          <span
-                            v-if="
-                              match.foodNameEn &&
-                              match.foodNameEn !== match.foodName
-                            "
-                            class="agent-step__match-en"
+                          <span class="agent-step__groups-title"
+                            >分组概览：</span
                           >
-                            {{ match.foodNameEn }}
-                          </span>
-                          <el-tag size="small" effect="plain" type="info">
-                            匹配方式：{{ match.matchedByLabel }}
+                          <el-tag
+                            v-for="group in step.search.groups"
+                            :key="group.key"
+                            size="small"
+                            effect="plain"
+                            type="info"
+                            class="agent-step__group"
+                          >
+                            {{ group.labelWithCount }}
+                            <template v-if="group.stateLabel">
+                              · {{ group.stateLabel }}
+                            </template>
                           </el-tag>
-                          <template v-if="match.classification">
-                            <el-tag
-                              size="small"
-                              effect="plain"
-                              type="success"
-                            >
-                              AI 分类：{{ match.classification.label }}
-                            </el-tag>
-                            <span
-                              v-if="match.classification.evidence"
-                              class="agent-step__match-meta"
-                            >
-                              依据词「{{ match.classification.evidence }}」
-                            </span>
-                          </template>
-                          <span class="agent-step__match-meta">
-                            关键词「{{ match.matchedKeyword }}」
-                          </span>
-                          <span class="agent-step__match-meta">
-                            分数 {{ match.scoreLabel }}
-                          </span>
-                          <span
-                            v-if="match.aiVerdict"
-                            class="agent-step__match-ai"
+                        </div>
+                        <p v-if="!step.search.found" class="agent-step__empty">
+                          没有找到匹配词条
+                        </p>
+                        <ul v-else class="agent-step__matches">
+                          <li
+                            v-for="(match, matchIndex) in step.search.matches"
+                            :key="matchIndex"
+                            class="agent-step__match"
                           >
-                            <el-tag
-                              size="small"
-                              :type="match.aiVerdictTagType"
-                              effect="plain"
-                            >
-                              AI 判断：{{ match.aiVerdictLabel }}
-                            </el-tag>
-                            <span
-                              v-if="match.aiReason"
-                              class="agent-step__match-reason"
-                            >
-                              {{ match.aiReason }}
+                            <span class="agent-step__match-name">
+                              {{ match.foodName }}
                             </span>
-                          </span>
-                        </li>
-                      </ul>
-                      <p
-                        v-if="
-                          step.search.found &&
-                          step.search.totalCount > step.search.matches.length
-                        "
-                        class="agent-step__match-more"
-                      >
-                        共 {{ step.search.totalCount }} 条，这里显示前
-                        {{ step.search.matches.length }} 条。
-                      </p>
-                    </div>
-                  </details>
-                </div>
+                            <span
+                              v-if="
+                                match.foodNameEn &&
+                                match.foodNameEn !== match.foodName
+                              "
+                              class="agent-step__match-en"
+                            >
+                              {{ match.foodNameEn }}
+                            </span>
+                            <el-tag size="small" effect="plain" type="info">
+                              匹配方式：{{ match.matchedByLabel }}
+                            </el-tag>
+                            <template v-if="match.classification">
+                              <el-tag
+                                size="small"
+                                effect="plain"
+                                type="success"
+                              >
+                                AI 分类：{{ match.classification.label }}
+                              </el-tag>
+                              <span
+                                v-if="match.classification.evidence"
+                                class="agent-step__match-meta"
+                              >
+                                依据词「{{ match.classification.evidence }}」
+                              </span>
+                            </template>
+                            <span class="agent-step__match-meta">
+                              关键词「{{ match.matchedKeyword }}」
+                            </span>
+                            <span class="agent-step__match-meta">
+                              分数 {{ match.scoreLabel }}
+                            </span>
+                            <span
+                              v-if="match.aiVerdict"
+                              class="agent-step__match-ai"
+                            >
+                              <el-tag
+                                size="small"
+                                :type="match.aiVerdictTagType"
+                                effect="plain"
+                              >
+                                AI 判断：{{ match.aiVerdictLabel }}
+                              </el-tag>
+                              <span
+                                v-if="match.aiReason"
+                                class="agent-step__match-reason"
+                              >
+                                {{ match.aiReason }}
+                              </span>
+                            </span>
+                          </li>
+                        </ul>
+                        <p
+                          v-if="
+                            step.search.found &&
+                            step.search.totalCount > step.search.matches.length
+                          "
+                          class="agent-step__match-more"
+                        >
+                          共 {{ step.search.totalCount }} 条，这里显示前
+                          {{ step.search.matches.length }} 条。
+                        </p>
+                      </div>
+                    </details>
+                  </div>
                 </div>
               </div>
             </details>
@@ -360,9 +378,7 @@
                   type="button"
                   class="agent-ask__option"
                   :title="option.title || undefined"
-                  :disabled="
-                    state.running || saving || Boolean(commitResult)
-                  "
+                  :disabled="state.running || saving || Boolean(commitResult)"
                   @click="handleAnswerOption(option.label)"
                 >
                   <span class="agent-ask__option-head">
@@ -456,7 +472,7 @@
             <el-table-column prop="library" label="营养库" width="102" />
             <el-table-column label="搜索词" min-width="220">
               <template #default="{ row }">
-                {{ row.terms.join('、') }}
+                {{ row.terms.join("、") }}
               </template>
             </el-table-column>
             <el-table-column label="命中" width="84">
@@ -466,7 +482,7 @@
               <template #default="{ row }">{{ row.rounds }} 轮</template>
             </el-table-column>
             <el-table-column label="AI 判断" min-width="220">
-              <template #default="{ row }">{{ row.note || '—' }}</template>
+              <template #default="{ row }">{{ row.note || "—" }}</template>
             </el-table-column>
           </el-table>
 
@@ -537,749 +553,837 @@
 
       <div class="review-column">
         <el-card v-if="reviewVisible" class="review-panel" shadow="never">
-        <div class="review-panel__head">
-          <div class="review-panel__head-top">
-            <div class="review-panel__title">
-              <b>草稿审核</b>
-              <span v-if="draft" class="review-panel__step">
-                当前站点 {{ draft.step }}
-              </span>
-            </div>
-            <div
-              v-if="activeTab === 'ingredient'"
-              class="review-panel__tools"
-            >
-              <el-switch v-model="onlyAiWritten" size="small" />
-              <span class="review-panel__switch-label">只看 AI 写入</span>
-            </div>
-          </div>
-          <div class="review-stats">
-            <el-tag
-              size="small"
-              :type="conflictCount > 0 ? 'danger' : 'info'"
-              effect="plain"
-            >
-              冲突 {{ conflictCount }} 项
-            </el-tag>
-            <el-tag
-              size="small"
-              :type="commitResult || gate.ready ? 'success' : 'info'"
-              effect="plain"
-              :title="
-                commitResult
-                  ? '已经写入正式库'
-                  : gate.ready
-                    ? '两页核验都已通过，可以授权'
-                    : gate.reasons[0]
-              "
-            >
-              授权：{{
-                commitResult ? '已写入' : gate.ready ? '可写入' : '还差条件'
-              }}
-            </el-tag>
-          </div>
-        </div>
-
-        <el-alert
-          v-if="draftError"
-          class="review-alert"
-          type="error"
-          :closable="false"
-          show-icon
-          title="草稿加载失败（后端返回原文）"
-        >
-          <p class="review-error-text">{{ draftError }}</p>
-        </el-alert>
-
-        <div v-else-if="draftLoading" v-loading="true" class="review-loading" />
-
-        <div v-else-if="draft" class="review-panel__body">
-          <div class="review-tabs-shell">
-            <el-tabs v-model="activeTab" class="review-tabs">
-              <el-tab-pane label="原料档案" name="ingredient">
-                <el-alert
-                  v-if="staleNotice('INGREDIENT')"
-                  class="review-stale"
-                  type="warning"
-                  :closable="false"
-                  show-icon
-                  :title="staleNotice('INGREDIENT') || ''"
-                >
-                  <div class="review-stale__body">
-                    <span>授权只认当前草稿版本的报告；点右上角「核验两页」重跑。</span>
-                  </div>
-                </el-alert>
-
-              <p v-if="onlyAiWritten && ingredientCardGroups.length === 0" class="ingredient-filter__empty">
-                还没有 AI 写入的字段。
-              </p>
-
-              <el-form
-                class="ingredient-form"
-                :disabled="Boolean(commitResult) || saving || submitting"
-                @submit.prevent
+          <div class="review-panel__head">
+            <div class="review-panel__head-top">
+              <div class="review-panel__title">
+                <b>草稿审核</b>
+                <span v-if="draft" class="review-panel__step">
+                  当前站点 {{ draft.step }}
+                </span>
+              </div>
+              <div
+                v-if="activeTab === 'ingredient'"
+                class="review-panel__tools"
               >
-                <section
-                  v-for="group in ingredientCardGroups"
-                  :key="group.key"
-                  class="ingredient-group"
-                >
-                  <h4 class="ingredient-group__head">{{ group.label }}</h4>
+                <el-switch v-model="onlyAiWritten" size="small" />
+                <span class="review-panel__switch-label">只看 AI 写入</span>
+              </div>
+            </div>
+            <div class="review-stats">
+              <el-tag
+                size="small"
+                :type="conflictCount > 0 ? 'danger' : 'info'"
+                effect="plain"
+              >
+                冲突 {{ conflictCount }} 项
+              </el-tag>
+              <el-tag
+                size="small"
+                :type="commitResult || gate.ready ? 'success' : 'info'"
+                effect="plain"
+                :title="
+                  commitResult
+                    ? '已经写入正式库'
+                    : gate.ready
+                      ? '两页核验都已通过，可以授权'
+                      : gate.reasons[0]
+                "
+              >
+                授权：{{
+                  commitResult ? "已写入" : gate.ready ? "可写入" : "还差条件"
+                }}
+              </el-tag>
+            </div>
+          </div>
 
-                  <div class="ingredient-form__grid">
-                    <div
-                      v-for="cell in group.cells"
-                      :key="cell.key"
-                      class="ingredient-cell"
-                      :class="{
-                        'ingredient-cell--empty': isIngredientCellEmpty(cell),
-                        'ingredient-cell--after-create': cell.isAfterCreate,
-                        'ingredient-cell--located':
-                          locatedField === cell.key
-                      }"
-                      :data-field-key="cell.key"
-                    >
-                      <div class="ingredient-cell__head">
-                        <span
-                          class="ingredient-cell__label"
-                          :title="cell.key"
-                        >
-                          {{ cell.label }}
-                        </span>
-                        <span v-if="cell.unit" class="ingredient-cell__unit">
-                          {{ cell.unit }}
-                        </span>
-                        <el-tag
-                          v-if="cell.sourceLabel"
-                          size="small"
-                          effect="plain"
-                          class="ingredient-cell__source"
-                          :type="cell.isManual ? 'warning' : 'success'"
-                        >
-                          {{ cell.sourceLabel }}
-                        </el-tag>
-                        <span
-                          v-if="cell.isAfterCreate"
-                          class="ingredient-cell__note"
-                        >
-                          建完后补
-                        </span>
-                      </div>
+          <el-alert
+            v-if="draftError"
+            class="review-alert"
+            type="error"
+            :closable="false"
+            show-icon
+            title="草稿加载失败（后端返回原文）"
+          >
+            <p class="review-error-text">{{ draftError }}</p>
+          </el-alert>
 
-                      <el-select
-                        v-if="cell.kind === 'select'"
-                        :model-value="ingredientCellText(cell)"
-                        :disabled="isIngredientCellDisabled(cell)"
-                        :clearable="isIngredientCellClearable(cell)"
-                        :filterable="cell.key === 'cfctClass'"
-                        :allow-create="cell.key === 'cfctClass'"
-                        placeholder="空"
-                        class="ingredient-cell__control"
-                        @update:model-value="
-                          setIngredientCellTextValue(cell.key, $event)
-                        "
-                        @change="handleIngredientSelectChange(cell.key, $event)"
-                      >
-                        <el-option
-                          v-for="option in ingredientCellOptions(cell)"
-                          :key="option.value"
-                          :label="option.label"
-                          :value="option.value"
-                        />
-                      </el-select>
+          <div
+            v-else-if="draftLoading"
+            v-loading="true"
+            class="review-loading"
+          />
 
-                      <el-select
-                        v-else-if="cell.kind === 'boolean'"
-                        :model-value="ingredientCellBoolean(cell)"
-                        :disabled="isIngredientCellDisabled(cell)"
-                        clearable
-                        placeholder="空"
-                        class="ingredient-cell__control"
-                        @update:model-value="
-                          setIngredientCellBooleanValue(cell.key, $event)
-                        "
-                        @change="handleIngredientBooleanChange(cell.key, $event)"
-                      >
-                        <el-option label="是" :value="true" />
-                        <el-option label="否" :value="false" />
-                      </el-select>
-
-                      <el-input-number
-                        v-else-if="cell.kind === 'number'"
-                        :model-value="ingredientCellNumber(cell)"
-                        :disabled="isIngredientCellDisabled(cell)"
-                        :controls="false"
-                        :precision="ingredientCellPrecision(cell)"
-                        :min="ingredientCellMin(cell)"
-                        :max="ingredientCellMax(cell)"
-                        placeholder="空"
-                        class="ingredient-cell__control"
-                        @update:model-value="
-                          setIngredientCellNumberValue(cell.key, $event)
-                        "
-                        @change="handleIngredientNumberChange(cell.key, $event)"
-                      />
-
-                      <el-select
-                        v-else-if="cell.kind === 'string-list'"
-                        :model-value="ingredientCellTags(cell)"
-                        :disabled="isIngredientCellDisabled(cell)"
-                        multiple
-                        filterable
-                        allow-create
-                        default-first-option
-                        :reserve-keyword="false"
-                        placeholder="输入后回车，可填多个"
-                        class="ingredient-cell__control"
-                        @update:model-value="
-                          setIngredientCellListValue(cell.key, $event)
-                        "
-                        @change="handleIngredientListChange(cell.key, $event)"
-                      />
-
-                      <el-select
-                        v-else-if="cell.kind === 'tags'"
-                        :model-value="ingredientCellTagIds(cell)"
-                        :disabled="isIngredientCellDisabled(cell)"
-                        multiple
-                        filterable
-                        clearable
-                        placeholder="选择标签"
-                        no-data-text="暂无标签，请先到原料库标签管理创建"
-                        class="ingredient-cell__control"
-                        @change="handleIngredientTagChange"
-                      >
-                        <el-option
-                          v-for="tag in ingredientTags"
-                          :key="tag.id"
-                          :label="tag.name"
-                          :value="tag.id"
-                        />
-                      </el-select>
-
-                      <el-tooltip
-                        v-else
-                        :content="ingredientCellText(cell)"
-                        :disabled="
-                          cell.key !== 'mainNutrientsDesc' ||
-                          !ingredientCellText(cell)
-                        "
-                        placement="top"
-                        :show-after="200"
-                      >
-                        <el-input
-                          :model-value="ingredientCellText(cell)"
-                          :disabled="isIngredientCellDisabled(cell)"
-                          :maxlength="ingredientCellMaxlength(cell)"
-                          placeholder="空"
-                          class="ingredient-cell__control"
-                          @update:model-value="
-                            setIngredientCellTextValue(cell.key, $event)
-                          "
-                          @change="handleIngredientTextChange(cell.key, $event)"
-                        />
-                      </el-tooltip>
-
+          <div v-else-if="draft" class="review-panel__body">
+            <div class="review-tabs-shell">
+              <el-tabs v-model="activeTab" class="review-tabs">
+                <el-tab-pane label="原料档案" name="ingredient">
+                  <el-alert
+                    v-if="staleNotice('INGREDIENT')"
+                    class="review-stale"
+                    type="warning"
+                    :closable="false"
+                    show-icon
+                    :title="staleNotice('INGREDIENT') || ''"
+                  >
+                    <div class="review-stale__body">
                       <span
-                        v-if="cell.hint"
-                        class="ingredient-cell__hint"
+                        >授权只认当前草稿版本的报告；点右上角「核验两页」重跑。</span
                       >
-                        {{ cell.hint }}
-                      </span>
                     </div>
+                  </el-alert>
+
+                  <p
+                    v-if="onlyAiWritten && ingredientCardGroups.length === 0"
+                    class="ingredient-filter__empty"
+                  >
+                    还没有 AI 写入的字段。
+                  </p>
+
+                  <el-form
+                    class="ingredient-form"
+                    :disabled="Boolean(commitResult) || saving || submitting"
+                    @submit.prevent
+                  >
+                    <section
+                      v-for="group in ingredientCardGroups"
+                      :key="group.key"
+                      class="ingredient-group"
+                    >
+                      <h4 class="ingredient-group__head">{{ group.label }}</h4>
+
+                      <div class="ingredient-form__grid">
+                        <div
+                          v-for="cell in group.cells"
+                          :key="cell.key"
+                          class="ingredient-cell"
+                          :class="{
+                            'ingredient-cell--empty':
+                              isIngredientCellEmpty(cell),
+                            'ingredient-cell--after-create': cell.isAfterCreate,
+                            'ingredient-cell--located':
+                              locatedField === cell.key,
+                          }"
+                          :data-field-key="cell.key"
+                        >
+                          <div class="ingredient-cell__head">
+                            <span
+                              class="ingredient-cell__label"
+                              :title="cell.key"
+                            >
+                              {{ cell.label }}
+                            </span>
+                            <span
+                              v-if="cell.unit"
+                              class="ingredient-cell__unit"
+                            >
+                              {{ cell.unit }}
+                            </span>
+                            <el-tag
+                              v-if="cell.sourceLabel"
+                              size="small"
+                              effect="plain"
+                              class="ingredient-cell__source"
+                              :type="cell.isManual ? 'warning' : 'success'"
+                            >
+                              {{ cell.sourceLabel }}
+                            </el-tag>
+                            <span
+                              v-if="cell.isAfterCreate"
+                              class="ingredient-cell__note"
+                            >
+                              建完后补
+                            </span>
+                          </div>
+
+                          <el-select
+                            v-if="cell.kind === 'select'"
+                            :model-value="ingredientCellText(cell)"
+                            :disabled="isIngredientCellDisabled(cell)"
+                            :clearable="isIngredientCellClearable(cell)"
+                            :filterable="cell.key === 'cfctClass'"
+                            :allow-create="cell.key === 'cfctClass'"
+                            placeholder="空"
+                            class="ingredient-cell__control"
+                            @update:model-value="
+                              setIngredientCellTextValue(cell.key, $event)
+                            "
+                            @change="
+                              handleIngredientSelectChange(cell.key, $event)
+                            "
+                          >
+                            <el-option
+                              v-for="option in ingredientCellOptions(cell)"
+                              :key="option.value"
+                              :label="option.label"
+                              :value="option.value"
+                            />
+                          </el-select>
+
+                          <el-select
+                            v-else-if="cell.kind === 'boolean'"
+                            :model-value="ingredientCellBoolean(cell)"
+                            :disabled="isIngredientCellDisabled(cell)"
+                            clearable
+                            placeholder="空"
+                            class="ingredient-cell__control"
+                            @update:model-value="
+                              setIngredientCellBooleanValue(cell.key, $event)
+                            "
+                            @change="
+                              handleIngredientBooleanChange(cell.key, $event)
+                            "
+                          >
+                            <el-option label="是" :value="true" />
+                            <el-option label="否" :value="false" />
+                          </el-select>
+
+                          <el-input-number
+                            v-else-if="cell.kind === 'number'"
+                            :model-value="ingredientCellNumber(cell)"
+                            :disabled="isIngredientCellDisabled(cell)"
+                            :controls="false"
+                            :precision="ingredientCellPrecision(cell)"
+                            :min="ingredientCellMin(cell)"
+                            :max="ingredientCellMax(cell)"
+                            placeholder="空"
+                            class="ingredient-cell__control"
+                            @update:model-value="
+                              setIngredientCellNumberValue(cell.key, $event)
+                            "
+                            @change="
+                              handleIngredientNumberChange(cell.key, $event)
+                            "
+                          />
+
+                          <el-select
+                            v-else-if="cell.kind === 'string-list'"
+                            :model-value="ingredientCellTags(cell)"
+                            :disabled="isIngredientCellDisabled(cell)"
+                            multiple
+                            filterable
+                            allow-create
+                            default-first-option
+                            :reserve-keyword="false"
+                            placeholder="输入后回车，可填多个"
+                            class="ingredient-cell__control"
+                            @update:model-value="
+                              setIngredientCellListValue(cell.key, $event)
+                            "
+                            @change="
+                              handleIngredientListChange(cell.key, $event)
+                            "
+                          />
+
+                          <el-select
+                            v-else-if="cell.kind === 'tags'"
+                            :model-value="ingredientCellTagIds(cell)"
+                            :disabled="isIngredientCellDisabled(cell)"
+                            multiple
+                            filterable
+                            clearable
+                            placeholder="选择标签"
+                            no-data-text="暂无标签，请先到原料库标签管理创建"
+                            class="ingredient-cell__control"
+                            @change="handleIngredientTagChange"
+                          >
+                            <el-option
+                              v-for="tag in ingredientTags"
+                              :key="tag.id"
+                              :label="tag.name"
+                              :value="tag.id"
+                            />
+                          </el-select>
+
+                          <el-tooltip
+                            v-else
+                            :content="ingredientCellText(cell)"
+                            :disabled="
+                              cell.key !== 'mainNutrientsDesc' ||
+                              !ingredientCellText(cell)
+                            "
+                            placement="top"
+                            :show-after="200"
+                          >
+                            <el-input
+                              :model-value="ingredientCellText(cell)"
+                              :disabled="isIngredientCellDisabled(cell)"
+                              :maxlength="ingredientCellMaxlength(cell)"
+                              placeholder="空"
+                              class="ingredient-cell__control"
+                              @update:model-value="
+                                setIngredientCellTextValue(cell.key, $event)
+                              "
+                              @change="
+                                handleIngredientTextChange(cell.key, $event)
+                              "
+                            />
+                          </el-tooltip>
+
+                          <span v-if="cell.hint" class="ingredient-cell__hint">
+                            {{ cell.hint }}
+                          </span>
+                        </div>
+                      </div>
+                    </section>
+                  </el-form>
+
+                  <p class="review-hint">
+                    改动会在离开输入框时自动保存；每次保存整张卡一起发，不会丢字段。
+                    标「人工」的格子 AI
+                    之后不会再覆盖；标签分类会进首页「避开」筛选，至少选一个，空着核验会阻断授权。
+                  </p>
+                </el-tab-pane>
+
+                <el-tab-pane label="营养档案" name="profiles">
+                  <el-alert
+                    v-if="staleNotice('NUTRITION')"
+                    class="review-stale"
+                    type="warning"
+                    :closable="false"
+                    show-icon
+                    :title="staleNotice('NUTRITION') || ''"
+                  >
+                    <div class="review-stale__body">
+                      <span
+                        >授权只认当前草稿版本的报告；点右上角「核验两页」重跑。</span
+                      >
+                    </div>
+                  </el-alert>
+
+                  <div
+                    v-if="profileGroups.length > 0"
+                    class="nutrition-summary"
+                  >
+                    <span class="nutrition-summary__main">
+                      营养核对：空值 {{ nutritionEmptyCount }} 项 + 零值
+                      {{ nutritionZeroCount }} 项 =
+                      {{ nutritionReviewCount }} 项
+                    </span>
+                    <span class="nutrition-summary__hint">
+                      空值是来源没有；零值可能是来源真实值，也可能是缺，需人工判断
+                    </span>
                   </div>
-                </section>
-              </el-form>
 
-              <p class="review-hint">
-                改动会在离开输入框时自动保存；每次保存整张卡一起发，不会丢字段。
-                标「人工」的格子 AI 之后不会再覆盖；标签分类会进首页「避开」筛选，至少选一个，空着核验会阻断授权。
-              </p>
-            </el-tab-pane>
+                  <div class="nutrition-category">
+                    <span class="nutrition-category__label">原料类别</span>
+                    <el-select
+                      :model-value="
+                        typeof ingredientForm.category === 'string'
+                          ? ingredientForm.category
+                          : ''
+                      "
+                      :disabled="Boolean(commitResult) || saving || submitting"
+                      clearable
+                      placeholder="空"
+                      class="nutrition-category__select"
+                      @change="handleCategoryChange"
+                    >
+                      <el-option
+                        v-for="option in COVERAGE_CATEGORY_OPTIONS"
+                        :key="option.value"
+                        :label="option.label"
+                        :value="option.value"
+                      />
+                    </el-select>
+                    <el-tag
+                      v-if="ingredientForm.manualFields.includes('category')"
+                      size="small"
+                      type="warning"
+                      effect="plain"
+                    >
+                      人工
+                    </el-tag>
+                    <span class="nutrition-category__hint">
+                      决定必需的生熟档案：肉类默认要“生”，根茎淀粉类默认要“熟”
+                    </span>
+                  </div>
 
-            <el-tab-pane label="营养档案" name="profiles">
+                  <el-empty
+                    v-if="profileGroups.length === 0"
+                    description="草稿里还没有营养档案。先让 AI 查库写入，或继续对话补数据。"
+                    :image-size="64"
+                  />
+
+                  <el-empty
+                    v-else-if="visibleProfileGroups.length === 0"
+                    description="当前筛子下没有可显示的营养字段。"
+                    :image-size="64"
+                  >
+                    <el-button size="small" @click="selectProfileFilter('ALL')">
+                      显示全部
+                    </el-button>
+                  </el-empty>
+
+                  <section
+                    v-for="group in visibleProfileGroups"
+                    :key="group.profileIndex"
+                    class="profile-group"
+                  >
+                    <header class="profile-group__head">
+                      <b>{{ group.stateLabel }}档案</b>
+                      <span class="profile-group__source">
+                        来源：{{ group.sourceLabel }}
+                      </span>
+                      <el-tag
+                        size="small"
+                        :type="group.pendingCount > 0 ? 'warning' : 'info'"
+                        effect="plain"
+                        :title="`空值 ${group.pendingCount} 项，零值 ${group.zeroCount} 项`"
+                      >
+                        空值 {{ group.pendingCount }} · 零值
+                        {{ group.zeroCount }}
+                      </el-tag>
+                    </header>
+
+                    <div class="profile-filter">
+                      <el-radio-group
+                        :model-value="profileFilterMode"
+                        size="small"
+                        aria-label="营养档案筛子"
+                        @update:model-value="handleProfileFilterChange"
+                      >
+                        <el-radio-button value="ALL">
+                          全部 {{ group.counts.all }}
+                        </el-radio-button>
+                        <el-radio-button value="FILLED">
+                          只看有值 {{ group.counts.filled }}
+                        </el-radio-button>
+                        <el-radio-button value="MISSING">
+                          只看缺口 {{ group.counts.missing }}
+                        </el-radio-button>
+                      </el-radio-group>
+                    </div>
+
+                    <div
+                      v-for="section in tabSections(group)"
+                      :key="`${group.profileIndex}-${section.key}`"
+                      class="profile-section"
+                    >
+                      <div class="profile-section__head">
+                        {{ section.label }}
+                      </div>
+                      <div class="profile-rows">
+                        <div
+                          v-for="row in section.rows"
+                          :key="row.fieldPath"
+                          class="profile-row"
+                          :class="{
+                            'profile-row--located':
+                              locatedField === row.fieldPath,
+                          }"
+                          :data-field-path="row.fieldPath"
+                        >
+                          <span
+                            class="profile-row__label"
+                            :title="row.fieldPath"
+                          >
+                            {{ row.label }}
+                          </span>
+                          <el-input-number
+                            :model-value="
+                              cellValue(group.profileIndex, row) ?? undefined
+                            "
+                            :min="0"
+                            :controls="false"
+                            size="small"
+                            class="profile-row__input"
+                            :disabled="
+                              Boolean(commitResult) || saving || submitting
+                            "
+                            @change="
+                              handleCellChange(group.profileIndex, row, $event)
+                            "
+                          />
+                          <span class="profile-row__unit">{{ row.unit }}</span>
+                          <el-tag
+                            size="small"
+                            :type="row.statusType"
+                            effect="plain"
+                            class="profile-row__status"
+                          >
+                            {{ row.statusLabel }}
+                          </el-tag>
+                          <span
+                            class="profile-row__source"
+                            :title="row.sourceRecordId || '暂无来源'"
+                          >
+                            {{ row.sourceLabel }}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <p class="review-hint">
+                    清空一格会保留证据行、值变成空（显示「待补」），不会写成 0。
+                  </p>
+                </el-tab-pane>
+              </el-tabs>
+
+              <div class="review-tabs__check-actions">
+                <el-button
+                  size="small"
+                  :loading="checkDialogLoading"
+                  :disabled="Boolean(commitResult) || submitting"
+                  @click="runBothChecks"
+                >
+                  核验两页
+                </el-button>
+                <el-button
+                  link
+                  size="small"
+                  :disabled="Boolean(commitResult) || submitting"
+                  @click="openCurrentReport"
+                >
+                  查看报告
+                </el-button>
+              </div>
+            </div>
+
+            <div class="review-feedback">
+              <!-- 旧页面（2026-11-08）：后台已经发布过新版本，这个标签页还停在旧代码上。
+                 不提示的话，人只会看到后端一句跟页面无关的拒绝理由。 -->
               <el-alert
-                v-if="staleNotice('NUTRITION')"
-                class="review-stale"
+                v-if="staleBundle"
                 type="warning"
                 :closable="false"
                 show-icon
-                :title="staleNotice('NUTRITION') || ''"
+                title="这个页面是旧版本（后台已经更新过），写入会被后端拒绝"
               >
                 <div class="review-stale__body">
-                  <span>授权只认当前草稿版本的报告；点右上角「核验两页」重跑。</span>
+                  <span
+                    >页面是在新版本发布之前打开的。刷新后能看到最新的表单项与规则。</span
+                  >
+                  <el-button
+                    size="small"
+                    type="primary"
+                    @click="reloadForNewVersion"
+                  >
+                    刷新到最新版本
+                  </el-button>
                 </div>
               </el-alert>
 
-              <div v-if="profileGroups.length > 0" class="nutrition-summary">
-                <span class="nutrition-summary__main">
-                  营养核对：空值 {{ nutritionEmptyCount }} 项 + 零值
-                  {{ nutritionZeroCount }} 项 = {{ nutritionReviewCount }} 项
-                </span>
-                <span class="nutrition-summary__hint">
-                  空值是来源没有；零值可能是来源真实值，也可能是缺，需人工判断
-                </span>
-              </div>
-
-              <div class="nutrition-category">
-                <span class="nutrition-category__label">原料类别</span>
-                <el-select
-                  :model-value="
-                    typeof ingredientForm.category === 'string'
-                      ? ingredientForm.category
-                      : ''
-                  "
-                  :disabled="Boolean(commitResult) || saving || submitting"
-                  clearable
-                  placeholder="空"
-                  class="nutrition-category__select"
-                  @change="handleCategoryChange"
-                >
-                  <el-option
-                    v-for="option in COVERAGE_CATEGORY_OPTIONS"
-                    :key="option.value"
-                    :label="option.label"
-                    :value="option.value"
-                  />
-                </el-select>
-                <el-tag
-                  v-if="ingredientForm.manualFields.includes('category')"
-                  size="small"
-                  type="warning"
-                  effect="plain"
-                >
-                  人工
-                </el-tag>
-                <span class="nutrition-category__hint">
-                  决定必需的生熟档案：肉类默认要“生”，根茎淀粉类默认要“熟”
-                </span>
-              </div>
-
-              <el-empty
-                v-if="profileGroups.length === 0"
-                description="草稿里还没有营养档案。先让 AI 查库写入，或继续对话补数据。"
-                :image-size="64"
-              />
-
-              <el-empty
-                v-else-if="visibleProfileGroups.length === 0"
-                description="当前筛子下没有可显示的营养字段。"
-                :image-size="64"
+              <el-alert
+                v-if="saveError"
+                type="error"
+                :closable="false"
+                show-icon
+                title="保存草稿失败（后端返回原文）"
               >
-                <el-button size="small" @click="selectProfileFilter('ALL')">
-                  显示全部
-                </el-button>
-              </el-empty>
+                <p class="review-error-text">{{ saveError }}</p>
+              </el-alert>
 
-              <section
-                v-for="group in visibleProfileGroups"
-                :key="group.profileIndex"
-                class="profile-group"
+              <el-alert
+                v-if="checksError"
+                type="warning"
+                :closable="false"
+                show-icon
+                title="核验状态读取失败（授权按钮会保持置灰）"
               >
-                <header class="profile-group__head">
-                  <b>{{ group.stateLabel }}档案</b>
-                  <span class="profile-group__source">
-                    来源：{{ group.sourceLabel }}
-                  </span>
-                  <el-tag
-                    size="small"
-                    :type="group.pendingCount > 0 ? 'warning' : 'info'"
-                    effect="plain"
-                    :title="`空值 ${group.pendingCount} 项，零值 ${group.zeroCount} 项`"
-                  >
-                    空值 {{ group.pendingCount }} · 零值 {{ group.zeroCount }}
-                  </el-tag>
-                </header>
+                <p class="review-error-text">{{ checksError }}</p>
+              </el-alert>
 
-                <div class="profile-filter">
-                  <el-radio-group
-                    :model-value="profileFilterMode"
-                    size="small"
-                    aria-label="营养档案筛子"
-                    @update:model-value="handleProfileFilterChange"
-                  >
-                    <el-radio-button value="ALL">
-                      全部 {{ group.counts.all }}
-                    </el-radio-button>
-                    <el-radio-button value="FILLED">
-                      只看有值 {{ group.counts.filled }}
-                    </el-radio-button>
-                    <el-radio-button value="MISSING">
-                      只看缺口 {{ group.counts.missing }}
-                    </el-radio-button>
-                  </el-radio-group>
-                </div>
-
-                <div
-                  v-for="section in tabSections(group)"
-                  :key="`${group.profileIndex}-${section.key}`"
-                  class="profile-section"
-                >
-                  <div class="profile-section__head">{{ section.label }}</div>
-                  <div class="profile-rows">
-                    <div
-                      v-for="row in section.rows"
-                      :key="row.fieldPath"
-                      class="profile-row"
-                      :class="{
-                        'profile-row--located': locatedField === row.fieldPath
-                      }"
-                      :data-field-path="row.fieldPath"
-                    >
-                      <span class="profile-row__label" :title="row.fieldPath">
-                        {{ row.label }}
-                      </span>
-                      <el-input-number
-                        :model-value="cellValue(group.profileIndex, row) ?? undefined"
-                        :min="0"
-                        :controls="false"
-                        size="small"
-                        class="profile-row__input"
-                        :disabled="Boolean(commitResult) || saving || submitting"
-                        @change="
-                          handleCellChange(group.profileIndex, row, $event)
-                        "
-                      />
-                      <span class="profile-row__unit">{{ row.unit }}</span>
-                      <el-tag
-                        size="small"
-                        :type="row.statusType"
-                        effect="plain"
-                        class="profile-row__status"
-                      >
-                        {{ row.statusLabel }}
-                      </el-tag>
-                      <span
-                        class="profile-row__source"
-                        :title="row.sourceRecordId || '暂无来源'"
-                      >
-                        {{ row.sourceLabel }}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </section>
-
-              <p class="review-hint">
-                清空一格会保留证据行、值变成空（显示「待补」），不会写成 0。
-              </p>
-            </el-tab-pane>
-            </el-tabs>
-
-            <div class="review-tabs__check-actions">
-              <el-button
-                size="small"
-                :loading="checkDialogLoading"
-                :disabled="Boolean(commitResult) || submitting"
-                @click="runBothChecks"
+              <el-alert
+                v-if="submitError"
+                type="error"
+                :closable="false"
+                show-icon
+                title="授权失败（后端返回原文）"
               >
-                核验两页
-              </el-button>
-              <el-button
-                link
-                size="small"
-                :disabled="Boolean(commitResult) || submitting"
-                @click="openCurrentReport"
+                <p class="review-error-text">{{ submitError }}</p>
+              </el-alert>
+
+              <el-alert
+                v-if="verifyError"
+                type="error"
+                :closable="false"
+                show-icon
+                title="确认可用失败（后端返回原文）"
               >
-                查看报告
-              </el-button>
+                <p class="review-error-text">{{ verifyError }}</p>
+              </el-alert>
+
+              <el-alert
+                v-if="commitResult"
+                type="success"
+                :closable="false"
+                show-icon
+                :title="
+                  verified
+                    ? '已写入，原料与营养档案已确认可用'
+                    : '已写入正式库，营养档案当前是「待验证」'
+                "
+              >
+                <p class="review-commit-result">
+                  原料 {{ shortId(commitResult.ingredientId) }} · 营养档案
+                  {{ commitResult.nutritionFoodIds.map(shortId).join("、") }}
+                </p>
+                <p class="review-commit-result">
+                  授权时间 {{ formatCheckedAt(commitResult.authorizedAt) }}
+                </p>
+                <p v-if="!verified" class="review-error-text">
+                  {{
+                    isAdmin
+                      ? "点「确认可用」后，这些档案才会进入配方链路。"
+                      : ADMIN_ONLY_TIP
+                  }}
+                </p>
+              </el-alert>
             </div>
+
+            <footer class="review-footer">
+              <el-button
+                type="primary"
+                size="large"
+                :loading="submitting"
+                :disabled="!canAuthorize"
+                @click="handleAuthorize"
+              >
+                授权写入正式库
+              </el-button>
+              <el-button
+                v-if="commitResult"
+                type="success"
+                size="large"
+                :loading="verifying"
+                :disabled="!isAdmin || verified || verifying"
+                @click="handleVerify"
+              >
+                确认可用
+              </el-button>
+              <span class="review-footer__hint">{{ authorizeHint }}</span>
+            </footer>
+
+            <CheckReportDialog
+              v-model="checkDialogVisible"
+              :domain="checkDialogDomain"
+              :run="checkDialogRun"
+              :loading="checkDialogLoading"
+              :error="checkDialogError"
+              :stale="checkDialogStale"
+              :exception-codes="exceptionCodes"
+              :saving-exception="savingException"
+              @rerun="runCheckForDomain(checkDialogDomain)"
+              @locate="locateToField"
+              @exception="handleRegisterException"
+            />
           </div>
-
-          <div class="review-feedback">
-            <!-- 旧页面（2026-11-08）：后台已经发布过新版本，这个标签页还停在旧代码上。
-                 不提示的话，人只会看到后端一句跟页面无关的拒绝理由。 -->
-            <el-alert
-              v-if="staleBundle"
-              type="warning"
-              :closable="false"
-              show-icon
-              title="这个页面是旧版本（后台已经更新过），写入会被后端拒绝"
-            >
-              <div class="review-stale__body">
-                <span>页面是在新版本发布之前打开的。刷新后能看到最新的表单项与规则。</span>
-                <el-button size="small" type="primary" @click="reloadForNewVersion">
-                  刷新到最新版本
-                </el-button>
-              </div>
-            </el-alert>
-
-            <el-alert
-              v-if="saveError"
-              type="error"
-              :closable="false"
-              show-icon
-              title="保存草稿失败（后端返回原文）"
-            >
-              <p class="review-error-text">{{ saveError }}</p>
-            </el-alert>
-
-            <el-alert
-              v-if="checksError"
-              type="warning"
-              :closable="false"
-              show-icon
-              title="核验状态读取失败（授权按钮会保持置灰）"
-            >
-              <p class="review-error-text">{{ checksError }}</p>
-            </el-alert>
-
-            <el-alert
-              v-if="submitError"
-              type="error"
-              :closable="false"
-              show-icon
-              title="授权失败（后端返回原文）"
-            >
-              <p class="review-error-text">{{ submitError }}</p>
-            </el-alert>
-
-            <el-alert
-              v-if="verifyError"
-              type="error"
-              :closable="false"
-              show-icon
-              title="确认可用失败（后端返回原文）"
-            >
-              <p class="review-error-text">{{ verifyError }}</p>
-            </el-alert>
-
-            <el-alert
-              v-if="commitResult"
-              type="success"
-              :closable="false"
-              show-icon
-              :title="
-                verified
-                  ? '已写入，原料与营养档案已确认可用'
-                  : '已写入正式库，营养档案当前是「待验证」'
-              "
-            >
-              <p class="review-commit-result">
-                原料 {{ shortId(commitResult.ingredientId) }} ·
-                营养档案
-                {{ commitResult.nutritionFoodIds.map(shortId).join('、') }}
-              </p>
-              <p class="review-commit-result">
-                授权时间 {{ formatCheckedAt(commitResult.authorizedAt) }}
-              </p>
-              <p v-if="!verified" class="review-error-text">
-                {{
-                  isAdmin
-                    ? '点「确认可用」后，这些档案才会进入配方链路。'
-                    : ADMIN_ONLY_TIP
-                }}
-              </p>
-            </el-alert>
-          </div>
-
-          <footer class="review-footer">
-            <el-button
-              type="primary"
-              size="large"
-              :loading="submitting"
-              :disabled="!canAuthorize"
-              @click="handleAuthorize"
-            >
-              授权写入正式库
-            </el-button>
-            <el-button
-              v-if="commitResult"
-              type="success"
-              size="large"
-              :loading="verifying"
-              :disabled="!isAdmin || verified || verifying"
-              @click="handleVerify"
-            >
-              确认可用
-            </el-button>
-            <span class="review-footer__hint">{{ authorizeHint }}</span>
-          </footer>
-
-          <CheckReportDialog
-            v-model="checkDialogVisible"
-            :domain="checkDialogDomain"
-            :run="checkDialogRun"
-            :loading="checkDialogLoading"
-            :error="checkDialogError"
-            :stale="checkDialogStale"
-            :exception-codes="exceptionCodes"
-            :saving-exception="savingException"
-            @rerun="runCheckForDomain(checkDialogDomain)"
-            @locate="locateToField"
-            @exception="handleRegisterException"
-          />
-        </div>
         </el-card>
 
-      <!-- 采购商品（2026-11-08 第三次改版）：
+        <!-- 采购商品（2026-11-08 第三次改版）：
            ① 挪到「草稿审核」板块**下方**——放在里面会把原料档案/营养档案的编辑区压扁；
            ② 只有「原料卡写全 + 两页核验都通过」才出现（老板定：先填档案并通过核验）；
               改了原料导致报告变旧时它会自己收起，等重跑核验再出现。 -->
-      <section
-        v-if="showProcurementCard"
-        ref="closingCardRef"
-        class="closing-card"
-      >
-        <div class="closing-card__head">
-          <h3>写入前必填：这条原料的采购商品</h3>
-          <span class="closing-card__state" :class="`is-${closingState.toLowerCase()}`">
-            {{ closingStateLabel }}
-          </span>
-        </div>
-
-        <!-- 截图识别（2026-11-08）：贴一张商品详情页，AI 把下面几格填好。
-             与小程序「新增采购商品」同一个识别服务，认得出的字段一样。 -->
-        <div
-          class="closing-card__shot"
-          :class="{ 'is-drag': shotDragging, 'is-busy': shotRecognizing }"
-          @click="pickScreenshot"
-          @dragover.prevent="shotDragging = true"
-          @dragleave.prevent="shotDragging = false"
-          @drop.prevent="handleScreenshotDrop"
+        <section
+          v-if="showProcurementCard"
+          ref="closingCardRef"
+          class="closing-card"
         >
-          <template v-if="shotRecognizing">
-            <span class="closing-card__shot-title">正在识别截图…</span>
-            <span class="closing-card__shot-sub">读商品名、件数、每件净含量、单价和渠道</span>
-          </template>
-          <template v-else>
-            <span class="closing-card__shot-title">
-              贴一张商品详情页截图 → 自动填好下面几格
+          <div class="closing-card__head">
+            <h3>写入前必填：这条原料的采购商品</h3>
+            <span
+              class="closing-card__state"
+              :class="`is-${closingState.toLowerCase()}`"
+            >
+              {{ closingStateLabel }}
             </span>
-            <span class="closing-card__shot-sub">
-              {{ shotDropHint }}
-            </span>
-          </template>
-          <input
-            ref="shotInputRef"
-            type="file"
-            accept="image/*"
-            class="closing-card__shot-file"
-            @change="handleScreenshotPick"
+          </div>
+
+          <!-- 截图识别（2026-11-08）：贴一张商品详情页，AI 把下面几格填好。
+             与小程序「新增采购商品」同一个识别服务，认得出的字段一样。 -->
+          <div
+            class="closing-card__shot"
+            :class="{ 'is-drag': shotDragging, 'is-busy': shotRecognizing }"
+            @click="pickScreenshot"
+            @dragover.prevent="shotDragging = true"
+            @dragleave.prevent="shotDragging = false"
+            @drop.prevent="handleScreenshotDrop"
+          >
+            <template v-if="shotRecognizing">
+              <span class="closing-card__shot-title">正在识别截图…</span>
+              <span class="closing-card__shot-sub"
+                >读商品名、件数、每件净含量、单价和渠道</span
+              >
+            </template>
+            <template v-else>
+              <span class="closing-card__shot-title">
+                贴一张商品详情页截图 → 自动填好下面几格
+              </span>
+              <span class="closing-card__shot-sub">
+                {{ shotDropHint }}
+              </span>
+            </template>
+            <input
+              ref="shotInputRef"
+              type="file"
+              accept="image/*"
+              class="closing-card__shot-file"
+              @change="handleScreenshotPick"
+            />
+          </div>
+
+          <el-alert
+            v-if="shotError"
+            class="closing-card__shot-alert"
+            type="warning"
+            :closable="false"
+            show-icon
+            :title="shotError"
           />
-        </div>
 
-        <el-alert
-          v-if="shotError"
-          class="closing-card__shot-alert"
-          type="warning"
-          :closable="false"
-          show-icon
-          :title="shotError"
-        />
+          <p
+            v-if="shotMissingLabels.length > 0"
+            class="closing-card__shot-missing"
+          >
+            截图里没读到：{{
+              shotMissingLabels.join("、")
+            }}——请手动补上（不猜数）。
+          </p>
 
-        <p v-if="shotMissingLabels.length > 0" class="closing-card__shot-missing">
-          截图里没读到：{{ shotMissingLabels.join('、') }}——请手动补上（不猜数）。
-        </p>
-
-        <!--
+          <!--
           两列 + 标签在上（2026-11-08 第二次改版）。
           第一版把「AI 识别」塞进 86px 的标签里，标签被挤成竖条（AI 识 / 别），
           还和右边的格子叠在一起。标签在上之后每格都能用满半栏宽度，
           标记只占标签行右侧，不会再撑坏布局。
         -->
-        <el-form label-position="top" size="small" class="closing-card__form">
-          <el-form-item required>
-            <template #label>
-              <span class="closing-card__label">
-                商品名称
-                <em v-if="isAiFilled('name')" class="closing-card__ai">AI 识别</em>
-              </span>
-            </template>
-            <el-input v-model="closingForm.name" placeholder="如：山姆 糙米 1kg" />
-          </el-form-item>
-
-          <el-form-item required>
-            <template #label>
-              <span class="closing-card__label">
-                采购单位
-                <em v-if="isAiFilled('purchaseUnit')" class="closing-card__ai">AI 识别</em>
-              </span>
-            </template>
-            <el-input v-model="closingForm.purchaseUnit" placeholder="袋 / 盒 / 箱" />
-          </el-form-item>
-
-          <el-form-item required>
-            <template #label>
-              <span class="closing-card__label">
-                一箱几件
-                <em v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</em>
-              </span>
-            </template>
-            <div class="closing-card__field">
-              <el-input-number
-                v-model="closingForm.packCount"
-                :min="1"
-                :step="1"
-                :precision="0"
-                controls-position="right"
+          <el-form label-position="top" size="small" class="closing-card__form">
+            <el-form-item required>
+              <template #label>
+                <span class="closing-card__label">
+                  商品名称
+                  <em v-if="isAiFilled('name')" class="closing-card__ai"
+                    >AI 识别</em
+                  >
+                </span>
+              </template>
+              <el-input
+                v-model="closingForm.name"
+                placeholder="如：山姆 糙米 1kg"
               />
-              <span class="closing-card__unit">件</span>
-            </div>
-          </el-form-item>
+            </el-form-item>
 
-          <el-form-item required>
-            <template #label>
-              <span class="closing-card__label">
-                每件净含量
-                <em v-if="isAiFilled('netContentPerPack')" class="closing-card__ai">AI 识别</em>
-              </span>
-            </template>
-            <div class="closing-card__field">
+            <el-form-item required>
+              <template #label>
+                <span class="closing-card__label">
+                  采购单位
+                  <em v-if="isAiFilled('purchaseUnit')" class="closing-card__ai"
+                    >AI 识别</em
+                  >
+                </span>
+              </template>
+              <el-input
+                v-model="closingForm.purchaseUnit"
+                placeholder="袋 / 盒 / 箱"
+              />
+            </el-form-item>
+
+            <el-form-item required>
+              <template #label>
+                <span class="closing-card__label">
+                  一箱几件
+                  <em v-if="isAiFilled('packCount')" class="closing-card__ai"
+                    >AI 识别</em
+                  >
+                </span>
+              </template>
+              <div class="closing-card__field">
+                <el-input-number
+                  v-model="closingForm.packCount"
+                  :min="1"
+                  :step="1"
+                  :precision="0"
+                  controls-position="right"
+                />
+                <span class="closing-card__unit">件</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item required>
+              <template #label>
+                <span class="closing-card__label">
+                  每件净含量
+                  <em
+                    v-if="isAiFilled('netContentPerPack')"
+                    class="closing-card__ai"
+                    >AI 识别</em
+                  >
+                </span>
+              </template>
+              <div class="closing-card__field">
+                <el-input-number
+                  v-model="closingForm.netContentPerPack"
+                  :min="0"
+                  controls-position="right"
+                />
+                <span class="closing-card__unit">{{
+                  closingBaseUnitLabel
+                }}</span>
+              </div>
+            </el-form-item>
+
+            <el-form-item required>
+              <template #label>
+                <span class="closing-card__label">
+                  这一件多少钱
+                  <em
+                    v-if="isAiFilled('currentPurchasePrice')"
+                    class="closing-card__ai"
+                    >AI 识别</em
+                  >
+                </span>
+              </template>
               <el-input-number
-                v-model="closingForm.netContentPerPack"
+                v-model="closingForm.currentPurchasePrice"
                 :min="0"
+                :precision="2"
                 controls-position="right"
+                class="closing-card__number"
               />
-              <span class="closing-card__unit">{{ closingBaseUnitLabel }}</span>
-            </div>
-          </el-form-item>
+            </el-form-item>
 
-          <el-form-item required>
-            <template #label>
-              <span class="closing-card__label">
-                这一件多少钱
-                <em v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</em>
-              </span>
-            </template>
-            <el-input-number
-              v-model="closingForm.currentPurchasePrice"
-              :min="0"
-              :precision="2"
-              controls-position="right"
-              class="closing-card__number"
-            />
-          </el-form-item>
+            <el-form-item>
+              <template #label>
+                <span class="closing-card__label">
+                  采购渠道
+                  <em
+                    v-if="isAiFilled('purchaseChannel')"
+                    class="closing-card__ai"
+                    :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
+                    :title="
+                      isLowConfidence('purchaseChannel')
+                        ? '是 AI 推测的，请核对'
+                        : ''
+                    "
+                  >
+                    {{
+                      isLowConfidence("purchaseChannel") ? "AI 推测" : "AI 识别"
+                    }}
+                  </em>
+                </span>
+              </template>
+              <el-input
+                v-model="closingForm.purchaseChannel"
+                placeholder="可不填"
+              />
+            </el-form-item>
+          </el-form>
 
-          <el-form-item>
-            <template #label>
-              <span class="closing-card__label">
-                采购渠道
-                <em
-                  v-if="isAiFilled('purchaseChannel')"
-                  class="closing-card__ai"
-                  :class="{ 'is-guess': isLowConfidence('purchaseChannel') }"
-                  :title="isLowConfidence('purchaseChannel') ? '是 AI 推测的，请核对' : ''"
-                >
-                  {{ isLowConfidence('purchaseChannel') ? 'AI 推测' : 'AI 识别' }}
-                </em>
-              </span>
-            </template>
-            <el-input v-model="closingForm.purchaseChannel" placeholder="可不填" />
-          </el-form-item>
-        </el-form>
+          <!-- 换算汇总：倍率 + 每克单价放在同一行，不再挤在输入框右边 -->
+          <p
+            v-if="closingRatioText || closingPreview"
+            class="closing-card__summary"
+          >
+            <span v-if="closingRatioText">{{ closingRatioText }}</span>
+            <span v-if="closingPreview">{{ closingPreview }}</span>
+          </p>
 
-        <!-- 换算汇总：倍率 + 每克单价放在同一行，不再挤在输入框右边 -->
-        <p v-if="closingRatioText || closingPreview" class="closing-card__summary">
-          <span v-if="closingRatioText">{{ closingRatioText }}</span>
-          <span v-if="closingPreview">{{ closingPreview }}</span>
-        </p>
-
-        <p class="closing-card__hint">
-          它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
-          没有它，原料进食谱就是按 0 元算。
-        </p>
-      </section>
+          <p class="closing-card__hint">
+            它会和原料一起写入，折算成「每{{
+              closingBaseUnitLabel
+            }}多少钱」作为初始成本； 没有它，原料进食谱就是按 0 元算。
+          </p>
+        </section>
       </div>
     </div>
   </div>
@@ -1295,12 +1399,12 @@ import {
   onUnmounted,
   reactive,
   ref,
-  watch
-} from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { ingredientCreationApi } from '@/api/ingredientCreation'
-import { ingredientApi } from '@/api/ingredients'
+  watch,
+} from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { ingredientCreationApi } from "@/api/ingredientCreation";
+import { ingredientApi } from "@/api/ingredients";
 import {
   applyRecognizedDraft,
   buildClosingSkuInput,
@@ -1308,23 +1412,20 @@ import {
   formatCostPreview,
   formatRatioText,
   shouldShowProcurementCard,
-  type ClosingFieldKey
-} from './procurementClosing'
-import { indexHtmlPathOf, isStaleBundle } from './staleBundle'
-import { nutritionFoodApi } from '@/api/ingredients'
-import {
-  ingredientTagApi,
-  type IngredientTag
-} from '@/api/ingredientTags'
-import { ADMIN_ONLY_TIP, useIsAdmin } from '@/composables/useAdminRole'
-import { useUserStore } from '@/store/user'
+  type ClosingFieldKey,
+} from "./procurementClosing";
+import { indexHtmlPathOf, isStaleBundle } from "./staleBundle";
+import { nutritionFoodApi } from "@/api/ingredients";
+import { ingredientTagApi, type IngredientTag } from "@/api/ingredientTags";
+import { ADMIN_ONLY_TIP, useIsAdmin } from "@/composables/useAdminRole";
+import { useUserStore } from "@/store/user";
 import {
   INGREDIENT_CARD_FIELDS,
   INGREDIENT_CARD_FIELD_GROUPS,
-  type IngredientCardFieldKey
-} from '@/constants/ingredientCardFields'
-import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
-import { getApiErrorMessage } from '@/utils/apiError'
+  type IngredientCardFieldKey,
+} from "@/constants/ingredientCardFields";
+import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from "@/constants/ingredientNutrition";
+import { getApiErrorMessage } from "@/utils/apiError";
 import {
   LINE_LABELS,
   applyLineAction,
@@ -1332,9 +1433,9 @@ import {
   resolveLineEntry,
   toLineEntryInput,
   type IngredientLine,
-  type LineEntryState
-} from './lineEntry'
-import SupplementFlow from './supplement/steps/SupplementFlow.vue'
+  type LineEntryState,
+} from "./lineEntry";
+import SupplementFlow from "./supplement/steps/SupplementFlow.vue";
 import type {
   AuthorizeBlockedReason,
   AuthorizeResult,
@@ -1346,8 +1447,8 @@ import type {
   IngredientCreationDraftPayload,
   IngredientDraftChecksView,
   ProfileDraft,
-  SearchPlan
-} from '@/types/ingredientCreation'
+  SearchPlan,
+} from "@/types/ingredientCreation";
 import {
   applyProfileCellEdit,
   countPlanConflicts,
@@ -1360,9 +1461,9 @@ import {
   type IngredientCardForm,
   type IngredientCardFormValue,
   type ProfileFieldRow,
-  type ProfileGroup
-} from './draftReview'
-import { toolLabel } from './stepView'
+  type ProfileGroup,
+} from "./draftReview";
+import { toolLabel } from "./stepView";
 import {
   checkDomainLabel,
   formatCheckedAt,
@@ -1370,24 +1471,24 @@ import {
   staleBannerText,
   toAuthorizeReasons,
   toCheckRunSummary,
-  toLocateTarget
-} from './checkReportView'
-import CheckReportDialog from './components/CheckReportDialog.vue'
+  toLocateTarget,
+} from "./checkReportView";
+import CheckReportDialog from "./components/CheckReportDialog.vue";
 import {
   buildIngredientCardCells,
   ingredientCellValuesEqual,
   isEmptyIngredientCardValue,
   selectOptionsForValue,
   toIngredientDraftFromCells,
-  type IngredientCardCell
-} from './ingredientCardView'
+  type IngredientCardCell,
+} from "./ingredientCardView";
 import {
   filterProfileRows,
   groupVisibleOnFilter,
   profileFilterCounts,
-  type ProfileFilterMode
-} from './profileFilters'
-import { COVERAGE_CATEGORY_OPTIONS } from './ingredientProfileRules'
+  type ProfileFilterMode,
+} from "./profileFilters";
+import { COVERAGE_CATEGORY_OPTIONS } from "./ingredientProfileRules";
 import {
   answerInputFromPendingQuestion,
   askOptionAiBadge,
@@ -1401,8 +1502,8 @@ import {
   type AgentRunReport,
   type AgentStreamMeta,
   type AgentStreamState,
-  type AgentStreamStep
-} from './agentStream'
+  type AgentStreamStep,
+} from "./agentStream";
 
 /**
  * Agent 审核页：
@@ -1413,32 +1514,34 @@ import {
  *   可例外项都已登记例外的报告，写入成功后才出现「确认可用」。
  */
 interface AgentRunRecord {
-  id: number
-  text: string
+  id: number;
+  text: string;
   /** 边跑边追加：step_start 先落一行「执行中」，step_end 改成成功 / 失败 */
-  steps: AgentStreamStep[]
-  reply: string | null
-  draftId: string | null
-  meta: AgentStreamMeta | null
+  steps: AgentStreamStep[];
+  reply: string | null;
+  draftId: string | null;
+  meta: AgentStreamMeta | null;
   /** 本轮运行报告：摘要行与展开区都靠它；旧后端为 null。 */
-  report: AgentRunReport | null
-  error: string | null
-  running: boolean
+  report: AgentRunReport | null;
+  error: string | null;
+  running: boolean;
   /** 本轮开始 / 结束时间：用于实时显示「已运行 N 秒」 */
-  startedAt: number
-  finishedAt: number | null
+  startedAt: number;
+  finishedAt: number | null;
 }
 
-const route = useRoute()
-const router = useRouter()
-const isAdmin = useIsAdmin()
-const userStore = useUserStore()
+const route = useRoute();
+const router = useRouter();
+const isAdmin = useIsAdmin();
+const userStore = useUserStore();
 
-const pageRef = ref<HTMLElement | null>(null)
-const inputText = ref('')
-const bodyRef = ref<HTMLElement | null>(null)
+const pageRef = ref<HTMLElement | null>(null);
+const inputText = ref(
+  typeof route.query.name === "string" ? route.query.name : "",
+);
+const bodyRef = ref<HTMLElement | null>(null);
 /** 点「都不对，我直接说」时把焦点放回输入框（自由输入，不把这句话当答案发出去）。 */
-const composerRef = ref<{ focus?: () => void } | null>(null)
+const composerRef = ref<{ focus?: () => void } | null>(null);
 const state = reactive({
   running: false,
   /** 上一轮成功返回的草稿 id；为空表示下一轮会新建草稿。 */
@@ -1450,8 +1553,8 @@ const state = reactive({
    */
   pendingQuestion: null as AgentPendingQuestion | null,
   /** AI 交了检索方案、等用户确认；确认前后端会拒绝写草稿。 */
-  pendingPlan: null as SearchPlan | null
-})
+  pendingPlan: null as SearchPlan | null,
+});
 
 /**
  * 方案卡上的可编辑副本。
@@ -1459,96 +1562,96 @@ const state = reactive({
  * 不能直接改 `state.pendingPlan`：那份是服务端推来的快照，确认时要拿它做
  * 「人改过没有」的对比，页面只改副本、提交时把副本发回去。
  */
-const planConfirming = ref(false)
-const planDismissing = ref(false)
+const planConfirming = ref(false);
+const planDismissing = ref(false);
 /** 只影响本次渲染的「收起」；不是跳过，方案仍然有效。 */
-const planCollapsed = ref(false)
+const planCollapsed = ref(false);
 /** 方案卡里勾中的候选记录 id（可多条，每条各写一份档案）。 */
-const selectedRecordIds = ref<string[]>([])
+const selectedRecordIds = ref<string[]>([]);
 
 watch(
   () => state.pendingPlan,
   (plan) => {
     if (!plan) {
-      return
+      return;
     }
-    selectedRecordIds.value = plan.selections.map((item) => item.recordId)
+    selectedRecordIds.value = plan.selections.map((item) => item.recordId);
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
 const selectedCandidates = computed(() =>
   (state.pendingPlan?.candidates ?? []).filter((candidate) =>
-    selectedRecordIds.value.includes(candidate.recordId)
-  )
-)
+    selectedRecordIds.value.includes(candidate.recordId),
+  ),
+);
 
 /** 同一来源库 + 同一状态下已经有别的记录被勾中 → 这一条不能再勾。 */
 function isCandidateDisabled(candidate: any) {
   if (selectedRecordIds.value.includes(candidate.recordId)) {
-    return false
+    return false;
   }
   return selectedCandidates.value.some(
     (picked) =>
       picked.sourceType === candidate.sourceType &&
-      picked.profileState === candidate.profileState
-  )
+      picked.profileState === candidate.profileState,
+  );
 }
 
 function toggleCandidate(candidate: any) {
-  const index = selectedRecordIds.value.indexOf(candidate.recordId)
+  const index = selectedRecordIds.value.indexOf(candidate.recordId);
   if (index >= 0) {
-    selectedRecordIds.value.splice(index, 1)
+    selectedRecordIds.value.splice(index, 1);
   } else {
-    selectedRecordIds.value.push(candidate.recordId)
+    selectedRecordIds.value.push(candidate.recordId);
   }
 }
 
 const planCanConfirm = computed(
-  () => selectedRecordIds.value.length > 0 && !planConfirming.value
-)
+  () => selectedRecordIds.value.length > 0 && !planConfirming.value,
+);
 
 /** 人确认方案 → 落库 → 自动继续一轮，让 AI 开始写。 */
 async function confirmPlan() {
-  const draftId = state.draftId
-  const plan = state.pendingPlan
+  const draftId = state.draftId;
+  const plan = state.pendingPlan;
   if (!draftId || !plan || !planCanConfirm.value) {
-    return
+    return;
   }
 
-  planConfirming.value = true
+  planConfirming.value = true;
   try {
     await ingredientCreationApi.confirmSearchPlan(draftId, {
-      selectedRecordIds: [...selectedRecordIds.value]
-    })
-    state.pendingPlan = null
-    const count = selectedRecordIds.value.length
-    inputText.value = `检索方案已确认：选中的 ${count} 条记录各写一份营养档案，profileIndex 从当前草稿的档案数开始递增，每条只用它自己的来源记录；写完调用 selfCheck。`
-    await handleRun()
+      selectedRecordIds: [...selectedRecordIds.value],
+    });
+    state.pendingPlan = null;
+    const count = selectedRecordIds.value.length;
+    inputText.value = `检索方案已确认：选中的 ${count} 条记录各写一份营养档案，profileIndex 从当前草稿的档案数开始递增，每条只用它自己的来源记录；写完调用 selfCheck。`;
+    await handleRun();
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '确认失败，请稍后重试'))
+    ElMessage.error(getApiErrorMessage(error, "确认失败，请稍后重试"));
   } finally {
-    planConfirming.value = false
+    planConfirming.value = false;
   }
 }
 
 /** 跳过当前待确认方案：清掉服务端方案，卡片消失，写工具仍需新方案确认。 */
 async function skipPlan() {
-  const draftId = state.draftId
+  const draftId = state.draftId;
   if (!draftId || planDismissing.value) {
-    return
+    return;
   }
-  planDismissing.value = true
+  planDismissing.value = true;
   try {
-    await ingredientCreationApi.dismissSearchPlan(draftId)
-    state.pendingPlan = null
-    planCollapsed.value = false
-    selectedRecordIds.value = []
-    ElMessage.success('已跳过当前检索方案，可以继续和 Agent 对话')
+    await ingredientCreationApi.dismissSearchPlan(draftId);
+    state.pendingPlan = null;
+    planCollapsed.value = false;
+    selectedRecordIds.value = [];
+    ElMessage.success("已跳过当前检索方案，可以继续和 Agent 对话");
   } catch (error) {
-    ElMessage.error(getApiErrorMessage(error, '跳过失败，请稍后重试'))
+    ElMessage.error(getApiErrorMessage(error, "跳过失败，请稍后重试"));
   } finally {
-    planDismissing.value = false
+    planDismissing.value = false;
   }
 }
 
@@ -1561,33 +1664,35 @@ async function skipPlan() {
 const entryState = reactive<LineEntryState>(
   // 入口预选**只消费一次**：之后 URL 不再参与判定，否则「改回食材」会被它拉回去。
   createLineEntryState(
-    typeof route.query.line === 'string' ? route.query.line : null
-  )
-)
+    typeof route.query.line === "string" ? route.query.line : null,
+  ),
+);
 
-const lineDecision = computed(() => resolveLineEntry(toLineEntryInput(entryState)))
-const line = computed(() => lineDecision.value.line)
+const lineDecision = computed(() =>
+  resolveLineEntry(toLineEntryInput(entryState)),
+);
+const line = computed(() => lineDecision.value.line);
 /** 还没建草稿、也没在跑，才允许改主意。 */
 const canSwitchLine = computed(
-  () => entryState.locked === null && !state.running && !state.draftId
-)
+  () => entryState.locked === null && !state.running && !state.draftId,
+);
 
 function pickLine(next: IngredientLine) {
   if (!canSwitchLine.value) {
-    return
+    return;
   }
   Object.assign(
     entryState,
-    applyLineAction(entryState, { type: 'PICK', line: next })
-  )
+    applyLineAction(entryState, { type: "PICK", line: next }),
+  );
 }
 
 /** 食材线返回起手卡；只在还没锁定的时候可用。 */
 function resetLine() {
   if (!canSwitchLine.value) {
-    return
+    return;
   }
-  Object.assign(entryState, applyLineAction(entryState, { type: 'RESET' }))
+  Object.assign(entryState, applyLineAction(entryState, { type: "RESET" }));
 }
 
 /**
@@ -1598,91 +1703,91 @@ function resetLine() {
  */
 const askOptionViews = computed(() =>
   (state.pendingQuestion?.options ?? []).map((label, index) => {
-    const check = state.pendingQuestion?.optionChecks?.[index]
-    const displayLabel = check?.displayLabel || label
+    const check = state.pendingQuestion?.optionChecks?.[index];
+    const displayLabel = check?.displayLabel || label;
     return {
       label,
       displayLabel,
       badge: pendingOptionBadge(check),
       // AI 判断与「你的选择」分开：上面是 AI 的参考意见，下面的按钮才是人点选的。
       aiBadge: askOptionAiBadge(check),
-      title: askOptionTitle(displayLabel, check?.matchedName ?? null)
-    }
-  })
-)
+      title: askOptionTitle(displayLabel, check?.matchedName ?? null),
+    };
+  }),
+);
 
 /**
  * 每秒推进一次的时钟：页面上「已运行 N 秒 / 已收到 M 步」会跟着跳，
  * 用来证明步骤是边跑边到的，而不是等最后一次性出现。
  */
-const clockNow = ref(Date.now())
-let clockTimer: ReturnType<typeof setInterval> | null = null
+const clockNow = ref(Date.now());
+let clockTimer: ReturnType<typeof setInterval> | null = null;
 
 function stopClock() {
   if (clockTimer) {
-    clearInterval(clockTimer)
-    clockTimer = null
+    clearInterval(clockTimer);
+    clockTimer = null;
   }
 }
 
 watch(
   () => state.running,
   (running) => {
-    stopClock()
+    stopClock();
     if (running) {
-      clockNow.value = Date.now()
+      clockNow.value = Date.now();
       clockTimer = setInterval(() => {
-        clockNow.value = Date.now()
-      }, 1000)
+        clockNow.value = Date.now();
+      }, 1000);
     }
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
-onUnmounted(stopClock)
+onUnmounted(stopClock);
 
-const draft = ref<IngredientCreationDraft | null>(null)
-const draftLoading = ref(false)
-const draftError = ref('')
-const activeTab = ref<'ingredient' | 'profiles'>('ingredient')
+const draft = ref<IngredientCreationDraft | null>(null);
+const draftLoading = ref(false);
+const draftError = ref("");
+const activeTab = ref<"ingredient" | "profiles">("ingredient");
 /** 营养档案筛子：全局一个模式，切换生 / 熟档案时计数跟着当前组走。 */
-const profileFilterMode = ref<ProfileFilterMode>('ALL')
+const profileFilterMode = ref<ProfileFilterMode>("ALL");
 
-const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null))
+const ingredientForm = reactive<IngredientCardForm>(toIngredientCard(null));
 /** 最近一次从后端读到的原料卡：用来判断人到底改了没有。 */
-const loadedCard = ref<IngredientCardForm | null>(null)
+const loadedCard = ref<IngredientCardForm | null>(null);
 
-const ingredientTags = ref<IngredientTag[]>([])
+const ingredientTags = ref<IngredientTag[]>([]);
 
 /** 两域最新报告 + 是否对应当前草稿；任何一次草稿保存后都要重新拉。 */
-const checksView = ref<IngredientDraftChecksView | null>(null)
+const checksView = ref<IngredientDraftChecksView | null>(null);
 /**
  * 本次载入草稿后是否成功保存过。
  *
  * 横幅靠它区分「这一页从没核验」和「改过之后还没核验」；
  * 换草稿 / 重新载入时归零，任何一次草稿 PATCH 成功后才置 true。
  */
-const draftTouched = ref(false)
-const checksLoading = ref(false)
-const checksError = ref('')
+const draftTouched = ref(false);
+const checksLoading = ref(false);
+const checksError = ref("");
 /** 并发 GET /checks 时只让最后一次落地，避免旧响应盖掉新报告。 */
-let checksSeq = 0
+let checksSeq = 0;
 
 /** 核验弹窗：只渲染与发事件，判定逻辑在 checkReportView.ts。 */
-const checkDialogVisible = ref(false)
-const checkDialogDomain = ref<CheckDomain>('INGREDIENT')
-const checkDialogRun = ref<CheckRunView | null>(null)
-const checkDialogLoading = ref(false)
-const checkDialogError = ref('')
-const savingException = ref(false)
+const checkDialogVisible = ref(false);
+const checkDialogDomain = ref<CheckDomain>("INGREDIENT");
+const checkDialogRun = ref<CheckRunView | null>(null);
+const checkDialogLoading = ref(false);
+const checkDialogError = ref("");
+const savingException = ref(false);
 
 /** 刚定位到的格子（原料 key 或营养 fieldPath），短暂高亮后自动熄灭。 */
-const locatedField = ref<string | null>(null)
-let locateTimer: ReturnType<typeof setTimeout> | null = null
+const locatedField = ref<string | null>(null);
+let locateTimer: ReturnType<typeof setTimeout> | null = null;
 
-const submitError = ref('')
-const submitting = ref(false)
-const commitResult = ref<AuthorizeResult | null>(null)
+const submitError = ref("");
+const submitting = ref(false);
+const commitResult = ref<AuthorizeResult | null>(null);
 
 /**
  * 收尾「补一条采购商品」（2026-11-07 成本口径归位）。
@@ -1691,48 +1796,49 @@ const commitResult = ref<AuthorizeResult | null>(null)
  * 不补商品 = 买不了 = 成本永远 0 = 食谱里按「免费」算。
  */
 const closingForm = reactive({
-  name: '',
-  purchaseChannel: '',
+  name: "",
+  purchaseChannel: "",
   // 单位默认留空：留成 '袋' 会被「只填空格子」的规则当成"人填过"，
   // AI 读到的「箱 / 瓶 / 包」就填不进来了（2026-11-08）。
-  purchaseUnit: '',
+  purchaseUnit: "",
   packCount: 1,
   netContentPerPack: undefined as number | undefined,
-  currentPurchasePrice: undefined as number | undefined
-})
+  currentPurchasePrice: undefined as number | undefined,
+});
 
 const closingBaseUnitLabel = computed(() => {
   // 草稿里的原料卡带 baseUnit；取不到时按克处理（食材绝大多数是克）
-  const baseUnit = (draft.value?.payload as any)?.ingredient?.baseUnit
-  return baseUnit === 'ML' ? 'ml' : 'g'
-})
+  const baseUnit = (draft.value?.payload as any)?.ingredient?.baseUnit;
+  return baseUnit === "ML" ? "ml" : "g";
+});
 const closingState = computed(() =>
   computeClosingState({
     pricePerPackage: closingForm.currentPurchasePrice ?? null,
     netContent: closingForm.netContentPerPack ?? null,
-    purchaseUnit: closingForm.purchaseUnit
-  })
-)
+    purchaseUnit: closingForm.purchaseUnit,
+  }),
+);
 const closingStateLabel = computed(() => {
-  if (closingState.value === 'READY') return '填好了，可以写入'
-  if (closingState.value === 'MISSING_UNIT') return '还差「采购单位」（袋 / 盒 / 箱）'
-  return '还差「每件净含量」和「这一件多少钱」'
-})
+  if (closingState.value === "READY") return "填好了，可以写入";
+  if (closingState.value === "MISSING_UNIT")
+    return "还差「采购单位」（袋 / 盒 / 箱）";
+  return "还差「每件净含量」和「这一件多少钱」";
+});
 const closingPreview = computed(() =>
   formatCostPreview(
     closingForm.currentPurchasePrice,
     closingForm.netContentPerPack,
-    closingBaseUnitLabel.value
-  )
-)
+    closingBaseUnitLabel.value,
+  ),
+);
 
 /** 采购商品卡片：缺字段时把视线带过去（卡片在按钮上方，但可能不在视口里）。 */
-const closingCardRef = ref<HTMLElement | null>(null)
+const closingCardRef = ref<HTMLElement | null>(null);
 
 /** 食材线：采购商品没填完，就不让点「授权写入正式库」。 */
 const closingReady = computed(
-  () => line.value !== 'FOOD' || closingState.value === 'READY'
-)
+  () => line.value !== "FOOD" || closingState.value === "READY",
+);
 
 /**
  * 商品详情页截图识别（2026-11-08）。
@@ -1741,43 +1847,43 @@ const closingReady = computed(
  * 读得出商品名、采购单位、一箱几件、每件净含量、单价、渠道；
  * 读不出的一律留空并进「待补」——绝不编数字（净含量错一次库存差几十倍）。
  */
-const shotInputRef = ref<HTMLInputElement | null>(null)
-const shotDragging = ref(false)
-const shotRecognizing = ref(false)
-const shotError = ref('')
-const shotMissing = ref<string[]>([])
-const shotSourceUrl = ref<string | null>(null)
-const closingAiFilled = ref<ClosingFieldKey[]>([])
-const closingLowConfidence = ref<string[]>([])
+const shotInputRef = ref<HTMLInputElement | null>(null);
+const shotDragging = ref(false);
+const shotRecognizing = ref(false);
+const shotError = ref("");
+const shotMissing = ref<string[]>([]);
+const shotSourceUrl = ref<string | null>(null);
+const closingAiFilled = ref<ClosingFieldKey[]>([]);
+const closingLowConfidence = ref<string[]>([]);
 
 /** 后端字段名 → 人话（「待补」清单用）。 */
 const SKU_FIELD_LABELS: Record<string, string> = {
-  name: '商品名称',
-  purchaseUnit: '采购单位',
-  packCount: '一箱几件',
-  netContentPerPack: '每件净含量',
-  currentPurchasePrice: '这一件多少钱',
-  purchaseChannel: '采购渠道'
-}
+  name: "商品名称",
+  purchaseUnit: "采购单位",
+  packCount: "一箱几件",
+  netContentPerPack: "每件净含量",
+  currentPurchasePrice: "这一件多少钱",
+  purchaseChannel: "采购渠道",
+};
 
 const shotMissingLabels = computed(() =>
   shotMissing.value
     .map((field) => SKU_FIELD_LABELS[field])
-    .filter((label): label is string => Boolean(label))
-)
+    .filter((label): label is string => Boolean(label)),
+);
 
 /** 拖拽区提示：识别过一张就提示可以再贴一张重新填。 */
 const shotDropHint = computed(() =>
   shotSourceUrl.value
-    ? '要么点这里换一张截图重新识别（已填的格子不会被覆盖）'
-    : '直接点这里选文件，或把截图拖进来 / 在页面上按 ⌘V 粘贴'
-)
+    ? "要么点这里换一张截图重新识别（已填的格子不会被覆盖）"
+    : "直接点这里选文件，或把截图拖进来 / 在页面上按 ⌘V 粘贴",
+);
 
 const isAiFilled = (field: ClosingFieldKey): boolean =>
-  closingAiFilled.value.includes(field)
+  closingAiFilled.value.includes(field);
 
 const isLowConfidence = (field: string): boolean =>
-  closingLowConfidence.value.includes(field)
+  closingLowConfidence.value.includes(field);
 
 /** 换算倍率的人话版：`24 件 × 330 ml → 一箱 = 7920 ml`，供人核对。 */
 const closingRatioText = computed(() =>
@@ -1785,42 +1891,42 @@ const closingRatioText = computed(() =>
     closingForm.packCount,
     closingForm.netContentPerPack,
     closingBaseUnitLabel.value,
-    closingForm.purchaseUnit
-  )
-)
+    closingForm.purchaseUnit,
+  ),
+);
 
 function pickScreenshot(): void {
-  if (shotRecognizing.value) return
-  shotInputRef.value?.click()
+  if (shotRecognizing.value) return;
+  shotInputRef.value?.click();
 }
 
 function handleScreenshotPick(event: Event): void {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  input.value = ''
-  if (file) void recognizeScreenshot(file)
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) void recognizeScreenshot(file);
 }
 
 function handleScreenshotDrop(event: DragEvent): void {
-  shotDragging.value = false
-  const file = event.dataTransfer?.files?.[0]
-  if (file && file.type.startsWith('image/')) {
-    void recognizeScreenshot(file)
+  shotDragging.value = false;
+  const file = event.dataTransfer?.files?.[0];
+  if (file && file.type.startsWith("image/")) {
+    void recognizeScreenshot(file);
   }
 }
 
 /** 在页面上直接粘贴截图（桌面端最顺手的一条路）。 */
 function handlePaste(event: ClipboardEvent): void {
-  if (commitResult.value || line.value !== 'FOOD' || shotRecognizing.value)
-    return
+  if (commitResult.value || line.value !== "FOOD" || shotRecognizing.value)
+    return;
 
   const item = Array.from(event.clipboardData?.items ?? []).find((entry) =>
-    entry.type.startsWith('image/')
-  )
-  const file = item?.getAsFile()
+    entry.type.startsWith("image/"),
+  );
+  const file = item?.getAsFile();
   if (file) {
-    event.preventDefault()
-    void recognizeScreenshot(file)
+    event.preventDefault();
+    void recognizeScreenshot(file);
   }
 }
 
@@ -1831,54 +1937,53 @@ function handlePaste(event: ClipboardEvent): void {
  * 识别失败只提示、不清空已填内容——手填永远可用。
  */
 async function recognizeScreenshot(file: File): Promise<void> {
-  const draftId = draft.value?.id
+  const draftId = draft.value?.id;
   if (!draftId) {
-    shotError.value = '还没有草稿，先让 AI 把原料写出来再识别截图'
-    return
+    shotError.value = "还没有草稿，先让 AI 把原料写出来再识别截图";
+    return;
   }
-  if (!file.type.startsWith('image/')) {
-    shotError.value = '请贴一张图片（商品详情页截图）'
-    return
+  if (!file.type.startsWith("image/")) {
+    shotError.value = "请贴一张图片（商品详情页截图）";
+    return;
   }
 
-  shotRecognizing.value = true
-  shotError.value = ''
+  shotRecognizing.value = true;
+  shotError.value = "";
   try {
-    const uploaded = await ingredientCreationApi.uploadProcurementSkuScreenshot(
-      file
-    )
+    const uploaded =
+      await ingredientCreationApi.uploadProcurementSkuScreenshot(file);
     const result = await ingredientCreationApi.recognizeProcurementSku(
       draftId,
-      uploaded.url
-    )
+      uploaded.url,
+    );
 
-    const recognized = result.draft
+    const recognized = result.draft;
     if (!recognized) {
       shotError.value =
-        '这张图没认出来（可能不是商品详情页），请换一张单个商品的详情页截图，或直接手动填写'
-      return
+        "这张图没认出来（可能不是商品详情页），请换一张单个商品的详情页截图，或直接手动填写";
+      return;
     }
 
-    const applied = applyRecognizedDraft(closingForm, recognized)
-    Object.assign(closingForm, applied.form)
-    closingAiFilled.value = applied.aiFilled
-    closingLowConfidence.value = applied.lowConfidence
-    shotMissing.value = applied.missing
-    shotSourceUrl.value = uploaded.url
+    const applied = applyRecognizedDraft(closingForm, recognized);
+    Object.assign(closingForm, applied.form);
+    closingAiFilled.value = applied.aiFilled;
+    closingLowConfidence.value = applied.lowConfidence;
+    shotMissing.value = applied.missing;
+    shotSourceUrl.value = uploaded.url;
 
     if (applied.aiFilled.length === 0) {
       shotError.value =
-        '这几格都已经有内容了，识别结果没有覆盖它们；要按截图重填，先清空对应格子再识别'
-      return
+        "这几格都已经有内容了，识别结果没有覆盖它们；要按截图重填，先清空对应格子再识别";
+      return;
     }
-    ElMessage.success('已按截图填好，请核对一遍带「AI 推测」的格子')
+    ElMessage.success("已按截图填好，请核对一遍带「AI 推测」的格子");
   } catch (error) {
     shotError.value = getApiErrorMessage(
       error,
-      '识别失败，请手动填写（不影响写入）'
-    )
+      "识别失败，请手动填写（不影响写入）",
+    );
   } finally {
-    shotRecognizing.value = false
+    shotRecognizing.value = false;
   }
 }
 
@@ -1890,17 +1995,17 @@ async function recognizeScreenshot(file: File): Promise<void> {
  * 判据只看「最新 index.html 的入口脚本 == 本页加载的那个」，
  * 纯判断在 ./staleBundle 里，这里只负责取与比。
  */
-const loadedEntrySrc = ref<string | null>(null)
-const staleBundle = ref(false)
-const STALE_CHECK_INTERVAL_MS = 30_000
-let staleCheckedAt = 0
+const loadedEntrySrc = ref<string | null>(null);
+const staleBundle = ref(false);
+const STALE_CHECK_INTERVAL_MS = 30_000;
+let staleCheckedAt = 0;
 
 /** 本页加载的入口脚本（构建产物里那个 type="module" 的<script>）。 */
 function readLoadedEntrySrc(): string | null {
   const script = document.querySelector<HTMLScriptElement>(
-    'script[type="module"][src]'
-  )
-  return script?.getAttribute('src') ?? null
+    'script[type="module"][src]',
+  );
+  return script?.getAttribute("src") ?? null;
 }
 
 /**
@@ -1909,21 +2014,24 @@ function readLoadedEntrySrc(): string | null {
  * 拉不到（断网 / 接口异常 / 解析不出）就保持原判断：宁可放过，不误拦。
  */
 async function checkBundleFreshness(force = false): Promise<void> {
-  if (!loadedEntrySrc.value) return
-  const now = Date.now()
-  if (!force && now - staleCheckedAt < STALE_CHECK_INTERVAL_MS) return
-  staleCheckedAt = now
+  if (!loadedEntrySrc.value) return;
+  const now = Date.now();
+  if (!force && now - staleCheckedAt < STALE_CHECK_INTERVAL_MS) return;
+  staleCheckedAt = now;
 
   // index.html 的位置由入口脚本推（SPA 路由下 baseURI 不是站点根）。
-  const indexPath = indexHtmlPathOf(loadedEntrySrc.value)
-  if (!indexPath) return
+  const indexPath = indexHtmlPathOf(loadedEntrySrc.value);
+  if (!indexPath) return;
 
   try {
     const response = await fetch(new URL(indexPath, window.location.origin), {
-      cache: 'no-store'
-    })
-    if (!response.ok) return
-    staleBundle.value = isStaleBundle(loadedEntrySrc.value, await response.text())
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    staleBundle.value = isStaleBundle(
+      loadedEntrySrc.value,
+      await response.text(),
+    );
   } catch {
     // 拿不到最新版本就不判旧页面
   }
@@ -1931,60 +2039,59 @@ async function checkBundleFreshness(force = false): Promise<void> {
 
 /** 回到这个标签页时再查一次（切走很久的情况最常见）。 */
 function handleBundleFreshnessCheck(): void {
-  if (document.visibilityState === 'hidden') return
-  void checkBundleFreshness()
+  if (document.visibilityState === "hidden") return;
+  void checkBundleFreshness();
 }
 
 function reloadForNewVersion(): void {
-  window.location.reload()
+  window.location.reload();
 }
 
+const verifyError = ref("");
+const verifying = ref(false);
+const verified = ref(false);
 
-const verifyError = ref('')
-const verifying = ref(false)
-const verified = ref(false)
+const saveError = ref("");
+const saveFailed = ref(false);
+const savingCount = ref(0);
+const pendingCells = reactive(new Map<string, number | null>());
+let saveQueue: Promise<void> = Promise.resolve();
 
-const saveError = ref('')
-const saveFailed = ref(false)
-const savingCount = ref(0)
-const pendingCells = reactive(new Map<string, number | null>())
-let saveQueue: Promise<void> = Promise.resolve()
+let runSeq = 0;
 
-let runSeq = 0
-
-const saving = computed(() => savingCount.value > 0)
+const saving = computed(() => savingCount.value > 0);
 
 const canRun = computed(
   () =>
-    line.value === 'FOOD' &&
+    line.value === "FOOD" &&
     !state.running &&
     !saving.value &&
     !commitResult.value &&
-    inputText.value.trim().length > 0
-)
+    inputText.value.trim().length > 0,
+);
 
 const runButtonLabel = computed(() =>
-  state.runs.length === 0 ? '开始' : '继续'
-)
+  state.runs.length === 0 ? "开始" : "继续",
+);
 
 const reviewVisible = computed(
   () =>
     Boolean(state.draftId) &&
-    Boolean(draft.value || draftLoading.value || draftError.value)
-)
+    Boolean(draft.value || draftLoading.value || draftError.value),
+);
 
 /**
  * 原料卡可见格子：值来自服务端草稿，人工标记来自当前表单。
  * 表单里的即时输入由各控件自己回显，保存成功后草稿更新，格子元数据跟着刷新。
  */
-const onlyAiWritten = ref(false)
+const onlyAiWritten = ref(false);
 
 const ingredientCells = computed(() =>
   buildIngredientCardCells(
     draft.value?.payload.ingredient ?? null,
-    ingredientForm.manualFields
-  )
-)
+    ingredientForm.manualFields,
+  ),
+);
 
 const ingredientCardGroups = computed(() =>
   INGREDIENT_CARD_FIELD_GROUPS.map((group) => ({
@@ -1995,119 +2102,116 @@ const ingredientCardGroups = computed(() =>
         cell.group === group.key &&
         cell.visible &&
         !cell.hidden &&
-        (!onlyAiWritten.value || cell.sourceLabel === 'AI')
-    )
-  })).filter((group) => group.cells.length > 0)
-)
+        (!onlyAiWritten.value || cell.sourceLabel === "AI"),
+    ),
+  })).filter((group) => group.cells.length > 0),
+);
 
 /** 有没保存成功的原料卡改动：刷新 / 关页前提醒，避免输入框还没失焦就丢掉。 */
 const hasUnsavedIngredientChanges = computed(() => {
   if (!loadedCard.value) {
-    return false
+    return false;
   }
   return (
     INGREDIENT_CARD_FIELDS.some((field) =>
-      isIngredientCellChanged(field.key)
+      isIngredientCellChanged(field.key),
     ) ||
     !ingredientCellValuesEqual(
       loadedCard.value.category,
-      ingredientForm.category
+      ingredientForm.category,
     ) ||
-    !ingredientCellValuesEqual(
-      loadedCard.value.tagIds,
-      ingredientForm.tagIds
-    )
-  )
-})
+    !ingredientCellValuesEqual(loadedCard.value.tagIds, ingredientForm.tagIds)
+  );
+});
 
 const sourceNames = computed(() => {
-  const map = new Map<string, string>()
-  const candidates = draft.value?.payload.candidates ?? []
+  const map = new Map<string, string>();
+  const candidates = draft.value?.payload.candidates ?? [];
   for (const candidate of candidates) {
     if (
       candidate &&
-      typeof candidate.sourceRecordId === 'string' &&
-      typeof candidate.foodName === 'string' &&
+      typeof candidate.sourceRecordId === "string" &&
+      typeof candidate.foodName === "string" &&
       candidate.foodName
     ) {
-      map.set(candidate.sourceRecordId, candidate.foodName)
+      map.set(candidate.sourceRecordId, candidate.foodName);
     }
   }
-  return map
-})
+  return map;
+});
 
 const profileGroups = computed<ProfileGroup[]>(() =>
-  toProfileRows(draft.value?.payload, sourceNames.value)
-)
+  toProfileRows(draft.value?.payload, sourceNames.value),
+);
 
 /**
  * 营养页当前可见的档案组：组内行按筛子过滤，整组没有可见行就不渲染。
  * 计数取过滤前的全量行，三个筛子的数字始终是这份档案的 60 项口径。
  */
 const visibleProfileGroups = computed(() => {
-  const mode = profileFilterMode.value
+  const mode = profileFilterMode.value;
   return profileGroups.value
     .filter((group) => groupVisibleOnFilter(group, mode))
     .map((group) => ({
       ...group,
       rows: filterProfileRows(group.rows, mode),
-      counts: profileFilterCounts(group.rows)
-    }))
-})
+      counts: profileFilterCounts(group.rows),
+    }));
+});
 
 const nutritionEmptyCount = computed(() =>
-  profileGroups.value.reduce((total, group) => total + group.pendingCount, 0)
-)
+  profileGroups.value.reduce((total, group) => total + group.pendingCount, 0),
+);
 const nutritionZeroCount = computed(() =>
-  profileGroups.value.reduce((total, group) => total + group.zeroCount, 0)
-)
+  profileGroups.value.reduce((total, group) => total + group.zeroCount, 0),
+);
 const nutritionReviewCount = computed(
-  () => nutritionEmptyCount.value + nutritionZeroCount.value
-)
-const conflictCount = computed(() =>
-  countPlanConflicts(draft.value?.payload)
-)
+  () => nutritionEmptyCount.value + nutritionZeroCount.value,
+);
+const conflictCount = computed(() => countPlanConflicts(draft.value?.payload));
 
 /** 两页摘要：`fresh` 只认服务端 GET /checks 的判断，不在前端重算哈希。 */
 const ingredientCheck = computed(() =>
   toCheckRunSummary(
     checksView.value?.ingredient ?? null,
-    checksView.value?.fresh.ingredient === true
-  )
-)
+    checksView.value?.fresh.ingredient === true,
+  ),
+);
 const nutritionCheck = computed(() =>
   toCheckRunSummary(
     checksView.value?.nutrition ?? null,
-    checksView.value?.fresh.nutrition === true
-  )
-)
+    checksView.value?.fresh.nutrition === true,
+  ),
+);
 
 /** 已登记例外的完整记录；授权确认里要连理由一起列出来（设计 §8.2）。 */
 const registeredExceptions = computed<ExceptionRecord[]>(() => {
-  const records = draft.value?.payload.verify?.exceptions ?? []
+  const records = draft.value?.payload.verify?.exceptions ?? [];
   return records.filter(
     (record): record is ExceptionRecord =>
       Boolean(record) &&
-      typeof record.code === 'string' &&
-      record.code.trim().length > 0
-  )
-})
+      typeof record.code === "string" &&
+      record.code.trim().length > 0,
+  );
+});
 
 /** 已登记例外的 code（去重）；弹窗据此标「已登记例外」。 */
 const exceptionCodes = computed<string[]>(() => [
   ...new Set(
-    registeredExceptions.value.map((record) => record.code.trim()).filter(Boolean)
-  )
-])
+    registeredExceptions.value
+      .map((record) => record.code.trim())
+      .filter(Boolean),
+  ),
+]);
 
 const gate = computed(() =>
   gateState({
     ingredient: ingredientCheck.value,
     nutrition: nutritionCheck.value,
     exceptions: draft.value?.payload.verify?.exceptions ?? [],
-    saving: saving.value
-  })
-)
+    saving: saving.value,
+  }),
+);
 
 const canAuthorize = computed(
   () =>
@@ -2116,8 +2220,8 @@ const canAuthorize = computed(
     !submitting.value &&
     !staleBundle.value &&
     closingReady.value &&
-    gate.value.ready
-)
+    gate.value.ready,
+);
 
 /**
  * 「采购商品」板块什么时候出现（2026-11-08 老板定）：
@@ -2125,47 +2229,52 @@ const canAuthorize = computed(
  */
 const showProcurementCard = computed(() =>
   shouldShowProcurementCard({
-    line: line.value ?? '',
+    line: line.value ?? "",
     hasDraft: Boolean(draft.value),
     hasIngredientBaseUnit: Boolean(
-      (draft.value?.payload as { ingredient?: { baseUnit?: unknown } } | undefined)
-        ?.ingredient?.baseUnit
+      (
+        draft.value?.payload as
+          { ingredient?: { baseUnit?: unknown } } | undefined
+      )?.ingredient?.baseUnit,
     ),
-    checksReady: gate.value.ready && !commitResult.value
-  })
-)
+    checksReady: gate.value.ready && !commitResult.value,
+  }),
+);
 
 // 板块刚出现时把它带进视口：它在草稿板块下方，窗口不高时可能在屏幕外。
 watch(showProcurementCard, (visible) => {
-  if (!visible) return
+  if (!visible) return;
   void nextTick(() => {
-    closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-  })
-})
+    closingCardRef.value?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+  });
+});
 
 const authorizeHint = computed(() => {
   if (commitResult.value) {
     return verified.value
-      ? '已确认可用，配方里现在能选到这些档案。'
-      : '已写入正式库；确认可用后才会进入配方链路。'
+      ? "已确认可用，配方里现在能选到这些档案。"
+      : "已写入正式库；确认可用后才会进入配方链路。";
   }
   // 旧页面先拦：这条不解决，点下去只会拿到一句跟页面无关的后端拒绝理由。
   if (staleBundle.value) {
-    return '这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入。'
+    return "这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入。";
   }
   if (checksLoading.value) {
-    return '正在读取两页的核验状态…'
+    return "正在读取两页的核验状态…";
   }
   if (!gate.value.ready) {
-    return gate.value.reasons[0] ?? '授权条件还没满足。'
+    return gate.value.reasons[0] ?? "授权条件还没满足。";
   }
   if (!closingReady.value) {
     return showProcurementCard.value
       ? `去下面把「采购商品」填完：${closingStateLabel.value}`
-      : '先把原料档案填完、两页核验通过，下方会出现「这条原料的采购商品」。'
+      : "先把原料档案填完、两页核验通过，下方会出现「这条原料的采购商品」。";
   }
-  return '授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。'
-})
+  return "授权前，所有内容只在草稿里；写入后原料与档案都是「待验证」。";
+});
 
 /**
  * 页签上的核验横幅：
@@ -2174,109 +2283,109 @@ const authorizeHint = computed(() => {
  * - 从没跑过 → 按本次载入后有没有保存过，说「还没核验」或「改动后还没核验」。
  */
 function staleNotice(domain: CheckDomain): string {
-  const view = checksView.value
+  const view = checksView.value;
   if (!view) {
-    return ''
+    return "";
   }
 
   const fresh =
-    domain === 'INGREDIENT' ? view.fresh.ingredient : view.fresh.nutrition
-  const run = domain === 'INGREDIENT' ? view.ingredient : view.nutrition
+    domain === "INGREDIENT" ? view.fresh.ingredient : view.fresh.nutrition;
+  const run = domain === "INGREDIENT" ? view.ingredient : view.nutrition;
   return staleBannerText({
     hasRun: Boolean(run),
     fresh,
-    touchedSinceLoad: draftTouched.value
-  })
+    touchedSinceLoad: draftTouched.value,
+  });
 }
 
 const checkDialogStale = computed(() => {
   if (!checkDialogRun.value) {
-    return false
+    return false;
   }
   // 拿不到 fresh 时按「过期」显示：宁可多提示一次重跑，也不让人误以为能授权。
-  return checkDialogDomain.value === 'INGREDIENT'
+  return checkDialogDomain.value === "INGREDIENT"
     ? checksView.value?.fresh.ingredient !== true
-    : checksView.value?.fresh.nutrition !== true
-})
+    : checksView.value?.fresh.nutrition !== true;
+});
 
 function stepTagType(
-  step: AgentStreamStep
-): 'info' | 'success' | 'warning' | 'danger' {
-  if (step.status === 'running') return 'info'
-  if (step.status === 'failed') return 'danger'
-  return step.found === false ? 'warning' : 'success'
+  step: AgentStreamStep,
+): "info" | "success" | "warning" | "danger" {
+  if (step.status === "running") return "info";
+  if (step.status === "failed") return "danger";
+  return step.found === false ? "warning" : "success";
 }
 
 function stepTagLabel(step: AgentStreamStep): string {
-  if (step.status === 'running') return '正在执行'
-  if (step.status === 'failed') return '失败'
-  return step.found === false ? '未找到' : '成功'
+  if (step.status === "running") return "正在执行";
+  if (step.status === "failed") return "失败";
+  return step.found === false ? "未找到" : "成功";
 }
 
 /** 后端 summary 已带中文动作（如「查本地库 西洋菜·生」），去掉与 label 重复的前缀。 */
 function stepSummary(step: AgentStreamStep): string {
-  const summary = step.summary.trim()
+  const summary = step.summary.trim();
   for (const prefix of [`调用 ${step.label}`, step.label]) {
     if (prefix && summary.startsWith(prefix)) {
-      return summary.slice(prefix.length).replace(/^[\s·:：-]+/, '')
+      return summary.slice(prefix.length).replace(/^[\s·:：-]+/, "");
     }
   }
-  return summary
+  return summary;
 }
 
 /** 本轮已运行秒数；结束后停在最终耗时，不再每秒重算。 */
 function runElapsedSeconds(run: AgentRunRecord): number {
-  const end = run.running ? clockNow.value : (run.finishedAt ?? clockNow.value)
-  return Math.max(0, Math.floor((end - run.startedAt) / 1000))
+  const end = run.running ? clockNow.value : (run.finishedAt ?? clockNow.value);
+  return Math.max(0, Math.floor((end - run.startedAt) / 1000));
 }
 
 function shortId(value: string): string {
-  return value.length > 12 ? `${value.slice(0, 8)}…` : value
+  return value.length > 12 ? `${value.slice(0, 8)}…` : value;
 }
 
 async function scrollToBottom() {
-  await nextTick()
-  const element = bodyRef.value
+  await nextTick();
+  const element = bodyRef.value;
   if (element) {
-    element.scrollTop = element.scrollHeight
+    element.scrollTop = element.scrollHeight;
   }
 }
 
-watch(() => state.runs.length, scrollToBottom)
-watch(() => state.running, scrollToBottom)
+watch(() => state.runs.length, scrollToBottom);
+watch(() => state.running, scrollToBottom);
 
 /** 关页 / 刷新时才拦（站内跳转靠失焦保存 + 保存队列兜底）。 */
 function handleBeforeUnload(event: BeforeUnloadEvent) {
   if (!hasUnsavedIngredientChanges.value) {
-    return
+    return;
   }
-  event.preventDefault()
-  event.returnValue = ''
+  event.preventDefault();
+  event.returnValue = "";
 }
 
 onMounted(() => {
-  void scrollToBottom()
-  void loadIngredientTags()
-  window.addEventListener('beforeunload', handleBeforeUnload)
+  void scrollToBottom();
+  void loadIngredientTags();
+  window.addEventListener("beforeunload", handleBeforeUnload);
 
   // 记下本页加载的入口脚本，并在回到标签页时看一眼是不是已经被新版顶掉。
-  loadedEntrySrc.value = readLoadedEntrySrc()
-  void checkBundleFreshness(true)
-  window.addEventListener('focus', handleBundleFreshnessCheck)
-  document.addEventListener('visibilitychange', handleBundleFreshnessCheck)
+  loadedEntrySrc.value = readLoadedEntrySrc();
+  void checkBundleFreshness(true);
+  window.addEventListener("focus", handleBundleFreshnessCheck);
+  document.addEventListener("visibilitychange", handleBundleFreshnessCheck);
 
   // 截图识别：桌面端最顺手的是直接 ⌘V 粘贴截图（2026-11-08）
-  window.addEventListener('paste', handlePaste)
-})
+  window.addEventListener("paste", handlePaste);
+});
 
 async function loadIngredientTags() {
   try {
-    ingredientTags.value = await ingredientTagApi.list()
+    ingredientTags.value = await ingredientTagApi.list();
   } catch {
     // 标签加载失败不阻断页面的其它操作；标签选择器会显示空列表。
-    ingredientTags.value = []
+    ingredientTags.value = [];
   }
-  hydrateTagIdsFromNames()
+  hydrateTagIdsFromNames();
 }
 
 /**
@@ -2284,54 +2393,52 @@ async function loadIngredientTags() {
  * 授权时才能把标签关联真正写进正式库。
  */
 function hydrateTagIdsFromNames() {
-  const ids = Array.isArray(ingredientForm.tagIds)
-    ? ingredientForm.tagIds
-    : []
+  const ids = Array.isArray(ingredientForm.tagIds) ? ingredientForm.tagIds : [];
   if (ids.length > 0 || ingredientTags.value.length === 0) {
-    return
+    return;
   }
   const names = Array.isArray(ingredientForm.tags)
     ? ingredientForm.tags.filter(
-        (name): name is string => typeof name === 'string'
+        (name): name is string => typeof name === "string",
       )
-    : []
+    : [];
   if (names.length === 0) {
-    return
+    return;
   }
   const mapped = ingredientTags.value
     .filter((tag) => names.includes(tag.name))
-    .map((tag) => tag.id)
+    .map((tag) => tag.id);
   if (mapped.length > 0) {
-    ingredientForm.tagIds = mapped
+    ingredientForm.tagIds = mapped;
   }
 }
 
-watch(ingredientTags, hydrateTagIdsFromNames)
+watch(ingredientTags, hydrateTagIdsFromNames);
 
 onBeforeUnmount(() => {
-  window.removeEventListener('beforeunload', handleBeforeUnload)
-  window.removeEventListener('focus', handleBundleFreshnessCheck)
-  document.removeEventListener('visibilitychange', handleBundleFreshnessCheck)
-  window.removeEventListener('paste', handlePaste)
+  window.removeEventListener("beforeunload", handleBeforeUnload);
+  window.removeEventListener("focus", handleBundleFreshnessCheck);
+  document.removeEventListener("visibilitychange", handleBundleFreshnessCheck);
+  window.removeEventListener("paste", handlePaste);
   if (locateTimer) {
-    clearTimeout(locateTimer)
-    locateTimer = null
+    clearTimeout(locateTimer);
+    locateTimer = null;
   }
-})
+});
 
 /** 后端返回的草稿统一在这里落状态；`resetForm` 只在首次加载/新一轮后使用。 */
 function applyDraft(
   updated: IngredientCreationDraft,
-  options: { resetForm?: boolean } = {}
+  options: { resetForm?: boolean } = {},
 ) {
-  draft.value = updated
-  loadedCard.value = toIngredientCard(updated.payload, updated.name)
+  draft.value = updated;
+  loadedCard.value = toIngredientCard(updated.payload, updated.name);
 
   if (options.resetForm) {
-    Object.assign(ingredientForm, loadedCard.value)
-    pendingCells.clear()
+    Object.assign(ingredientForm, loadedCard.value);
+    pendingCells.clear();
   }
-  hydrateTagIdsFromNames()
+  hydrateTagIdsFromNames();
 }
 
 /**
@@ -2342,35 +2449,35 @@ function applyDraft(
  * 草稿保存标成失败。
  */
 async function refreshChecks(
-  draftId?: string
+  draftId?: string,
 ): Promise<IngredientDraftChecksView | null> {
-  const id = draftId ?? draft.value?.id
+  const id = draftId ?? draft.value?.id;
   if (!id) {
-    checksView.value = null
-    return null
+    checksView.value = null;
+    return null;
   }
 
-  const seq = ++checksSeq
-  checksLoading.value = true
-  checksError.value = ''
+  const seq = ++checksSeq;
+  checksLoading.value = true;
+  checksError.value = "";
 
   try {
-    const view = await ingredientCreationApi.getDraftChecks(id)
+    const view = await ingredientCreationApi.getDraftChecks(id);
     if (seq === checksSeq && draft.value?.id === id) {
-      checksView.value = view
+      checksView.value = view;
     }
-    return view
+    return view;
   } catch (error) {
     if (seq === checksSeq) {
       checksError.value = getApiErrorMessage(
         error,
-        '核验报告加载失败，请稍后重试'
-      )
+        "核验报告加载失败，请稍后重试",
+      );
     }
-    return null
+    return null;
   } finally {
     if (seq === checksSeq) {
-      checksLoading.value = false
+      checksLoading.value = false;
     }
   }
 }
@@ -2382,56 +2489,56 @@ async function refreshChecks(
  * fresh=true 放行；页签横幅会如实说报告已过期。
  */
 function markChecksStale() {
-  const view = checksView.value
+  const view = checksView.value;
   if (!view) {
-    return
+    return;
   }
   checksView.value = {
     ...view,
-    fresh: { ingredient: false, nutrition: false }
-  }
+    fresh: { ingredient: false, nutrition: false },
+  };
 }
 
 async function loadDraft(draftId: string) {
-  draftLoading.value = true
-  draftError.value = ''
+  draftLoading.value = true;
+  draftError.value = "";
   // 换草稿时先清掉上一份的报告，避免用别人的 fresh 判定这一页。
-  checksView.value = null
+  checksView.value = null;
   // 上一份草稿的「改过」不能带过来：新草稿载入后先按「这一页还没核验」说。
-  draftTouched.value = false
+  draftTouched.value = false;
   try {
-    const updated = await ingredientCreationApi.getDraft(draftId)
-    applyDraft(updated, { resetForm: true })
+    const updated = await ingredientCreationApi.getDraft(draftId);
+    applyDraft(updated, { resetForm: true });
     // 非流式路径：刷新 / 直接读草稿时，payload.pendingQuestion 也要恢复成
     // 「等你回答」，否则页面会像什么都没问过一样。
-    state.draftId = updated.id
+    state.draftId = updated.id;
     state.pendingQuestion = readPendingQuestion(
-      updated.payload.pendingQuestion
-    )
-    await refreshChecks(draftId)
+      updated.payload.pendingQuestion,
+    );
+    await refreshChecks(draftId);
   } catch (error) {
-    draftError.value = getApiErrorMessage(error, '草稿加载失败，请稍后重试')
+    draftError.value = getApiErrorMessage(error, "草稿加载失败，请稍后重试");
   } finally {
-    draftLoading.value = false
+    draftLoading.value = false;
   }
 }
 
 async function handleRun() {
   // 线路没定、或者选了补剂，一个请求都不发：闸门不是提示，是硬拦。
-  if (line.value !== 'FOOD') {
-    return
+  if (line.value !== "FOOD") {
+    return;
   }
-  const text = inputText.value.trim()
+  const text = inputText.value.trim();
   if (!text || state.running || saving.value || commitResult.value) {
-    return
+    return;
   }
-  const sentLine = line.value
+  const sentLine = line.value;
 
-  inputText.value = ''
+  inputText.value = "";
   // 这一句要么是新指令，要么是在回答上一轮的问题；两种情况问题都已消费。
-  state.pendingQuestion = null
-  state.pendingPlan = null
-  state.running = true
+  state.pendingQuestion = null;
+  state.pendingPlan = null;
+  state.running = true;
   const run = reactive<AgentRunRecord>({
     id: ++runSeq,
     text,
@@ -2443,24 +2550,24 @@ async function handleRun() {
     error: null,
     running: true,
     startedAt: Date.now(),
-    finishedAt: null
-  })
-  state.runs.push(run)
-  await scrollToBottom()
+    finishedAt: null,
+  });
+  state.runs.push(run);
+  await scrollToBottom();
 
   const applyState = (next: AgentStreamState) => {
-    run.steps = next.steps
-    run.reply = next.reply
-    run.draftId = next.draftId
-    run.meta = next.meta
-    run.report = next.report
-    run.error = next.error
-    state.pendingQuestion = next.pendingQuestion
-    state.pendingPlan = next.pendingPlan
+    run.steps = next.steps;
+    run.reply = next.reply;
+    run.draftId = next.draftId;
+    run.meta = next.meta;
+    run.report = next.report;
+    run.error = next.error;
+    state.pendingQuestion = next.pendingQuestion;
+    state.pendingPlan = next.pendingPlan;
     if (next.draftId) {
-      state.draftId = next.draftId
+      state.draftId = next.draftId;
     }
-  }
+  };
 
   try {
     // 直接读 ReadableStream：step_start 一到就渲染「执行中」，
@@ -2469,40 +2576,40 @@ async function handleRun() {
       {
         ...(state.draftId ? { draftId: state.draftId } : {}),
         text,
-        ...(sentLine ? { line: sentLine } : {})
+        ...(sentLine ? { line: sentLine } : {}),
       },
       {
         onState: (next) => {
-          applyState(next)
-          void scrollToBottom()
-        }
-      }
-    )
-    applyState(finalState)
+          applyState(next);
+          void scrollToBottom();
+        },
+      },
+    );
+    applyState(finalState);
     if (finalState.draftId) {
       // 草稿一建出来，线路就定了：之后只能另起一份，不能在这半页里改。
       if (sentLine) {
         Object.assign(
           entryState,
-          applyLineAction(entryState, { type: 'LOCK', line: sentLine })
-        )
+          applyLineAction(entryState, { type: "LOCK", line: sentLine }),
+        );
       }
       // 每跑完一轮都重新读草稿：右边两个标签永远显示服务端最新版本。
-      await loadDraft(finalState.draftId)
+      await loadDraft(finalState.draftId);
       // Agent 正常写完（不是在等方案确认）时自动跑两页核验；
       // 报告仍分域落库，授权仍由人点。
       if (!state.pendingPlan) {
-        void autoRunChecks(finalState.draftId)
+        void autoRunChecks(finalState.draftId);
       }
     }
   } catch (error) {
     // 流式函数本身不抛错；这里是防御性兜底，且不清空已经收到的步骤。
-    run.error = getApiErrorMessage(error, '流式请求失败，已保留收到的步骤。')
+    run.error = getApiErrorMessage(error, "流式请求失败，已保留收到的步骤。");
   } finally {
-    run.finishedAt = Date.now()
-    run.running = false
-    state.running = false
-    await scrollToBottom()
+    run.finishedAt = Date.now();
+    run.running = false;
+    state.running = false;
+    await scrollToBottom();
   }
 }
 
@@ -2514,34 +2621,34 @@ async function handleRun() {
  */
 async function handleAnswerOption(option: string) {
   if (state.running || saving.value || commitResult.value) {
-    return
+    return;
   }
-  const input = answerInputFromPendingQuestion(state, option)
+  const input = answerInputFromPendingQuestion(state, option);
   if (!input) {
-    return
+    return;
   }
   // 点之前按钮上已经有「未收录」小标和文案后缀；点之后再明确一次预期：
   // 这一轮会去线上找，线上也没有就留空，不会拿编造的数值凑。
   const check = state.pendingQuestion?.optionChecks?.find(
-    (entry) => entry.label === option
-  )
+    (entry) => entry.label === option,
+  );
   if (check?.inLibrary === false) {
     ElMessage.info(
-      '这个选项库里未收录：本轮会去线上检索；线上也没有就先留空待补。'
-    )
+      "这个选项库里未收录：本轮会去线上检索；线上也没有就先留空待补。",
+    );
   }
   // 兜底选项是「自由输入」入口：不把这句话当答案发给 AI，
   // 收起问题卡片、把光标放回输入框，让用户直接说自己的叫法。
-  if (check?.kind === 'FREE') {
-    state.pendingQuestion = null
-    await nextTick()
-    composerRef.value?.focus?.()
-    ElMessage.info('直接输入你要用的名称即可。')
-    return
+  if (check?.kind === "FREE") {
+    state.pendingQuestion = null;
+    await nextTick();
+    composerRef.value?.focus?.();
+    ElMessage.info("直接输入你要用的名称即可。");
+    return;
   }
-  state.pendingQuestion = null
-  inputText.value = input.text
-  await handleRun()
+  state.pendingQuestion = null;
+  inputText.value = input.text;
+  await handleRun();
 }
 
 /**
@@ -2550,157 +2657,161 @@ async function handleAnswerOption(option: string) {
  */
 function enqueueSave(task: () => Promise<void>): Promise<boolean> {
   const run = saveQueue.then(async () => {
-    savingCount.value += 1
-    saveError.value = ''
-    saveFailed.value = false
+    savingCount.value += 1;
+    saveError.value = "";
+    saveFailed.value = false;
     try {
-      await task()
-      return true
+      await task();
+      return true;
     } catch (error) {
-      saveFailed.value = true
-      saveError.value = getApiErrorMessage(error, '保存草稿失败，请稍后重试')
-      return false
+      saveFailed.value = true;
+      saveError.value = getApiErrorMessage(error, "保存草稿失败，请稍后重试");
+      return false;
     } finally {
-      savingCount.value -= 1
+      savingCount.value -= 1;
     }
-  })
+  });
 
-  saveQueue = run.then(() => undefined)
-  return run
+  saveQueue = run.then(() => undefined);
+  return run;
 }
 
 /** 一格在表单里的当前值（展示口径）。 */
 function ingredientTextValue(key: IngredientCardFieldKey): string {
-  const value = ingredientForm[key]
-  return typeof value === 'string' ? value : ''
+  const value = ingredientForm[key];
+  return typeof value === "string" ? value : "";
 }
 
 function ingredientCellText(cell: IngredientCardCell): string {
-  return ingredientTextValue(cell.key)
+  return ingredientTextValue(cell.key);
 }
 
 function ingredientCellNumber(cell: IngredientCardCell): number | undefined {
-  const value = ingredientForm[cell.key]
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+  const value = ingredientForm[cell.key];
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function ingredientCellBoolean(cell: IngredientCardCell): boolean | null {
-  const value = ingredientForm[cell.key]
-  return typeof value === 'boolean' ? value : null
+  const value = ingredientForm[cell.key];
+  return typeof value === "boolean" ? value : null;
 }
 
 function ingredientCellTags(cell: IngredientCardCell): string[] {
-  const value = ingredientForm[cell.key]
+  const value = ingredientForm[cell.key];
   const names = Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === 'string')
-    : []
-  if (cell.key === 'tags' && names.length === 0) {
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+  if (cell.key === "tags" && names.length === 0) {
     // 新草稿可能只有 tagIds：用标签表把 id 翻成名字，供展示与「AI/人工」标记。
-    const ids = ingredientForm.tagIds
+    const ids = ingredientForm.tagIds;
     if (Array.isArray(ids) && ids.length > 0) {
       return ingredientTags.value
         .filter((tag) => ids.includes(tag.id))
-        .map((tag) => tag.name)
+        .map((tag) => tag.name);
     }
   }
-  return names
+  return names;
 }
 
 function ingredientCellTagIds(cell: IngredientCardCell): string[] {
-  const ids = ingredientForm.tagIds
+  const ids = ingredientForm.tagIds;
   if (Array.isArray(ids)) {
     const cleaned = ids
-      .filter((item): item is string => typeof item === 'string')
+      .filter((item): item is string => typeof item === "string")
       .map((item) => item.trim())
-      .filter(Boolean)
+      .filter(Boolean);
     if (cleaned.length > 0) {
-      return cleaned
+      return cleaned;
     }
   }
   // 旧草稿只有标签名：按名字找回 id，保证下拉能回显。
-  const names = ingredientCellTags(cell)
+  const names = ingredientCellTags(cell);
   return ingredientTags.value
     .filter((tag) => names.includes(tag.name))
-    .map((tag) => tag.id)
+    .map((tag) => tag.id);
 }
 
 function handleIngredientTagChange(value: unknown) {
   const ids = Array.isArray(value)
     ? value
-        .filter((item): item is string => typeof item === 'string')
+        .filter((item): item is string => typeof item === "string")
         .map((item) => item.trim())
         .filter(Boolean)
-    : []
-  ingredientForm.tagIds = ids
+    : [];
+  ingredientForm.tagIds = ids;
   ingredientForm.tags = ingredientTags.value
     .filter((tag) => ids.includes(tag.id))
-    .map((tag) => tag.name)
-  void saveIngredientCell('tags')
+    .map((tag) => tag.name);
+  void saveIngredientCell("tags");
 }
 
 function ingredientCellOptions(
-  cell: IngredientCardCell
+  cell: IngredientCardCell,
 ): { label: string; value: string }[] {
-  return selectOptionsForValue(cell.options, ingredientForm[cell.key])
+  return selectOptionsForValue(cell.options, ingredientForm[cell.key]);
 }
 
 function ingredientCellMin(cell: IngredientCardCell): number {
-  if (cell.key === 'edibleYieldPercent') {
-    return 10
+  if (cell.key === "edibleYieldPercent") {
+    return 10;
   }
-  if (cell.key === 'densityGPerMl') {
-    return 0.1
+  if (cell.key === "densityGPerMl") {
+    return 0.1;
   }
-  if (cell.key === 'weightG') {
-    return 0.1
+  if (cell.key === "weightG") {
+    return 0.1;
   }
-  return 0
+  return 0;
 }
 
 function ingredientCellMax(cell: IngredientCardCell): number | undefined {
-  if (cell.key === 'edibleYieldPercent') {
-    return 100
+  if (cell.key === "edibleYieldPercent") {
+    return 100;
   }
-  if (cell.key === 'densityGPerMl') {
-    return 10
+  if (cell.key === "densityGPerMl") {
+    return 10;
   }
-  return undefined
+  return undefined;
 }
 
 function ingredientCellPrecision(cell: IngredientCardCell): number | undefined {
-  if (cell.key === 'edibleYieldPercent' || cell.key === 'weightG') {
-    return 1
+  if (cell.key === "edibleYieldPercent" || cell.key === "weightG") {
+    return 1;
   }
-  if (cell.key === 'densityGPerMl') {
-    return 3
+  if (cell.key === "densityGPerMl") {
+    return 3;
   }
-  return undefined
+  return undefined;
 }
 
 /** 与后端 DTO 的长度上限一致，避免输入时就注定 400。 */
 function ingredientCellMaxlength(cell: IngredientCardCell): number {
   switch (cell.key) {
-    case 'name':
-      return 100
-    case 'unitDisplayLabel':
-      return 20
-    case 'mainNutrientsDesc':
-    case 'notes':
-      return 200
-    case 'labelNameSource':
-      return 120
+    case "name":
+      return 100;
+    case "unitDisplayLabel":
+      return 20;
+    case "mainNutrientsDesc":
+    case "notes":
+      return 200;
+    case "labelNameSource":
+      return 120;
     default:
-      return 500
+      return 500;
   }
 }
 
 function isIngredientCellEmpty(cell: IngredientCardCell): boolean {
-  return isEmptyIngredientCardValue(ingredientForm[cell.key])
+  return isEmptyIngredientCardValue(ingredientForm[cell.key]);
 }
 
 function isIngredientCellClearable(cell: IngredientCardCell): boolean {
   // 类型与基准单位是建原料的必填项，不给清空；其余可选枚举允许清回空。
-  return cell.kind === 'select' && cell.key !== 'type' && cell.key !== 'baseUnit'
+  return (
+    cell.kind === "select" && cell.key !== "type" && cell.key !== "baseUnit"
+  );
 }
 
 /**
@@ -2715,7 +2826,7 @@ function isIngredientCellDisabled(cell: IngredientCardCell): boolean {
     Boolean(commitResult.value) ||
     saving.value ||
     submitting.value
-  )
+  );
 }
 
 /**
@@ -2726,60 +2837,60 @@ function isIngredientCellDisabled(cell: IngredientCardCell): boolean {
  */
 function setIngredientCellValue(
   key: IngredientCardFieldKey,
-  value: IngredientCardFormValue
+  value: IngredientCardFormValue,
 ) {
   const target = ingredientForm as unknown as Record<
     string,
     IngredientCardFormValue
-  >
-  target[key] = value
+  >;
+  target[key] = value;
 }
 
 function setIngredientCellTextValue(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellValue(key, typeof value === 'string' ? value : '')
+  setIngredientCellValue(key, typeof value === "string" ? value : "");
 }
 
 function setIngredientCellNumberValue(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
   setIngredientCellValue(
     key,
-    typeof value === 'number' && Number.isFinite(value) ? value : null
-  )
+    typeof value === "number" && Number.isFinite(value) ? value : null,
+  );
 }
 
 function setIngredientCellBooleanValue(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellValue(key, typeof value === 'boolean' ? value : null)
+  setIngredientCellValue(key, typeof value === "boolean" ? value : null);
 }
 
 function setIngredientCellListValue(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
   setIngredientCellValue(
     key,
     Array.isArray(value)
       ? value
-          .filter((item): item is string => typeof item === 'string')
+          .filter((item): item is string => typeof item === "string")
           .map((item) => item.trim())
           .filter(Boolean)
-      : []
-  )
+      : [],
+  );
 }
 
 function isIngredientCellChanged(key: IngredientCardFieldKey): boolean {
-  const before = loadedCard.value
+  const before = loadedCard.value;
   if (!before) {
-    return true
+    return true;
   }
-  return !ingredientCellValuesEqual(before[key], ingredientForm[key])
+  return !ingredientCellValuesEqual(before[key], ingredientForm[key]);
 }
 
 /**
@@ -2790,15 +2901,15 @@ function isIngredientCellChanged(key: IngredientCardFieldKey): boolean {
  */
 async function saveIngredientCell(key: IngredientCardFieldKey) {
   if (!draft.value || commitResult.value) {
-    return
+    return;
   }
   if (!isIngredientCellChanged(key)) {
-    return
+    return;
   }
 
-  const marked = markIngredientFieldManual(ingredientForm, key)
-  ingredientForm.manualFields = marked.manualFields
-  await persistIngredientCard()
+  const marked = markIngredientFieldManual(ingredientForm, key);
+  ingredientForm.manualFields = marked.manualFields;
+  await persistIngredientCard();
 }
 
 /**
@@ -2806,161 +2917,161 @@ async function saveIngredientCell(key: IngredientCardFieldKey) {
  * 但改完同样要整卡 PATCH（浅替换会把 ingredient 整块覆盖）。
  */
 function handleCategoryChange(value: unknown) {
-  ingredientForm.category = typeof value === 'string' ? value : ''
+  ingredientForm.category = typeof value === "string" ? value : "";
   // 人的类别判断要进人工白名单，AI 之后再写原料卡时不能覆盖它。
-  if (!ingredientForm.manualFields.includes('category')) {
-    ingredientForm.manualFields = [...ingredientForm.manualFields, 'category']
+  if (!ingredientForm.manualFields.includes("category")) {
+    ingredientForm.manualFields = [...ingredientForm.manualFields, "category"];
   }
-  void saveIngredientCategory()
+  void saveIngredientCategory();
 }
 
 async function saveIngredientCategory() {
   if (!draft.value || commitResult.value) {
-    return
+    return;
   }
   if (
     ingredientCellValuesEqual(
       loadedCard.value?.category,
-      ingredientForm.category
+      ingredientForm.category,
     )
   ) {
-    return
+    return;
   }
-  await persistIngredientCard()
+  await persistIngredientCard();
 }
 
 async function persistIngredientCard() {
   if (!draft.value || commitResult.value) {
-    return
+    return;
   }
   const ingredient = toIngredientDraftFromCells(
     draft.value.payload.ingredient,
-    ingredientForm
-  )
-  const draftId = draft.value.id
-  const step = draft.value.step
+    ingredientForm,
+  );
+  const draftId = draft.value.id;
+  const step = draft.value.step;
 
   await enqueueSave(async () => {
     const updated = await ingredientCreationApi.patchDraft(draftId, step, {
-      ingredient
-    })
-    draft.value = updated
+      ingredient,
+    });
+    draft.value = updated;
     // 保存成功才说明这一页被改过：横幅据此区分「还没核验」与「改动后还没核验」。
-    draftTouched.value = true
+    draftTouched.value = true;
     // 服务端会 trim 字符串、把目录外枚举收敛成空；把归一化结果回写表单，
     // 否则表单会长期「看起来有改动」，刷新提示也一直挂着。
-    const nextCard = toIngredientCard(updated.payload, updated.name)
-    loadedCard.value = nextCard
-    Object.assign(ingredientForm, nextCard)
+    const nextCard = toIngredientCard(updated.payload, updated.name);
+    loadedCard.value = nextCard;
+    Object.assign(ingredientForm, nextCard);
     // 草稿一变，两页报告就过期了：先本地置灰，再刷新页签横幅与授权按钮。
-    markChecksStale()
-    await refreshChecks(updated.id)
-  })
+    markChecksStale();
+    await refreshChecks(updated.id);
+  });
 }
 
 function handleIngredientTextChange(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellTextValue(key, value)
-  void saveIngredientCell(key)
+  setIngredientCellTextValue(key, value);
+  void saveIngredientCell(key);
 }
 
 function handleIngredientSelectChange(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellTextValue(key, value)
-  void saveIngredientCell(key)
+  setIngredientCellTextValue(key, value);
+  void saveIngredientCell(key);
 }
 
 function handleIngredientNumberChange(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellNumberValue(key, value)
-  void saveIngredientCell(key)
+  setIngredientCellNumberValue(key, value);
+  void saveIngredientCell(key);
 }
 
 function handleIngredientBooleanChange(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellBooleanValue(key, value)
-  void saveIngredientCell(key)
+  setIngredientCellBooleanValue(key, value);
+  void saveIngredientCell(key);
 }
 
 function handleIngredientListChange(
   key: IngredientCardFieldKey,
-  value: unknown
+  value: unknown,
 ) {
-  setIngredientCellListValue(key, value)
-  void saveIngredientCell(key)
+  setIngredientCellListValue(key, value);
+  void saveIngredientCell(key);
 }
 
 function cellKey(profileIndex: number, fieldPath: string): string {
-  return `${profileIndex}:${fieldPath}`
+  return `${profileIndex}:${fieldPath}`;
 }
 
 /** 乐观显示刚输入的值；PATCH 成功后以服务端返回为准。 */
 function cellValue(profileIndex: number, row: ProfileFieldRow): number | null {
-  const key = cellKey(profileIndex, row.fieldPath)
-  return pendingCells.has(key) ? pendingCells.get(key)! : row.value
+  const key = cellKey(profileIndex, row.fieldPath);
+  return pendingCells.has(key) ? pendingCells.get(key)! : row.value;
 }
 
 async function handleCellChange(
   profileIndex: number,
   row: ProfileFieldRow,
-  value: number | undefined
+  value: number | undefined,
 ) {
   if (!draft.value || commitResult.value) {
-    return
+    return;
   }
 
   const nextValue =
-    typeof value === 'number' && Number.isFinite(value) ? value : null
-  const key = cellKey(profileIndex, row.fieldPath)
+    typeof value === "number" && Number.isFinite(value) ? value : null;
+  const key = cellKey(profileIndex, row.fieldPath);
   if (row.value === nextValue && !pendingCells.has(key)) {
-    return
+    return;
   }
 
-  pendingCells.set(key, nextValue)
+  pendingCells.set(key, nextValue);
 
-  const draftId = draft.value.id
-  const step = draft.value.step
+  const draftId = draft.value.id;
+  const step = draft.value.step;
   const ok = await enqueueSave(async () => {
     const profiles = applyProfileCellEdit(
       draft.value?.payload.profiles ?? [],
       profileIndex,
       row.fieldPath,
-      nextValue
-    )
+      nextValue,
+    );
     const updated = await ingredientCreationApi.patchDraft(draftId, step, {
-      profiles
-    })
-    draft.value = updated
-    pendingCells.delete(key)
-    draftTouched.value = true
+      profiles,
+    });
+    draft.value = updated;
+    pendingCells.delete(key);
+    draftTouched.value = true;
     // 营养页改一格也会让两页报告同时过期。
-    markChecksStale()
-    await refreshChecks(updated.id)
-  })
+    markChecksStale();
+    await refreshChecks(updated.id);
+  });
 
   if (!ok) {
-    pendingCells.delete(key)
+    pendingCells.delete(key);
   }
 }
 
 function selectProfileFilter(mode: ProfileFilterMode) {
-  profileFilterMode.value = mode
+  profileFilterMode.value = mode;
 }
 
 /** el-radio-group 的值是 string | number | boolean，只认三个已知模式。 */
 function handleProfileFilterChange(
-  value: string | number | boolean | undefined
+  value: string | number | boolean | undefined,
 ) {
-  if (value === 'ALL' || value === 'FILLED' || value === 'MISSING') {
-    profileFilterMode.value = value
+  if (value === "ALL" || value === "FILLED" || value === "MISSING") {
+    profileFilterMode.value = value;
   }
 }
 
@@ -2968,8 +3079,8 @@ function tabSections(group: ProfileGroup) {
   return INGREDIENT_NUTRITION_TAB_DEFINITIONS.map((tab) => ({
     key: tab.key,
     label: tab.label,
-    rows: group.rows.filter((row) => row.tabKey === tab.key)
-  })).filter((section) => section.rows.length > 0)
+    rows: group.rows.filter((row) => row.tabKey === tab.key),
+  })).filter((section) => section.rows.length > 0);
 }
 
 /**
@@ -2980,92 +3091,92 @@ function tabSections(group: ProfileGroup) {
  * 事后就追不到是谁批的例外了。
  */
 function currentApprover(): string {
-  const info = userStore.userInfo
-  const name = typeof info?.username === 'string' ? info.username.trim() : ''
+  const info = userStore.userInfo;
+  const name = typeof info?.username === "string" ? info.username.trim() : "";
   if (name) {
-    return name
+    return name;
   }
 
-  const userId = info?.userId
-  if (typeof userId === 'string' && userId.trim()) {
-    return userId.trim()
+  const userId = info?.userId;
+  if (typeof userId === "string" && userId.trim()) {
+    return userId.trim();
   }
-  if (typeof userId === 'number') {
-    return String(userId)
+  if (typeof userId === "number") {
+    return String(userId);
   }
 
-  return 'unknown'
+  return "unknown";
 }
 
 /** 一次跑完两页；报告仍分域落库，授权仍要求两份都新鲜、无阻断。 */
 async function runBothChecks() {
-  const draftId = draft.value?.id
+  const draftId = draft.value?.id;
   if (!draftId || checkDialogLoading.value) {
-    return
+    return;
   }
-  checkDialogVisible.value = true
+  checkDialogVisible.value = true;
   checkDialogDomain.value =
-    activeTab.value === 'profiles' ? 'NUTRITION' : 'INGREDIENT'
-  checkDialogRun.value = null
-  checkDialogError.value = ''
-  checkDialogLoading.value = true
+    activeTab.value === "profiles" ? "NUTRITION" : "INGREDIENT";
+  checkDialogRun.value = null;
+  checkDialogError.value = "";
+  checkDialogLoading.value = true;
   try {
     const ingredient = await ingredientCreationApi.runDomainCheck(
       draftId,
-      'INGREDIENT'
-    )
+      "INGREDIENT",
+    );
     const nutrition = await ingredientCreationApi.runDomainCheck(
       draftId,
-      'NUTRITION'
-    )
+      "NUTRITION",
+    );
     if (draft.value?.id !== draftId) {
-      return
+      return;
     }
     // 优先把有阻断的那一域展示出来；两域都干净时展示当前标签页。
     const target: CheckDomain =
       ingredient.result.blocking.length > 0
-        ? 'INGREDIENT'
+        ? "INGREDIENT"
         : nutrition.result.blocking.length > 0
-          ? 'NUTRITION'
-          : checkDialogDomain.value
-    checkDialogDomain.value = target
-    checkDialogRun.value = target === 'INGREDIENT' ? ingredient : nutrition
-    await refreshChecks(draftId)
+          ? "NUTRITION"
+          : checkDialogDomain.value;
+    checkDialogDomain.value = target;
+    checkDialogRun.value = target === "INGREDIENT" ? ingredient : nutrition;
+    await refreshChecks(draftId);
   } catch (error) {
     checkDialogError.value = getApiErrorMessage(
       error,
-      '两页核验没跑成，请稍后重试'
-    )
+      "两页核验没跑成，请稍后重试",
+    );
   } finally {
-    checkDialogLoading.value = false
+    checkDialogLoading.value = false;
   }
 }
 
 /** 查看当前标签页已有的报告；没有报告时退回单页核验。 */
 function openCurrentReport() {
   const domain: CheckDomain =
-    activeTab.value === 'profiles' ? 'NUTRITION' : 'INGREDIENT'
+    activeTab.value === "profiles" ? "NUTRITION" : "INGREDIENT";
   const run =
-    domain === 'INGREDIENT'
-      ? checksView.value?.ingredient ?? null
-      : checksView.value?.nutrition ?? null
+    domain === "INGREDIENT"
+      ? (checksView.value?.ingredient ?? null)
+      : (checksView.value?.nutrition ?? null);
   if (!run) {
-    void runCheckForDomain(domain)
-    checkDialogVisible.value = true
-    return
+    void runCheckForDomain(domain);
+    checkDialogVisible.value = true;
+    return;
   }
-  checkDialogDomain.value = domain
-  checkDialogRun.value = run
-  checkDialogError.value = ''
-  checkDialogVisible.value = true
+  checkDialogDomain.value = domain;
+  checkDialogRun.value = run;
+  checkDialogError.value = "";
+  checkDialogVisible.value = true;
 }
 
 /** Agent 正常写完后自动跑两页；失败不打断对话，只留状态给用户重试。 */
 async function autoRunChecks(draftId: string) {
   try {
-    await ingredientCreationApi.runAutoChecks(draftId)
+    await ingredientCreationApi.runAutoChecks(draftId);
     if (draft.value?.id === draftId) {
-      await refreshChecks(draftId)
+      await refreshChecks(draftId);
     }
   } catch {
     // 自动核验失败不抢用户操作；用户仍可点「核验两页」手动重跑。
@@ -3074,29 +3185,29 @@ async function autoRunChecks(draftId: string) {
 
 /** 跑某一页的核验并落库；成功后刷新页签横幅与授权闸门。 */
 async function runCheckForDomain(domain: CheckDomain) {
-  const draftId = draft.value?.id
+  const draftId = draft.value?.id;
   if (!draftId || checkDialogLoading.value) {
-    return
+    return;
   }
 
-  checkDialogDomain.value = domain
-  checkDialogLoading.value = true
-  checkDialogError.value = ''
+  checkDialogDomain.value = domain;
+  checkDialogLoading.value = true;
+  checkDialogError.value = "";
 
   try {
-    const run = await ingredientCreationApi.runDomainCheck(draftId, domain)
+    const run = await ingredientCreationApi.runDomainCheck(draftId, domain);
     if (draft.value?.id !== draftId) {
-      return
+      return;
     }
-    checkDialogRun.value = run
-    await refreshChecks(draftId)
+    checkDialogRun.value = run;
+    await refreshChecks(draftId);
   } catch (error) {
     checkDialogError.value = getApiErrorMessage(
       error,
-      '核验没跑成，请稍后重试'
-    )
+      "核验没跑成，请稍后重试",
+    );
   } finally {
-    checkDialogLoading.value = false
+    checkDialogLoading.value = false;
   }
 }
 
@@ -3108,35 +3219,35 @@ async function runCheckForDomain(domain: CheckDomain) {
  * 并把第一处滚到视野中间。
  */
 async function locateToField(item: CheckItem) {
-  const target = toLocateTarget(item)
-  checkDialogVisible.value = false
+  const target = toLocateTarget(item);
+  checkDialogVisible.value = false;
   if (!target) {
-    return
+    return;
   }
 
-  if (target.tab === 'profiles') {
-    profileFilterMode.value = 'ALL'
+  if (target.tab === "profiles") {
+    profileFilterMode.value = "ALL";
   }
-  activeTab.value = target.tab
-  locatedField.value = target.key
+  activeTab.value = target.tab;
+  locatedField.value = target.key;
   // 切页签 / 切筛子后 TabPane 才挂载，等两拍再查目标格子。
-  await nextTick()
-  await nextTick()
+  await nextTick();
+  await nextTick();
 
   const selector =
-    target.tab === 'ingredient'
+    target.tab === "ingredient"
       ? `[data-field-key="${CSS.escape(target.key)}"]`
-      : `[data-field-path="${CSS.escape(target.fieldPath)}"]`
-  const element = pageRef.value?.querySelector<HTMLElement>(selector)
-  element?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+      : `[data-field-path="${CSS.escape(target.fieldPath)}"]`;
+  const element = pageRef.value?.querySelector<HTMLElement>(selector);
+  element?.scrollIntoView({ block: "center", behavior: "smooth" });
 
   if (locateTimer) {
-    clearTimeout(locateTimer)
+    clearTimeout(locateTimer);
   }
   locateTimer = setTimeout(() => {
-    locatedField.value = null
-    locateTimer = null
-  }, 2600)
+    locatedField.value = null;
+    locateTimer = null;
+  }, 2600);
 }
 
 /**
@@ -3145,85 +3256,83 @@ async function locateToField(item: CheckItem) {
  */
 async function handleRegisterException(item: CheckItem) {
   if (!draft.value || savingException.value) {
-    return
+    return;
   }
 
-  const draftId = draft.value.id
-  let reason = ''
+  const draftId = draft.value.id;
+  let reason = "";
 
   try {
     const result = await ElMessageBox.prompt(
       `请写明为什么「${item.code}」可以例外。这句话会记进审计，授权后也能查到。`,
       `登记例外 · ${item.code}`,
       {
-        confirmButtonText: '登记并重跑',
-        cancelButtonText: '取消',
-        inputType: 'textarea',
-        inputPlaceholder:
-          '例如：本地库没有可食部数据，按供应商提供的 60% 登记',
+        confirmButtonText: "登记并重跑",
+        cancelButtonText: "取消",
+        inputType: "textarea",
+        inputPlaceholder: "例如：本地库没有可食部数据，按供应商提供的 60% 登记",
         inputValidator: (value) =>
-          typeof value === 'string' && value.trim().length > 0
+          typeof value === "string" && value.trim().length > 0
             ? true
-            : '理由必填：没有理由的例外不允许登记'
-      }
-    )
-    reason = String(result.value ?? '').trim()
+            : "理由必填：没有理由的例外不允许登记",
+      },
+    );
+    reason = String(result.value ?? "").trim();
   } catch {
-    return
+    return;
   }
 
   if (!reason || !draft.value || draft.value.id !== draftId) {
-    return
+    return;
   }
 
   const record: ExceptionRecord = {
     code: item.code,
     reason,
     approvedBy: currentApprover(),
-    approvedAt: new Date().toISOString()
-  }
+    approvedAt: new Date().toISOString(),
+  };
 
-  savingException.value = true
-  checkDialogError.value = ''
+  savingException.value = true;
+  checkDialogError.value = "";
 
   try {
     // 走同一条保存队列：并发保存（尤其营养格）不能把刚写的 verify.exceptions
     // 用旧 payload 覆盖掉。合并也放在队列任务里按最新草稿重算。
     const ok = await enqueueSave(async () => {
-      const current = draft.value
+      const current = draft.value;
       if (!current || current.id !== draftId) {
-        throw new Error('草稿已经切换，登记例外已取消')
+        throw new Error("草稿已经切换，登记例外已取消");
       }
 
       // 同 code 只留一条：重复登记视为「换理由」，不往数组里叠重复项。
-      const existing = current.payload.verify?.exceptions ?? []
-      const index = existing.findIndex((entry) => entry.code === record.code)
+      const existing = current.payload.verify?.exceptions ?? [];
+      const index = existing.findIndex((entry) => entry.code === record.code);
       const exceptions =
         index >= 0
           ? existing.map((entry, i) => (i === index ? record : entry))
-          : [...existing, record]
+          : [...existing, record];
 
       const updated = await ingredientCreationApi.patchDraft(
         draftId,
         current.step,
-        { verify: { exceptions } }
-      )
-      draft.value = updated
-      draftTouched.value = true
-      markChecksStale()
-      await refreshChecks(updated.id)
-    })
+        { verify: { exceptions } },
+      );
+      draft.value = updated;
+      draftTouched.value = true;
+      markChecksStale();
+      await refreshChecks(updated.id);
+    });
 
     if (!ok) {
-      checkDialogError.value =
-        saveError.value || '登记例外失败，请稍后重试'
-      return
+      checkDialogError.value = saveError.value || "登记例外失败，请稍后重试";
+      return;
     }
 
-    ElMessage.success('已登记例外，正在重跑核验')
-    await runCheckForDomain(checkDialogDomain.value)
+    ElMessage.success("已登记例外，正在重跑核验");
+    await runCheckForDomain(checkDialogDomain.value);
   } finally {
-    savingException.value = false
+    savingException.value = false;
   }
 }
 
@@ -3235,36 +3344,36 @@ async function handleRegisterException(item: CheckItem) {
  */
 async function flushIngredientCard(): Promise<boolean> {
   if (!draft.value || !hasUnsavedIngredientChanges.value) {
-    return true
+    return true;
   }
 
-  let card: IngredientCardForm = ingredientForm
+  let card: IngredientCardForm = ingredientForm;
   for (const field of INGREDIENT_CARD_FIELDS) {
     if (isIngredientCellChanged(field.key)) {
-      card = markIngredientFieldManual(card, field.key)
+      card = markIngredientFieldManual(card, field.key);
     }
   }
-  ingredientForm.manualFields = card.manualFields
+  ingredientForm.manualFields = card.manualFields;
 
   const ingredient = toIngredientDraftFromCells(
     draft.value.payload.ingredient,
-    ingredientForm
-  )
-  const draftId = draft.value.id
-  const step = draft.value.step
+    ingredientForm,
+  );
+  const draftId = draft.value.id;
+  const step = draft.value.step;
 
   return enqueueSave(async () => {
     const updated = await ingredientCreationApi.patchDraft(draftId, step, {
-      ingredient
-    })
-    draft.value = updated
-    draftTouched.value = true
-    const nextCard = toIngredientCard(updated.payload, updated.name)
-    loadedCard.value = nextCard
-    Object.assign(ingredientForm, nextCard)
-    markChecksStale()
-    await refreshChecks(updated.id)
-  })
+      ingredient,
+    });
+    draft.value = updated;
+    draftTouched.value = true;
+    const nextCard = toIngredientCard(updated.payload, updated.name);
+    loadedCard.value = nextCard;
+    Object.assign(ingredientForm, nextCard);
+    markChecksStale();
+    await refreshChecks(updated.id);
+  });
 }
 
 /** 授权前的二次确认：写什么、两份报告什么样、写完是什么状态。 */
@@ -3275,72 +3384,72 @@ async function confirmAuthorize(profileCount: number): Promise<boolean> {
     } · 提醒 ${ingredientCheck.value?.warning ?? 0}`,
     `营养档案：阻断 ${nutritionCheck.value?.blocking ?? 0} · 不合格 ${
       nutritionCheck.value?.exceptionable ?? 0
-    } · 提醒 ${nutritionCheck.value?.warning ?? 0}`
-  ]
-  const exceptions = registeredExceptions.value
+    } · 提醒 ${nutritionCheck.value?.warning ?? 0}`,
+  ];
+  const exceptions = registeredExceptions.value;
   const exceptionLines =
     exceptions.length > 0
       ? [
-          '已登记例外（理由随授权存档）：',
+          "已登记例外（理由随授权存档）：",
           ...exceptions.map((record) => {
             const reason =
-              typeof record.reason === 'string' ? record.reason.trim() : ''
-            return `· ${record.code}：${reason || '（未填写理由）'}`
-          })
+              typeof record.reason === "string" ? record.reason.trim() : "";
+            return `· ${record.code}：${reason || "（未填写理由）"}`;
+          }),
         ]
-      : ['已登记例外：无']
+      : ["已登记例外：无"];
   const lines = [
     `写入 1 条原料 + ${profileCount} 份营养档案。`,
     ...summaries,
     ...exceptionLines,
-    '写入后原料与营养档案都是「待验证」，确认可用是另一个动作。'
-  ]
+    "写入后原料与营养档案都是「待验证」，确认可用是另一个动作。",
+  ];
 
   try {
     await ElMessageBox.confirm(
-      h('div', [
-        h('p', '确认授权后，以下内容会写入正式库：'),
+      h("div", [
+        h("p", "确认授权后，以下内容会写入正式库："),
         h(
-          'ul',
-          lines.map((line, index) => h('li', { key: index }, line))
-        )
+          "ul",
+          lines.map((line, index) => h("li", { key: index }, line)),
+        ),
       ]),
-      '授权写入正式库',
+      "授权写入正式库",
       {
-        confirmButtonText: '确认写入',
-        cancelButtonText: '再看看',
-        type: 'warning'
-      }
-    )
-    return true
+        confirmButtonText: "确认写入",
+        cancelButtonText: "再看看",
+        type: "warning",
+      },
+    );
+    return true;
   } catch {
-    return false
+    return false;
   }
 }
 
 /** 400 的 reasons 只在弹窗里列明细：拦截器已经弹过后端 message，不再重复 toast。 */
 async function showAuthorizeBlocked(
-  reasons: AuthorizeBlockedReason[]
+  reasons: AuthorizeBlockedReason[],
 ): Promise<void> {
   const items = reasons.map((reason, index) => {
     const domain = reason.domain
       ? `（${checkDomainLabel(reason.domain)}）`
-      : ''
-    return h('li', { key: `${reason.code}-${index}` }, [
-      h('code', reason.code),
-      `${domain}：${reason.detail || '后端没有给出细节'}`
-    ])
-  })
+      : "";
+    return h("li", { key: `${reason.code}-${index}` }, [
+      h("code", reason.code),
+      `${domain}：${reason.detail || "后端没有给出细节"}`,
+    ]);
+  });
 
   try {
     await ElMessageBox.alert(
-      h('div', [
-        h('p', '正式库没有被写入。下面这些条件还没满足：'),
-        h('ul', items)
+      h("div", [
+        h("p", "正式库没有被写入。下面这些条件还没满足："),
+        h("ul", items),
       ]),
-      '授权未通过',
-      { confirmButtonText: '知道了', type: 'warning' }
-    )
+      "授权未通过",
+      { confirmButtonText: "知道了", type: "warning" },
+    );
   } catch {
     // 直接点右上角关掉也算看过，不把 close 当成授权失败再抛一次。
   }
@@ -3354,166 +3463,170 @@ async function showAuthorizeBlocked(
  */
 async function handleAuthorize() {
   if (!draft.value || submitting.value || commitResult.value) {
-    return
+    return;
   }
   // 写入前再确认一次页面是不是被后台的新版本顶掉了（2026-11-08）：
   // 这个动作只写库不读库，拿旧契约的请求发出去，人只会看到一句莫名奇妙的拒绝。
-  await checkBundleFreshness(true)
+  await checkBundleFreshness(true);
   if (staleBundle.value) {
-    submitError.value = ''
-    ElMessage.warning('这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入')
-    return
+    submitError.value = "";
+    ElMessage.warning("这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入");
+    return;
   }
   if (!closingReady.value) {
     if (!showProcurementCard.value) {
-      ElMessage.warning('先把原料档案填完、两页核验通过，再填采购商品')
-      return
+      ElMessage.warning("先把原料档案填完、两页核验通过，再填采购商品");
+      return;
     }
-    closingCardRef.value?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    ElMessage.warning(`写入前先把这条原料的采购商品填完：${closingStateLabel.value}`)
-    return
+    closingCardRef.value?.scrollIntoView({
+      block: "nearest",
+      behavior: "smooth",
+    });
+    ElMessage.warning(
+      `写入前先把这条原料的采购商品填完：${closingStateLabel.value}`,
+    );
+    return;
   }
   if (!gate.value.ready) {
-    ElMessage.warning(gate.value.reasons[0] ?? '授权条件还没满足')
-    return
+    ElMessage.warning(gate.value.reasons[0] ?? "授权条件还没满足");
+    return;
   }
 
-  submitting.value = true
-  submitError.value = ''
-  verifyError.value = ''
-  verified.value = false
+  submitting.value = true;
+  submitError.value = "";
+  verifyError.value = "";
+  verified.value = false;
 
   try {
-    await saveQueue
+    await saveQueue;
     if (saveFailed.value) {
       submitError.value =
-        saveError.value || '草稿还有没保存成功的改动，不能授权'
-      return
+        saveError.value || "草稿还有没保存成功的改动，不能授权";
+      return;
     }
 
     if (hasUnsavedIngredientChanges.value) {
-      const flushed = await flushIngredientCard()
+      const flushed = await flushIngredientCard();
       if (!flushed) {
         submitError.value =
-          saveError.value || '原料卡还有没保存成功的改动，不能授权'
-        return
+          saveError.value || "原料卡还有没保存成功的改动，不能授权";
+        return;
       }
     }
 
-    const draftId = draft.value.id
-    await refreshChecks(draftId)
+    const draftId = draft.value.id;
+    await refreshChecks(draftId);
     if (checksError.value) {
-      submitError.value = `核验状态读取失败，不能授权：${checksError.value}`
-      return
+      submitError.value = `核验状态读取失败，不能授权：${checksError.value}`;
+      return;
     }
     if (!gate.value.ready) {
-      ElMessage.warning(gate.value.reasons[0] ?? '授权条件还没满足')
-      return
+      ElMessage.warning(gate.value.reasons[0] ?? "授权条件还没满足");
+      return;
     }
 
     const input = toCommitInput(
       draft.value.payload,
       // 以当前表单为准：主档案下标与确认弹窗里的份数都按它算。
-      toIngredientDraft(ingredientForm)
-    )
+      toIngredientDraft(ingredientForm),
+    );
     if (!input) {
-      submitError.value = '草稿还缺原料名或营养档案，不能授权'
-      return
+      submitError.value = "草稿还缺原料名或营养档案，不能授权";
+      return;
     }
 
     // authorize 要的是草稿原始 profiles 的下标；toCommitInput 给的是可用档案
     // 过滤后的下标，前面有脏档案时会错位，必须映射回原始数组再传。
     const rawProfiles = Array.isArray(draft.value.payload.profiles)
       ? draft.value.payload.profiles
-      : []
+      : [];
     const primaryProfileIndex = resolveRawPrimaryProfileIndex(
       draft.value.payload,
-      input.profiles[input.primaryProfileIndex]
-    )
+      input.profiles[input.primaryProfileIndex],
+    );
     if (primaryProfileIndex < 0) {
-      submitError.value =
-        '选中的主档案不在草稿的原始档案里，刷新页面后再试'
-      return
+      submitError.value = "选中的主档案不在草稿的原始档案里，刷新页面后再试";
+      return;
     }
 
-    const confirmed = await confirmAuthorize(rawProfiles.length)
+    const confirmed = await confirmAuthorize(rawProfiles.length);
     if (!confirmed) {
-      return
+      return;
     }
 
     // 2026-11-07 硬门禁：采购商品必须和建档一起提交（同一次事务）。
     // 没有它，这条原料建出来就没有价，一进食谱按 0 元算。
-    if (line.value === 'FOOD' && closingState.value !== 'READY') {
-      ElMessage.warning(closingStateLabel.value)
-      return
+    if (line.value === "FOOD" && closingState.value !== "READY") {
+      ElMessage.warning(closingStateLabel.value);
+      return;
     }
 
     const result = await ingredientCreationApi.authorize(draftId, {
       primaryProfileIndex,
       procurementSku: buildClosingSkuInput({
         ...closingForm,
-        sourceScreenshotUrl: shotSourceUrl.value
-      })
-    })
-    commitResult.value = result
-    ElMessage.success('已写入正式库，营养档案当前是「待验证」')
+        sourceScreenshotUrl: shotSourceUrl.value,
+      }),
+    });
+    commitResult.value = result;
+    ElMessage.success("已写入正式库，营养档案当前是「待验证」");
   } catch (error) {
-    const reasons = toAuthorizeReasons(error)
+    const reasons = toAuthorizeReasons(error);
     if (reasons.length > 0) {
-      await showAuthorizeBlocked(reasons)
+      await showAuthorizeBlocked(reasons);
       // 报告可能刚好变旧（例如别的标签页改过草稿），刷新后按钮会同步置灰。
-      await refreshChecks(draft.value?.id)
+      await refreshChecks(draft.value?.id);
     } else {
-      submitError.value = getApiErrorMessage(error, '授权失败，请稍后重试')
+      submitError.value = getApiErrorMessage(error, "授权失败，请稍后重试");
     }
   } finally {
-    submitting.value = false
+    submitting.value = false;
   }
 }
 
 /** 确认可用：对授权返回的每个 nutritionFoodId 一个一个验证，失败逐条留原文。 */
 async function handleVerify() {
   if (!isAdmin.value) {
-    ElMessage.warning(ADMIN_ONLY_TIP)
-    return
+    ElMessage.warning(ADMIN_ONLY_TIP);
+    return;
   }
 
-  const nutritionFoodIds = commitResult.value?.nutritionFoodIds ?? []
+  const nutritionFoodIds = commitResult.value?.nutritionFoodIds ?? [];
   if (nutritionFoodIds.length === 0) {
-    verifyError.value = '这次授权没有返回营养档案，无法确认可用'
-    return
+    verifyError.value = "这次授权没有返回营养档案，无法确认可用";
+    return;
   }
 
-  verifying.value = true
-  verifyError.value = ''
+  verifying.value = true;
+  verifyError.value = "";
 
-  const failures: string[] = []
+  const failures: string[] = [];
   for (const nutritionFoodId of nutritionFoodIds) {
     try {
-      await nutritionFoodApi.verify(nutritionFoodId)
+      await nutritionFoodApi.verify(nutritionFoodId);
     } catch (error) {
       failures.push(
         `${shortId(nutritionFoodId)}：${getApiErrorMessage(
           error,
-          '确认可用失败，请稍后重试'
-        )}`
-      )
+          "确认可用失败，请稍后重试",
+        )}`,
+      );
     }
   }
 
-  verifying.value = false
+  verifying.value = false;
 
   if (failures.length === 0) {
-    verified.value = true
-    ElMessage.success('已确认可用，配方里现在能选到这些档案')
-    return
+    verified.value = true;
+    ElMessage.success("已确认可用，配方里现在能选到这些档案");
+    return;
   }
 
-  verifyError.value = failures.join('\n')
+  verifyError.value = failures.join("\n");
 }
 
 function goBackToList() {
-  void router.push('/ingredients')
+  void router.push("/ingredients");
 }
 </script>
 
@@ -4921,7 +5034,9 @@ function goBackToList() {
   border-radius: 8px;
   background: var(--el-fill-color-lighter);
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
 .closing-card__shot:hover,

@@ -74,6 +74,21 @@ export class RecipeAgentController {
     );
   }
 
+  @Post('drafts/:draftId/agent/selection/rematch')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary:
+      'Re-match outside-library selection items after ingredients are added',
+  })
+  async rematchSelection(
+    @Param('draftId') draftId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    return ApiResponseDto.success(
+      await this.agentService.rematchSelection(draftId, toActor(user)),
+    );
+  }
+
   @Post('drafts/:draftId/agent/selection/decision')
   @UseGuards(StaffGuard)
   @ApiOperation({

@@ -494,6 +494,8 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/drafts/${draftId}/agent/selection/decision`, {
       decision,
     }),
+  rematchAgentSelection: (draftId: string): Promise<AgentSelection> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/selection/rematch`),
 };
 
 /** AI 食谱设计会话（2026-10-31 极简版；2026-11-20 增加三阶段） */

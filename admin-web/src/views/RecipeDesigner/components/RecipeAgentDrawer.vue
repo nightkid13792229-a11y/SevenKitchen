@@ -126,6 +126,14 @@
             }}
           </div>
           <div class="agent-plan__summary">{{ session.selection.summary }}</div>
+          <div v-if="hasOutsideSelection" class="agent-plan__actions">
+            <el-button
+              size="small"
+              :loading="rematching"
+              @click="rematchSelection"
+              >重新匹配库外食材</el-button
+            >
+          </div>
           <table class="agent-plan__table">
             <thead>
               <tr>
@@ -140,7 +148,19 @@
                 <td>{{ item.foodCategory || "未分类" }}</td>
                 <td>{{ item.name }}</td>
                 <td>{{ item.reason }}</td>
-                <td>{{ dataStatusLabel(item.dataStatus) }}</td>
+                <td>
+                  <div class="agent-selection-status">
+                    <span>{{ dataStatusLabel(item.dataStatus) }}</span>
+                    <el-button
+                      v-if="item.dataStatus === 'MISSING'"
+                      size="small"
+                      text
+                      type="primary"
+                      @click="openIngredientCreation(item)"
+                      >新增原料</el-button
+                    >
+                  </div>
+                </td>
               </tr>
             </tbody>
           </table>
@@ -252,11 +272,14 @@ const visible = computed({
 
 const session = ref<AgentSession | null>(null);
 const messages = ref<AgentMessage[]>([]);
-/** 旧选材可能含补剂；选材卡只展示食材。 */
+/** 旧选材可能含补剂；选材卡不展示补剂。 */
 const selectionFoodItems = computed(() =>
   (session.value?.selection?.items ?? []).filter(
-    (item) => item.kind === "FOOD",
+    (item) => item.kind !== "SUPPLEMENT",
   ),
+);
+const hasOutsideSelection = computed(() =>
+  selectionFoodItems.value.some((item) => item.dataStatus === "MISSING"),
 );
 const MEDICATION_PATTERN =
   /用药|药物|处方|服药|口服|注射|溃速平|潘飞龙|抗生素|止痛药|激素|mg\/kg/i;
@@ -315,6 +338,7 @@ const visibleMessages = computed(() =>
 const input = ref("");
 const sending = ref(false);
 const deciding = ref(false);
+const rematching = ref(false);
 const loading = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
 const planRef = ref<HTMLElement | null>(null);
@@ -426,6 +450,24 @@ function dataStatusLabel(status: string): string {
   return "可用";
 }
 
+function openIngredientCreation(item: { name: string }) {
+  const url = `/ingredients/ai-agent?line=FOOD&name=${encodeURIComponent(item.name)}`;
+  window.open(url, "_blank", "noopener");
+}
+
+async function rematchSelection() {
+  if (!session.value || rematching.value) return;
+  rematching.value = true;
+  try {
+    const selection = await recipeDesignerApi.rematchAgentSelection(
+      props.draftId,
+    );
+    session.value = { ...session.value, selection };
+  } finally {
+    rematching.value = false;
+  }
+}
+
 async function decidePlan(decision: "APPROVE" | "CONTINUE") {
   if (!session.value || deciding.value) return;
   deciding.value = true;
@@ -487,6 +529,13 @@ watch(
 </script>
 
 <style scoped>
+.agent-selection-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .agent-header {
   display: flex;
   align-items: center;

@@ -63,6 +63,7 @@ import {
   type AgentNutritionPlan,
   type AgentSelection,
 } from './propose-plan';
+import { matchSelectionToLibrary } from './selection-match';
 import { assessmentGapSignature } from './assessment-progress';
 import { loadSkillsForPhase } from './skill-loader';
 import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
@@ -252,6 +253,39 @@ export class RecipeAgentService implements OnModuleInit {
     return this.confirmStage(draftId, actor, 'SELECT', decision);
   }
 
+  /**
+   * 库外食材新增后，按名称重新匹配原料库；不推进阶段、不写方案。
+   * 只更新 selection 的 dataStatus / 原料 ID。
+   */
+  async rematchSelection(
+    draftId: string,
+    actor: RecipeAgentActor,
+  ): Promise<AgentSelection> {
+    await this.designer.getDraft(draftId, this.accessFor(actor));
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId: draftId },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!session) throw new NotFoundException('会话不存在');
+    if (!session.selection) {
+      throw new BadRequestException('还没有提交选材候选');
+    }
+    const port = new RecipeDraftPort(
+      this.designer,
+      this.accessFor(actor),
+      draftId,
+    );
+    const matched = await matchSelectionToLibrary(
+      session.selection as unknown as AgentSelection,
+      (input) => port.findFoods(input),
+    );
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: session.id },
+      data: { selection: matched as never },
+    });
+    return matched;
+  }
+
   private async confirmStage(
     draftId: string,
     actor: RecipeAgentActor,
@@ -294,7 +328,7 @@ export class RecipeAgentService implements OnModuleInit {
         actor,
         silent: true,
         message:
-          '方案已确认。请进入选材阶段：基于已确认方案提出食材与补剂候选；补剂只能来自原料库，库外食材标 MISSING；用 propose_selection 提交。',
+          '方案已确认。请进入选材阶段：只列食材，不列补剂；基于已确认方案和忌口自由选食材，不要查原料库；库外食材系统会自动标 MISSING；用 propose_selection 提交。',
       });
       return { phase: 'SELECT' };
     }

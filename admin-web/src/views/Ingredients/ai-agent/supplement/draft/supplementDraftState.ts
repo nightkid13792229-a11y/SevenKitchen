@@ -14,6 +14,7 @@ import type {
   SupplementDraftReview,
   SupplementDraftValidationIssue
 } from '@/api/supplementDrafts'
+import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 
 /** AI 重填时参与 diff 的区块（`review` 是人已经确认过的提醒，不参与）。 */
 export const DRAFT_DIFF_SECTIONS = [
@@ -48,6 +49,119 @@ export interface SupplementDraftFieldMapRow {
   target: string
   /** 审核屏分组（与编辑页区块一致） */
   section: string
+}
+
+/** 枚举代码 → 中文。差异弹窗和审核屏不再把内部代码直接给人看。 */
+const DRAFT_CODE_LABELS: Record<string, Record<string, string>> = {
+  'basic.baseUnit': { PCS: '个（粒/片/胶囊）', G: '克', ML: '毫升' },
+  'basic.physicalForm': {
+    POWDER: '粉剂',
+    TABLET: '片剂',
+    CAPSULE: '胶囊',
+    LIQUID: '液体'
+  },
+  'basic.addTiming': {
+    BEFORE_MIXING: '制作中添加',
+    BEFORE_MEAL: '随餐'
+  },
+  'label.labelCategory': {
+    FEED_MATERIAL: '饲料原料',
+    FEED_ADDITIVE: '饲料添加剂'
+  },
+  'diy.platform': {
+    TAOBAO: '淘宝',
+    JD: '京东',
+    PINDUODUO: '拼多多',
+    IHERB: 'iHerb',
+    OTHER: '其他'
+  },
+  'retail.noSaleReason': {
+    SELF_MADE: '自制原料',
+    BULK: '散装采购',
+    NO_SUPPLY: '暂无稳定货源',
+    UNDECIDED: '待定'
+  }
+}
+
+/** 布尔字段的两种说法；没登记的布尔默认「是/否」。 */
+const DRAFT_BOOLEAN_LABELS: Record<string, [string, string]> = {
+  'retail.enabled': ['上架', '不上架'],
+  'retail.isOilBased': ['是', '否'],
+  'diy.enabled': ['参与', '不参与'],
+  'procurement.enabled': ['参与', '不参与'],
+  'equivalence.reapproveGroup': ['本次一并审核', '不一并审核']
+}
+
+const NUTRIENT_SERVING_PREFIX = 'nutrition.servingNutrients.'
+const NUTRIENT_BY_PATH = new Map(
+  supplementNutrientGroups.flatMap((group) =>
+    group.fields.map((field) => [field.fieldPath, field] as const)
+  )
+)
+
+function nutrientLabel(fieldPath: string): string {
+  return NUTRIENT_BY_PATH.get(fieldPath)?.label ?? fieldPath
+}
+
+/**
+ * 差异弹窗/核验页的值展示。
+ *
+ * 后端存的是枚举代码和数字；直接 `String(value)` 会把 `BEFORE_MIXING`、
+ * `G`、`POWDER` 这种内部值展示给用户。这里统一翻成人话，同时保留
+ * 空值/缺失值的区别，避免「空」和「没有这个字段」混在一起。
+ */
+export function formatDraftFieldValue(path: string, value: unknown): string {
+  if (value === undefined) return '（原草稿没有）'
+  if (value === null) return '空'
+
+  if (typeof value === 'boolean') {
+    const labels = DRAFT_BOOLEAN_LABELS[path]
+    if (labels) return value ? labels[0] : labels[1]
+    return value ? '是' : '否'
+  }
+
+  if (typeof value === 'string') {
+    const text = value.trim()
+    if (!text) return '空'
+    if (path === 'equivalence.groupId') {
+      return text === '__SKIP__' ? '暂不归组' : '已选等价组'
+    }
+    return DRAFT_CODE_LABELS[path]?.[text] ?? text
+  }
+
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return '空'
+    if (path === 'basic.currentPricePerPurchaseUnit') return `${value} 元`
+    if (path === 'retail.shelfLifeMonths') return `${value} 个月`
+    if (path === 'retail.openedShelfLifeDays') return `${value} 天`
+    if (path === 'basic.productionLossRate') {
+      const percent = Math.round((value - 1) * 100)
+      return `${value}（${percent}% 损耗）`
+    }
+    if (path.startsWith(NUTRIENT_SERVING_PREFIX)) {
+      const field = NUTRIENT_BY_PATH.get(path.slice(NUTRIENT_SERVING_PREFIX.length))
+      if (field) return `${value} ${field.unit}`
+    }
+    return String(value)
+  }
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '（空列表）'
+    if (path === 'nutrition.defaultTargetFields') {
+      return value.map((item) => (typeof item === 'string' ? nutrientLabel(item) : String(item))).join('、')
+    }
+    return value.map((item) => formatDraftFieldValue(path, item)).join('、')
+  }
+
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return String(value)
+    }
+  }
+
+  return String(value)
 }
 
 /** 需要人确认的提醒项：优先后端给的 `ackKey`，没有就回退 `code`。 */

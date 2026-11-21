@@ -63,15 +63,19 @@
             />
           </td>
           <td>
-            <span class="draft-diff__field">{{ fieldLabel(row.path) }}</span>
-            <code class="draft-diff__path">{{ row.path }}</code>
+            <span
+              class="draft-diff__field"
+              :title="`内部字段：${row.path}`"
+            >{{ fieldLabel(row.path) }}</span>
           </td>
-          <td class="draft-diff__value">{{ formatValue(row.before) }}</td>
+          <td class="draft-diff__value">
+            {{ formatDraftFieldValue(row.path, row.before) }}
+          </td>
           <td
             class="draft-diff__value"
             :class="{ 'draft-diff__value--changed': !row.manual }"
           >
-            {{ formatValue(row.after) }}
+            {{ formatDraftFieldValue(row.path, row.after) }}
           </td>
           <td>
             <el-tag
@@ -128,8 +132,10 @@ import type { SupplementDraftPayload } from '@/api/supplementDrafts'
 import {
   diffDraft,
   fieldMapRows,
+  formatDraftFieldValue,
   type SupplementDraftDiffRow
 } from './supplementDraftState'
+import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 
 const props = defineProps<{
   /** 是否显示；父级在 apply 后直接把组件卸载 */
@@ -222,8 +228,22 @@ const labelByPath = computed(() => {
   return map
 })
 
+const nutrientByPath = new Map(
+  supplementNutrientGroups.flatMap((group) =>
+    group.fields.map((field) => [field.fieldPath, field] as const)
+  )
+)
+
+const NUTRIENT_SERVING_PREFIX = 'nutrition.servingNutrients.'
+
 function fieldLabel(path: string): string {
-  return labelByPath.value.get(path) ?? path
+  const direct = labelByPath.value.get(path)
+  if (direct) return direct
+  if (path.startsWith(NUTRIENT_SERVING_PREFIX)) {
+    const field = nutrientByPath.get(path.slice(NUTRIENT_SERVING_PREFIX.length))
+    if (field) return `每份${field.label}（${field.unit}）`
+  }
+  return path
 }
 
 function toggleRow(path: string, checked: boolean): void {
@@ -238,19 +258,6 @@ function toggleRow(path: string, checked: boolean): void {
 
 function toggleAll(checked: boolean): void {
   selected.value = checked ? selectableRows.value.map((row) => row.path) : []
-}
-
-/** 展示用值：null/undefined 要能区分「空」和「没这个字段」。 */
-function formatValue(value: unknown): string {
-  if (value === undefined) return '（原草稿没有）'
-  if (value === null) return '空'
-  if (Array.isArray(value)) {
-    return value.length === 0 ? '（空列表）' : value.join('、')
-  }
-  if (typeof value === 'object') {
-    return JSON.stringify(value)
-  }
-  return String(value)
 }
 
 function adoptSelected(): void {

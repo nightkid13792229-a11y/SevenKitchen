@@ -312,4 +312,49 @@ describe('补剂写入核验结果页', () => {
     expect(busy.attributes('disabled')).toBeDefined()
     expect(wrapper.text()).toContain('正在重新核验')
   })
+
+  it('直接字段的枚举值显示中文，不展示内部代码', () => {
+    const wrapper = mountVerification({
+      verification: verification({
+        fields: [
+          {
+            key: 'ingredient.baseUnit',
+            label: '基准单位',
+            target: 'ingredient.base_unit',
+            expected: 'G',
+            actual: 'G',
+            ok: true
+          },
+          {
+            key: 'ingredient.physicalForm',
+            label: '物理形态',
+            target: 'ingredient.physical_form',
+            expected: 'POWDER',
+            actual: 'POWDER',
+            ok: true
+          },
+          {
+            key: 'properties.add_timing',
+            label: '添加时机',
+            target: 'ingredient.properties.add_timing',
+            expected: 'BEFORE_MIXING',
+            actual: 'BEFORE_MIXING',
+            ok: true
+          }
+        ]
+      })
+    })
+
+    const baseUnit = wrapper.find('[data-field-row="ingredient.baseUnit"]')
+    expect(baseUnit.text()).toContain('克')
+    expect(baseUnit.text()).not.toContain('G')
+
+    const form = wrapper.find('[data-field-row="ingredient.physicalForm"]')
+    expect(form.text()).toContain('粉剂')
+    expect(form.text()).not.toContain('POWDER')
+
+    const timing = wrapper.find('[data-field-row="properties.add_timing"]')
+    expect(timing.text()).toContain('制作中添加')
+    expect(timing.text()).not.toContain('BEFORE_MIXING')
+  })
 })

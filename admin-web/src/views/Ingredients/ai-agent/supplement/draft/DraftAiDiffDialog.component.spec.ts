@@ -140,4 +140,37 @@ describe('AI 重填 diff 弹窗', () => {
     expect(wrapper.emitted('apply')).toHaveLength(1)
     expect(wrapper.emitted('apply')?.[0]).toEqual([[]])
   })
+
+  it('AI 新值显示中文，不把枚举代码或内部路径露给用户', () => {
+    const after = afterPayload()
+    after.basic.baseUnit = 'G'
+    after.basic.physicalForm = 'POWDER'
+    after.basic.addTiming = 'BEFORE_MIXING'
+
+    const wrapper = mount(DraftAiDiffDialog, {
+      props: {
+        modelValue: true,
+        before: beforePayload(),
+        after,
+        manualFields: []
+      },
+      global: { plugins: [ElementPlus] }
+    })
+
+    const baseUnit = wrapper.find('[data-diff-row="basic.baseUnit"]')
+    expect(baseUnit.text()).toContain('克')
+    expect(baseUnit.text()).not.toContain('G')
+
+    const form = wrapper.find('[data-diff-row="basic.physicalForm"]')
+    expect(form.text()).toContain('粉剂')
+    expect(form.text()).not.toContain('POWDER')
+
+    const timing = wrapper.find('[data-diff-row="basic.addTiming"]')
+    expect(timing.text()).toContain('制作中添加')
+    expect(timing.text()).not.toContain('BEFORE_MIXING')
+
+    const name = wrapper.find('[data-diff-row="basic.name"]')
+    expect(name.text()).toContain('原料名称')
+    expect(name.text()).not.toContain('basic.name')
+  })
 })

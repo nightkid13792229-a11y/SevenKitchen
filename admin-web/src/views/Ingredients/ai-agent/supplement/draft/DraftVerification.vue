@@ -66,8 +66,12 @@
                 <code>{{ field.target }}</code>
               </span>
             </td>
-            <td class="draft-verification__value">{{ formatValue(field.expected) }}</td>
-            <td class="draft-verification__value">{{ formatValue(field.actual) }}</td>
+            <td class="draft-verification__value">
+              {{ formatVerificationValue(field.key, field.expected) }}
+            </td>
+            <td class="draft-verification__value">
+              {{ formatVerificationValue(field.key, field.actual) }}
+            </td>
             <td>
               <el-tag :type="field.ok ? 'success' : 'danger'" size="small">
                 {{ field.ok ? '通过' : '不通过' }}
@@ -213,6 +217,7 @@ import type {
   SupplementVerificationFeatureSeverity,
   SupplementWriteVerification
 } from '@/api/supplementDrafts'
+import { formatDraftFieldValue } from './supplementDraftState'
 
 const props = withDefaults(
   defineProps<{
@@ -273,6 +278,30 @@ const summary = computed(() => {
 /* ------------------------------------------------------------------ */
 /* 展示格式                                                            */
 /* ------------------------------------------------------------------ */
+
+/** 后端核验字段 key → 草稿 payload 路径，用来翻译枚举代码。 */
+const VERIFICATION_VALUE_PATH: Record<string, string> = {
+  'ingredient.baseUnit': 'basic.baseUnit',
+  'ingredient.physicalForm': 'basic.physicalForm',
+  'ingredient.currentPricePerPurchaseUnit': 'basic.currentPricePerPurchaseUnit',
+  'ingredient.shelfLifeMonths': 'retail.shelfLifeMonths',
+  'ingredient.openedShelfLifeDays': 'retail.openedShelfLifeDays',
+  'ingredient.isOilBased': 'retail.isOilBased',
+  'ingredient.supplementRetailEnabled': 'retail.enabled',
+  'ingredient.diyEnabled': 'diy.enabled',
+  'ingredient.procurementEnabled': 'procurement.enabled',
+  'ingredient.equivalenceGroupId': 'equivalence.groupId',
+  'ingredient.equivalencePriority': 'equivalence.priority',
+  'properties.add_timing': 'basic.addTiming',
+  'properties.production_loss_rate': 'basic.productionLossRate',
+  'properties.label_category': 'label.labelCategory',
+  'properties.no_sale_reason': 'retail.noSaleReason'
+}
+
+function formatVerificationValue(key: string, value: unknown): string {
+  const path = VERIFICATION_VALUE_PATH[key] ?? key
+  return formatDraftFieldValue(path, value)
+}
 
 /** 核验值可能是字符串/数字/布尔/数组/对象，统一转成可读文本。 */
 function formatValue(value: unknown): string {

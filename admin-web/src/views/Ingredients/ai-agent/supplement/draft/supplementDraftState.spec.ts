@@ -12,6 +12,7 @@ import {
   canFinalize,
   diffDraft,
   fieldMapRows,
+  formatDraftFieldValue,
   hasBlocker
 } from './supplementDraftState'
 
@@ -401,5 +402,60 @@ describe('字段 → 生产落点', () => {
     }
     const paths = fieldMapRows.map((row) => row.path)
     expect(new Set(paths).size).toBe(paths.length)
+  })
+})
+
+
+describe('差异值显示', () => {
+  it('把枚举代码翻译成中文，不把内部代码给用户看', () => {
+    expect(formatDraftFieldValue('basic.baseUnit', 'G')).toBe('克')
+    expect(formatDraftFieldValue('basic.physicalForm', 'POWDER')).toBe('粉剂')
+    expect(formatDraftFieldValue('basic.addTiming', 'BEFORE_MIXING')).toBe(
+      '制作中添加'
+    )
+    expect(formatDraftFieldValue('label.labelCategory', 'FEED_ADDITIVE')).toBe(
+      '饲料添加剂'
+    )
+    expect(formatDraftFieldValue('diy.platform', 'IHERB')).toBe('iHerb')
+    expect(formatDraftFieldValue('retail.noSaleReason', 'BULK')).toBe('散装采购')
+  })
+
+  it('布尔和数组显示成人话', () => {
+    expect(formatDraftFieldValue('retail.enabled', true)).toBe('上架')
+    expect(formatDraftFieldValue('retail.enabled', false)).toBe('不上架')
+    expect(formatDraftFieldValue('diy.enabled', true)).toBe('参与')
+    expect(formatDraftFieldValue('procurement.enabled', false)).toBe('不参与')
+    expect(
+      formatDraftFieldValue('nutrition.defaultTargetFields', [
+        'minerals.copper',
+        'fattyAcids.epa'
+      ])
+    ).toBe('铜、EPA')
+  })
+
+  it('价格、保质期和每份营养带单位', () => {
+    expect(
+      formatDraftFieldValue('basic.currentPricePerPurchaseUnit', 98.52)
+    ).toBe('98.52 元')
+    expect(formatDraftFieldValue('retail.shelfLifeMonths', 24)).toBe('24 个月')
+    expect(formatDraftFieldValue('retail.openedShelfLifeDays', 60)).toBe(
+      '60 天'
+    )
+    expect(
+      formatDraftFieldValue(
+        'nutrition.servingNutrients.minerals.copper',
+        2
+      )
+    ).toBe('2 mg')
+  })
+
+  it('空值和“暂不归组”有明确说法', () => {
+    expect(formatDraftFieldValue('basic.brand', null)).toBe('空')
+    expect(formatDraftFieldValue('basic.brand', undefined)).toBe(
+      '（原草稿没有）'
+    )
+    expect(formatDraftFieldValue('equivalence.groupId', '__SKIP__')).toBe(
+      '暂不归组'
+    )
   })
 })

@@ -278,7 +278,21 @@ export class SupplementDraftReviewService {
     draftId: string,
   ): Promise<SupplementDraftGroupRecommendations> {
     const draft = await this.draftService.get(draftId, userId);
-    const ingredient = this.buildDraftIngredient(draft.payload);
+    return this.recommendGroupsForPayload(draft.payload);
+  }
+
+  /**
+   * 按**任意载荷**推荐等价组（不读草稿、不查 ingredient 表）。
+   *
+   * AI 起草时读图/链接得到的事实只在内存里、还没保存：全新草稿的 payload
+   * 是空的，按草稿 id 查组会全部 MISSING。所以 Task 8 会把「草稿现值 +
+   * 本次事实」拼成临时载荷直接传进来；`recommendGroups` 只是持久化草稿的
+   * 薄包装。
+   */
+  async recommendGroupsForPayload(
+    payload: SupplementDraftPayload,
+  ): Promise<SupplementDraftGroupRecommendations> {
+    const ingredient = this.buildDraftIngredient(payload);
 
     const [groups, config] = await Promise.all([
       this.prisma.supplementEquivalenceGroup.findMany({

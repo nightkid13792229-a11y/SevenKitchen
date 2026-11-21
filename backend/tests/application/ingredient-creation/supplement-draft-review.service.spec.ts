@@ -1401,6 +1401,76 @@ describe('SupplementDraftReviewService', () => {
       expect(prismaMock.ingredient.findFirst).not.toHaveBeenCalled();
     });
 
+    it('recommendGroups 只是读取草稿后转交 recommendGroupsForPayload', async () => {
+      prismaMock.supplementEquivalenceGroup.findMany.mockResolvedValue([
+        groupRow(),
+      ]);
+      const payload = validDraft({ basic: { name: '草稿名' } });
+      draftServiceMock.get.mockResolvedValue(draftView(payload));
+
+      const result = await service.recommendGroups('u1', 'draft-1');
+
+      expect(draftServiceMock.get).toHaveBeenCalledWith('draft-1', 'u1');
+      const [ingredientLike] = dosageMock.resolveConcentration.mock.calls[0];
+      expect(ingredientLike.name).toBe('草稿名');
+      expect(result.candidates).toHaveLength(1);
+    });
+
+    /** 用真的浓度解析：验证「临时载荷 → 营养档案 → 浓度」这条链。 */
+    function serviceWithRealDosage(): SupplementDraftReviewService {
+      return new SupplementDraftReviewService(
+        prismaMock as unknown as PrismaService,
+        draftServiceMock as unknown as SupplementDraftService,
+        new SupplementDosageService(),
+        additiveMock as unknown as FeedAdditiveCatalogService,
+        materialMock as unknown as FeedMaterialCatalogService,
+      );
+    }
+
+    it('recommendGroupsForPayload 直接用未保存载荷算浓度（不读草稿、不查 ingredient 表）', async () => {
+      prismaMock.supplementEquivalenceGroup.findMany.mockResolvedValue([
+        groupRow(),
+      ]);
+      // 全新草稿：还没选组、也还没有 ingredient 行，只有载荷里的营养事实。
+      const payload = validDraft({
+        basic: { name: '鱼油' },
+        equivalence: { groupId: null },
+      });
+
+      const result =
+        await serviceWithRealDosage().recommendGroupsForPayload(payload);
+
+      expect(draftServiceMock.get).not.toHaveBeenCalled();
+      expect(prismaMock.ingredient.findFirst).not.toHaveBeenCalled();
+      expect(result.equivalenceEnabled).toBe(true);
+      expect(result.candidates).toHaveLength(1);
+      expect(result.candidates[0]).toMatchObject({
+        groupId: 'group-1',
+        code: 'EPA_FISH_OIL',
+        status: 'APPROVED',
+        memberCount: 2,
+        sameUnit: true,
+        actualUnit: null,
+        mismatchReason: null,
+      });
+      expect(result.candidates[0].reason).toBe(
+        '单位一致、组已审核、2 个成员；加入后会把组打回待审核，需要重新审核才继续生效',
+      );
+    });
+
+    it('recommendGroupsForPayload 空载荷返回空候选（没有可解析的浓度）', async () => {
+      prismaMock.supplementEquivalenceGroup.findMany.mockResolvedValue([
+        groupRow(),
+      ]);
+
+      const result = await serviceWithRealDosage().recommendGroupsForPayload(
+        emptySupplementDraftPayload(),
+      );
+
+      expect(result.equivalenceEnabled).toBe(true);
+      expect(result.candidates).toEqual([]);
+    });
+
     it('单位不一致的组也返回，但 sameUnit=false 且原因说明不一致', async () => {
       prismaMock.supplementEquivalenceGroup.findMany.mockResolvedValue([
         groupRow(),

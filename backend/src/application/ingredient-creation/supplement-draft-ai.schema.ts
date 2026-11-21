@@ -116,11 +116,21 @@ export interface SupplementAiParseContext {
   allowedTags: string[];
   allowedTimings: string[];
   allowedNoSaleReasons: string[];
+  allowedPlatforms: string[];
   groupIds: string[];
 }
 
 /** 「暂不归组」的显式表态值，与草稿校验/前端一致。 */
 export const SUPPLEMENT_AI_GROUP_SKIPPED = '__SKIP__';
+
+/** DIY 购买平台允许值；与 `supplement-draft-validation.ts` 的 `DIY_PLATFORMS` 一致。 */
+export const SUPPLEMENT_AI_DIY_PLATFORMS: readonly string[] = [
+  'TAOBAO',
+  'JD',
+  'PINDUODUO',
+  'IHERB',
+  'OTHER',
+];
 
 /**
  * AI 可以填的字段路径（parser 白名单，prompt 也直接复用这份清单）。
@@ -211,7 +221,6 @@ const STRING_FIELD_PATHS = new Set<string>([
   'nutrition.labelText',
   'label.labelNameSource',
   'retail.storageCondition',
-  'diy.platform',
   'diy.linkUrl',
   'diy.imageUrl',
   'evidence.frontImageUrl',
@@ -319,6 +328,33 @@ function appendWarning(
   warnings.push(warning);
 }
 
+function describeValue(value: unknown): string {
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value) ?? String(value);
+  } catch {
+    return String(value);
+  }
+}
+
+/**
+ * 枚举/白名单字段收到了不在允许值里的内容：丢掉整条，并留一条
+ * `AI_FIELD_INVALID` 提醒（只给人看，不参与 finalize 门禁）。
+ */
+function invalidFieldValue(
+  warnings: SupplementAiWarning[],
+  fieldPath: string,
+  value: unknown,
+  allowed: readonly string[],
+): NormalizedFieldValue {
+  appendWarning(warnings, {
+    code: 'AI_FIELD_INVALID',
+    message: `模型给 ${fieldPath} 的值「${describeValue(value)}」不在允许值（${allowed.join('、')}）里，已忽略`,
+    fieldPath,
+  });
+  return INVALID;
+}
+
 /**
  * 归一化等价组 id：
  * - null / 空串 → null（还没选）；
@@ -367,25 +403,35 @@ function normalizeFieldValue(
     case 'basic.baseUnit':
       return typeof value === 'string' && BASE_UNITS.includes(value)
         ? ok(value)
-        : INVALID;
+        : invalidFieldValue(warnings, path, value, BASE_UNITS);
     case 'basic.physicalForm':
       return typeof value === 'string' && PHYSICAL_FORMS.includes(value)
         ? ok(value)
-        : INVALID;
+        : invalidFieldValue(warnings, path, value, PHYSICAL_FORMS);
     case 'label.labelCategory':
       return typeof value === 'string' && LABEL_CATEGORIES.includes(value)
         ? ok(value)
-        : INVALID;
+        : invalidFieldValue(warnings, path, value, LABEL_CATEGORIES);
     case 'basic.addTiming':
       return typeof value === 'string' && context.allowedTimings.includes(value)
         ? ok(value)
-        : INVALID;
+        : invalidFieldValue(warnings, path, value, context.allowedTimings);
     case 'retail.noSaleReason':
       if (value === null) return ok(null);
       return typeof value === 'string' &&
         context.allowedNoSaleReasons.includes(value)
         ? ok(value)
-        : INVALID;
+        : invalidFieldValue(
+            warnings,
+            path,
+            value,
+            context.allowedNoSaleReasons,
+          );
+    case 'diy.platform':
+      return typeof value === 'string' &&
+        context.allowedPlatforms.includes(value)
+        ? ok(value)
+        : invalidFieldValue(warnings, path, value, context.allowedPlatforms);
     case 'nutrition.defaultTargetFields':
       return Array.isArray(value)
         ? ok(filterAllowed(value, context.allowedFields))
@@ -555,13 +601,29 @@ function normalizeWarnings(raw: unknown): SupplementAiWarning[] {
   return result;
 }
 
-/** 顶层是数组 / 纯文本时不是我们要的「一个 JSON 对象」。 */
-function isNotObjectPayload(text: string): boolean {
-  const cleaned = String(text ?? '')
-    .replace(/^```(?:json)?/i, '')
-    .replace(/```$/, '')
+/** 去掉模型偶尔包上的 ```json / ``` 围栏（允许 ` ``` json ` 这种带空格的写法）。 */
+function stripCodeFences(text: string): string {
+  return String(text ?? '')
+    .trim()
+    .replace(/^```[ \t]*(?:json)?[ \t]*\r?\n?/i, '')
+    .replace(/```\s*$/i, '')
     .trim();
-  return cleaned.startsWith('[');
+}
+
+/**
+ * 找文本里的第一个 JSON 起始符。
+ *
+ * 模型可能先写一句“Here is the result:”，也可能把结果包在围栏里；
+ * 只认第一个 `{` 或 `[`：是 `[` 就说明顶层是数组，一律拒绝。
+ */
+function firstJsonToken(text: string): '{' | '[' | null {
+  const cleaned = stripCodeFences(text);
+  const objectIndex = cleaned.indexOf('{');
+  const arrayIndex = cleaned.indexOf('[');
+  if (objectIndex === -1 && arrayIndex === -1) return null;
+  if (arrayIndex === -1) return '{';
+  if (objectIndex === -1) return '[';
+  return arrayIndex < objectIndex ? '[' : '{';
 }
 
 /**
@@ -575,7 +637,7 @@ export function parseSupplementAiDraft(
   text: string,
   context: SupplementAiParseContext,
 ): SupplementAiDraft | null {
-  if (isNotObjectPayload(text)) return null;
+  if (firstJsonToken(text) !== '{') return null;
   const parsed = parseAnalysisJson(text);
   if (!isRecord(parsed)) return null;
 

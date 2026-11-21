@@ -11,6 +11,7 @@
  */
 
 import {
+  SUPPLEMENT_AI_DIY_PLATFORMS,
   SUPPLEMENT_AI_GROUP_SKIPPED,
   SUPPLEMENT_AI_KNOWN_FIELD_PATHS,
 } from './supplement-draft-ai.schema';
@@ -66,20 +67,13 @@ export interface SupplementDraftPromptInput {
   groupCandidates: SupplementDraftPromptGroupCandidate[];
   config: SupplementDraftPromptConfig;
   provisionalDraft: SupplementDraftPayload;
+  /** 人已经改过的字段路径（`manualFields`）；提示词要求模型不要覆盖。 */
+  manualFields: string[];
   allowedFields: string[];
   allowedTags: string[];
   allowedTimings: string[];
   allowedNoSaleReasons: string[];
 }
-
-/** DIY 平台允许值，与 `supplement-draft-validation.ts` 的 `DIY_PLATFORMS` 一致。 */
-const DIY_PLATFORMS: readonly string[] = [
-  'TAOBAO',
-  'JD',
-  'PINDUODUO',
-  'IHERB',
-  'OTHER',
-];
 
 const OUTPUT_SCHEMA = [
   '{',
@@ -216,7 +210,12 @@ export function buildSupplementDraftPrompt(
     formatList(input.allowedNoSaleReasons),
     '',
     '【DIY 购买平台（diy.platform）】',
-    formatList(DIY_PLATFORMS),
+    formatList(SUPPLEMENT_AI_DIY_PLATFORMS),
+    '',
+    '【允许的枚举值】',
+    '- basic.baseUnit：PCS、G、ML',
+    '- basic.physicalForm：POWDER、TABLET、CAPSULE、LIQUID',
+    '- label.labelCategory：FEED_MATERIAL、FEED_ADDITIVE',
     '',
     '【等价组候选】',
     formatGroupCandidates(input.groupCandidates),
@@ -227,6 +226,11 @@ export function buildSupplementDraftPrompt(
     '',
     '【当前草稿（人已经填的/系统算出的值；只作参考，不要静默覆盖人改过的字段）】',
     provisionalDraftJson,
+    '',
+    '【人已经改过的字段（不要覆盖）】',
+    input.manualFields.length > 0
+      ? input.manualFields.map((path) => `- ${path}`).join('\n')
+      : '（无）',
     '',
     '【可以填的字段路径（只允许这些）】',
     SUPPLEMENT_AI_KNOWN_FIELD_PATHS.map((path) => `- ${path}`).join('\n'),
@@ -240,6 +244,7 @@ export function buildSupplementDraftPrompt(
     '5. 目录只用来核对标签名称（labelNames）：只写目录里完全同名的规范名，不要自己造名字，也不要用目录判断适用性。',
     '6. 不看 dogAllowed / 适用范围：不要判断能不能给狗吃，不生成任何适用性门禁或提醒。',
     '7. 只输出一个 JSON 对象：只输出 JSON，不要加 markdown 代码块、不要解释、不要前后缀。',
+    '8. 人已经改过的字段以人的值为准，不要覆盖；如果你认为不同，把新值放 fields 并在 reason 里说明，或写进 warnings/missing，让人决定。',
     '',
     '字段条目格式：',
     '- source 只能是：LABEL、FRONT、LINK、CATALOG、RULE、INFERENCE；',

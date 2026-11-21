@@ -1,5 +1,6 @@
 import {
   parseSupplementAiDraft,
+  SUPPLEMENT_AI_DIY_PLATFORMS,
   type SupplementAiParseContext,
 } from '../../../src/application/ingredient-creation/supplement-draft-ai.schema';
 import {
@@ -19,6 +20,7 @@ const CONTEXT: SupplementAiParseContext = {
   allowedTags: ['油脂类', '蛋白质类'],
   allowedTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
   allowedNoSaleReasons: ['SELF_MADE', 'BULK', 'NO_SUPPLY', 'UNDECIDED'],
+  allowedPlatforms: [...SUPPLEMENT_AI_DIY_PLATFORMS],
   groupIds: ['group-1', 'group-2'],
 };
 
@@ -108,7 +110,7 @@ describe('parseSupplementAiDraft', () => {
     expect(draft!.fields['label.tagNames'].value).toEqual(['油脂类']);
   });
 
-  it('drops field values that fail enum or type checks', () => {
+  it('drops invalid enum/platform values and reports AI_FIELD_INVALID warnings', () => {
     const draft = parseJson({
       fields: {
         'basic.baseUnit': field('TON'),
@@ -116,11 +118,76 @@ describe('parseSupplementAiDraft', () => {
         'label.labelCategory': field('OTHER'),
         'basic.addTiming': field('AFTER_MEAL'),
         'retail.noSaleReason': field('BORED'),
+        'diy.platform': field('AMAZON'),
         'nutrition.servingNutrients.crudeProtein': field('875'),
       },
     });
 
     expect(draft!.fields).toEqual({});
+    expect(draft!.warnings).toHaveLength(6);
+    expect(draft!.warnings.map((warning) => warning.code)).toEqual(
+      Array.from({ length: 6 }, () => 'AI_FIELD_INVALID'),
+    );
+    expect(draft!.warnings.map((warning) => warning.fieldPath).sort()).toEqual([
+      'basic.addTiming',
+      'basic.baseUnit',
+      'basic.physicalForm',
+      'diy.platform',
+      'label.labelCategory',
+      'retail.noSaleReason',
+    ]);
+    const baseUnitWarning = draft!.warnings.find(
+      (warning) => warning.fieldPath === 'basic.baseUnit',
+    );
+    expect(baseUnitWarning?.message).toContain('basic.baseUnit');
+    expect(baseUnitWarning?.message).toContain('TON');
+  });
+
+  it('keeps reapproveGroup, isOilBased and field-level group ids', () => {
+    const draft = parseJson({
+      fields: {
+        'equivalence.reapproveGroup': field(false),
+        'retail.isOilBased': field(true),
+        'diy.platform': field('IHERB'),
+        'equivalence.groupId': field('group-2'),
+      },
+    });
+
+    expect(draft!.fields['equivalence.reapproveGroup'].value).toBe(false);
+    expect(draft!.fields['retail.isOilBased'].value).toBe(true);
+    expect(draft!.fields['diy.platform'].value).toBe('IHERB');
+    expect(draft!.fields['equivalence.groupId'].value).toBe('group-2');
+    expect(draft!.warnings).toEqual([]);
+  });
+
+  it('normalizes field-level equivalence group ids (valid / __SKIP__ / unknown)', () => {
+    const skip = parseJson({
+      fields: { 'equivalence.groupId': field('__SKIP__') },
+    });
+    expect(skip!.fields['equivalence.groupId'].value).toBe('__SKIP__');
+
+    const unknown = parseJson({
+      fields: { 'equivalence.groupId': field('group-9') },
+    });
+    expect(unknown!.fields['equivalence.groupId'].value).toBeNull();
+    expect(unknown!.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'EQUIVALENCE_GROUP_UNKNOWN',
+          fieldPath: 'equivalence.groupId',
+        }),
+      ]),
+    );
+  });
+
+  it('shares the platform whitelist with the prompt (TAOBAO/JD/PINDUODUO/IHERB/OTHER)', () => {
+    expect([...SUPPLEMENT_AI_DIY_PLATFORMS]).toEqual([
+      'TAOBAO',
+      'JD',
+      'PINDUODUO',
+      'IHERB',
+      'OTHER',
+    ]);
   });
 
   it('normalizes decisions and filters them to allowed values', () => {
@@ -280,10 +347,33 @@ describe('parseSupplementAiDraft', () => {
   it.each([
     ['plain text', 'not json'],
     ['broken fence', '```json\n{broken\n```'],
-    ['array', '[{"fields":{}}]'],
     ['empty', ''],
+    ['bare array', '[{"fields":{"basic.name":{"value":"鱼油"}}}]'],
+    [
+      'prose + array',
+      'Here is the result: [{"fields":{"basic.name":{"value":"鱼油"}}}]',
+    ],
+    [
+      'fenced array',
+      '``` json\n[{"fields":{"basic.name":{"value":"鱼油"}}}]\n```',
+    ],
   ])('returns null for %s', (_label, text) => {
     expect(parseSupplementAiDraft(text, CONTEXT)).toBeNull();
+  });
+
+  it('still parses an object with leading prose or a spaced fence', () => {
+    const body = JSON.stringify({
+      fields: { 'basic.name': field('鱼油') },
+    });
+
+    for (const text of [
+      `Here is the result: ${body}`,
+      `\`\`\` json\n${body}\n\`\`\``,
+    ]) {
+      expect(
+        parseSupplementAiDraft(text, CONTEXT)?.fields['basic.name'].value,
+      ).toBe('鱼油');
+    }
   });
 });
 
@@ -326,6 +416,7 @@ function promptInput(): SupplementDraftPromptInput {
     ],
     config: { shopEnabled: true, equivalenceEnabled: false },
     provisionalDraft,
+    manualFields: ['basic.name', 'nutrition.servingNutrients.fattyAcids.epa'],
     allowedFields: ['fattyAcids.epa', 'crudeProtein'],
     allowedTags: ['油脂类', '蛋白质类'],
     allowedTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
@@ -334,14 +425,52 @@ function promptInput(): SupplementDraftPromptInput {
 }
 
 describe('buildSupplementDraftPrompt', () => {
-  it('accepts the real link-preview and group-candidate shapes used by Task 8', () => {
+  it('accepts real link-preview and group-candidate objects used by Task 8', () => {
+    const linkPreview: SupplementLinkPreview = {
+      productUrl: 'https://cn.iherb.com/pr/now-foods/123',
+      pagePriceCny: 199,
+      productName: 'NOW Foods Ultra Omega-3',
+      brand: 'NOW Foods',
+      productModel: '180 Softgels',
+      imageUrl: 'https://img.example.com/front.jpg',
+      servingUnitsPerDose: 1,
+      nutrients: [
+        {
+          fieldPath: 'fattyAcids.epa',
+          value: 650,
+          unit: 'mg',
+          rawName: 'Fish Oil',
+        },
+      ],
+      unrecognized: ['Other Ingredients: softgel'],
+      labelText: 'Supplement Facts from link',
+    };
+    const groupCandidates: SupplementGroupRecommendation[] = [
+      {
+        groupId: 'group-1',
+        code: 'FO',
+        name: '鱼油等价组',
+        status: 'APPROVED',
+        memberCount: 3,
+        sameUnit: true,
+        nutrientLabel: 'EPA',
+        nutrientUnit: 'g',
+        reason: '浓度接近',
+      },
+    ];
+
     const input: SupplementDraftPromptInput = {
       ...promptInput(),
-      linkPreview: null as SupplementLinkPreview | null,
-      groupCandidates: [] as SupplementGroupRecommendation[],
+      linkPreview,
+      groupCandidates,
     };
+    const prompt = buildSupplementDraftPrompt(input);
 
-    expect(buildSupplementDraftPrompt(input)).toContain('没有候选等价组');
+    expect(prompt).toContain('NOW Foods Ultra Omega-3');
+    expect(prompt).toContain('Supplement Facts from link');
+    expect(prompt).toContain('group-1');
+    expect(prompt).toContain('鱼油等价组');
+    expect(prompt).toContain('浓度接近');
   });
 
   it('includes the facts, allowed values and the output JSON schema', () => {
@@ -379,8 +508,17 @@ describe('buildSupplementDraftPrompt', () => {
       '"warnings"',
       'basic.name',
       'nutrition.servingNutrients.<field>',
+      'basic.baseUnit：PCS、G、ML',
+      'basic.physicalForm：POWDER、TABLET、CAPSULE、LIQUID',
+      'label.labelCategory：FEED_MATERIAL、FEED_ADDITIVE',
+      '人已经改过的字段（不要覆盖）',
+      'nutrition.servingNutrients.fattyAcids.epa',
     ]) {
       expect(prompt).toContain(text);
+    }
+
+    for (const platform of SUPPLEMENT_AI_DIY_PLATFORMS) {
+      expect(prompt).toContain(platform);
     }
   });
 

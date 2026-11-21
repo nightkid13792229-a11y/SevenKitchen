@@ -1205,7 +1205,8 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿流程开关与入口
 
 ```bash
 cd backend
-npx jest tests/application/ingredient-creation/supplement-draft-completeness.spec.ts \
+npx jest tests/prisma/supplement-creation-draft.schema.spec.ts \
+  tests/application/ingredient-creation/supplement-draft-completeness.spec.ts \
   tests/application/ingredient-creation/supplement-draft-profile.spec.ts \
   tests/application/ingredient-creation/supplement-draft-validation.spec.ts \
   tests/application/ingredient-creation/supplement-draft-review.service.spec.ts \

@@ -127,20 +127,32 @@ export class IngredientCreationDraftService {
    *
    * 只能删自己的、未提交的草稿；核验报告一起删，避免留下无主行。
    * 已提交草稿是正式数据的追溯依据，不允许删。
+   *
+   * 「是谁的 / 有没有提交」和删除写在**同一条语句**里（条件 deleteMany），
+   * 不做「先查后删」：否则两边擦肩而过时，可能把刚提交的草稿删掉，
+   * 审计里只剩一条指向不存在草稿的记录。
    */
   async remove(id: string, userId: string): Promise<void> {
+    const removed = await this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.ingredientCreationDraft.deleteMany({
+        where: { id, createdBy: userId, step: { not: 'COMMIT' } },
+      });
+      if (claimed.count === 0) {
+        return false;
+      }
+      await tx.ingredientCheckRun.deleteMany({ where: { draftId: id } });
+      return true;
+    });
+    if (removed) {
+      return;
+    }
+
+    // 没删掉：按库里现状给出人能看懂的原因（不存在 / 不是自己的 / 已提交）。
     const draft = await this.get(id);
     if (draft.createdBy !== userId) {
       throw new ForbiddenException('只能删除自己创建的草稿');
     }
-    if (draft.step === 'COMMIT') {
-      throw new ConflictException('已提交的草稿不能删除');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.ingredientCheckRun.deleteMany({ where: { draftId: id } });
-      await tx.ingredientCreationDraft.delete({ where: { id } });
-    });
+    throw new ConflictException('已提交的草稿不能删除');
   }
 
   /**
@@ -148,18 +160,26 @@ export class IngredientCreationDraftService {
    *
    * 合并由**一条 UPDATE** 在库内完成（`payload || $1::jsonb`），不做「先读后写」——
    * 默认隔离级别是 READ COMMITTED，读改写会让两个并发 patch 互相覆盖。
+   *
+   * 已提交的草稿在这里就是只读的：`AND step <> 'COMMIT'` 和写入同一条语句，
+   * 提交与保存并发时只有一方能成立。已提交草稿是审计的追溯依据，提交后
+   * 再改 payload（含 AI 基线）会让「当时提交的是什么」无法回答。
    */
   async patch(
     id: string,
     step: CreationStep,
     payload: Partial<IngredientCreationDraftPayload>,
   ): Promise<IngredientCreationDraft> {
-    // 兜底：`proposalHistory` 只能由 `appendProposal` 追加，绝不接受 patch 覆盖。
+    // 兜底：这些键只能由服务端自己写，绝不接受 patch 覆盖。
+    // - `proposalHistory` 只能由 `appendProposal` 追加；
+    // - `aiBaseline` 只能由 AI 写工具记录（审计据此区分 AI 原值与人工改动）。
     // 前端若把整份 payload 回传，HTTP DTO 会先剥一次，这里再剥一次。
     const safePayload = {
       ...payload,
     } as Partial<IngredientCreationDraftPayload>;
-    delete (safePayload as Record<string, unknown>).proposalHistory;
+    const serverOwnedPayload = safePayload as Record<string, unknown>;
+    delete serverOwnedPayload.proposalHistory;
+    delete serverOwnedPayload.aiBaseline;
 
     const rows = await this.prisma.$queryRaw<RawDraftRow[]>`
       UPDATE "ingredient_creation_draft"
@@ -167,12 +187,21 @@ export class IngredientCreationDraftService {
           step = ${step},
           updated_at = now()
       WHERE id = ${id}
+        AND step <> 'COMMIT'
       RETURNING *
     `;
 
     const row = rows[0];
     if (!row) {
-      throw new NotFoundException(`Ingredient creation draft ${id} not found`);
+      // 没命中只有两种可能：草稿不存在，或已经提交。
+      const existing = await this.prisma.ingredientCreationDraft.findUnique({
+        where: { id },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new NotFoundException(`Ingredient creation draft ${id} not found`);
+      }
+      throw new ConflictException('这份草稿已经提交，不能再修改');
     }
 
     return this.mapRawDraft(row);

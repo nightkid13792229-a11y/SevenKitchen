@@ -101,14 +101,23 @@ import {
 import { AdminGuard } from '../guards/role.guard';
 import { sanitizeVerifyExceptions } from '../../domain/ingredient-creation/verify-exceptions';
 
-/** 服务层兜底之外的显式防线：payload 回传整份快照时也不得覆盖 AI 提案历史。 */
-function stripProposalHistory(
+/**
+ * 服务层兜底之外的显式防线：客户端回传整份快照时，也不得覆盖服务端专属的 payload 键。
+ *
+ * - `proposalHistory` 只能由 `appendProposal` 追加；
+ * - `aiBaseline` 只能由 AI 写工具记录（审计据此区分 AI 原值与人工改动）。
+ */
+function stripServerOwnedPayload(
   payload: UpdateDraftPayloadDto,
 ): Partial<IngredientCreationDraftPayload> {
-  const { proposalHistory: _ignored, ...rest } =
-    payload as UpdateDraftPayloadDto & {
-      proposalHistory?: unknown;
-    };
+  const {
+    proposalHistory: _ignoredHistory,
+    aiBaseline: _ignoredBaseline,
+    ...rest
+  } = payload as UpdateDraftPayloadDto & {
+    proposalHistory?: unknown;
+    aiBaseline?: unknown;
+  };
   return rest as unknown as Partial<IngredientCreationDraftPayload>;
 }
 
@@ -420,7 +429,7 @@ export class IngredientCreationController {
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<IngredientCreationDraft>> {
     // 例外的审批人/时间只能由服务端盖章，浏览器带来的值一律忽略。
-    const payload = stripProposalHistory(dto.payload);
+    const payload = stripServerOwnedPayload(dto.payload);
     if (payload.verify !== undefined) {
       const sanitized = sanitizeVerifyExceptions(
         payload.verify,

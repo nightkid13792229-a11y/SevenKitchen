@@ -390,9 +390,7 @@
                   type="button"
                   class="agent-ask__option"
                   :title="option.title || undefined"
-                  :disabled="
-                    state.running || saving || Boolean(commitResult)
-                  "
+                  :disabled="reviewLocked"
                   @click="handleAnswerOption(option.label)"
                 >
                   <span class="agent-ask__option-head">
@@ -448,6 +446,7 @@
               size="small"
               type="danger"
               :loading="planDismissing"
+              :disabled="reviewLocked"
               @click="skipPlan"
             >
               跳过本方案
@@ -468,6 +467,7 @@
                 size="small"
                 type="danger"
                 :loading="planDismissing"
+                :disabled="reviewLocked"
                 @click="skipPlan"
               >
                 跳过本方案
@@ -1565,7 +1565,10 @@ function toggleCandidate(candidate: any) {
 }
 
 const planCanConfirm = computed(
-  () => selectedRecordIds.value.length > 0 && !planConfirming.value
+  () =>
+    selectedRecordIds.value.length > 0 &&
+    !planConfirming.value &&
+    !reviewLocked.value
 )
 
 /** 人确认方案 → 落库 → 自动继续一轮，让 AI 开始写。 */
@@ -1596,6 +1599,13 @@ async function confirmPlan() {
 async function skipPlan() {
   const draftId = state.draftId
   if (!draftId || planDismissing.value) {
+    return
+  }
+  // 已提交的草稿只读：方案本身也不能再从页面上改（服务端同样会拒绝）。
+  if (reviewLocked.value) {
+    if (draftCommitted.value) {
+      ElMessage.info('这份草稿已经写入并确认可用，不能再改')
+    }
     return
   }
   planDismissing.value = true
@@ -2621,6 +2631,13 @@ async function discardSelectedDraft() {
 }
 
 async function handleRun() {
+  // 已提交的草稿只读：宁可什么都不发，也不让 AI 往已经写进正式库的草稿里再写。
+  if (draftCommitted.value) {
+    ElMessage.info(
+      '这份草稿已经写入并确认可用，不能再改；需要补数据请另开一份草稿'
+    )
+    return
+  }
   // 有未确认的检索方案：先让人确认/跳过，不能把方案卡悄悄清掉。
   if (
     shouldBlockRunForPendingPlan({
@@ -2743,7 +2760,14 @@ async function handleRun() {
  * 也不能悄悄新建一份草稿，让答案落到别处。
  */
 async function handleAnswerOption(option: string) {
-  if (state.running || saving.value || commitResult.value) {
+  // 审核区锁定（运行中 / 保存中 / 提交中 / 已提交）就不该再发下一轮：
+  // 问答卡可能是刷新后从 payload 恢复出来的，不能让已提交的草稿再被写一次。
+  if (reviewLocked.value) {
+    if (draftCommitted.value) {
+      ElMessage.info(
+        '这份草稿已经写入并确认可用，不能再改；需要补数据请另开一份草稿'
+      )
+    }
     return
   }
   const input = answerInputFromPendingQuestion(state, option)
@@ -3610,6 +3634,11 @@ async function handleAuthorize() {
     ElMessage.warning(gate.value.reasons[0] ?? '授权条件还没满足')
     return
   }
+  // 勾选状态是授权的一句话依据，必须真的被人勾上；按钮 disabled 只是第一道防线。
+  if (!reportAcknowledged.value) {
+    ElMessage.warning('先勾选「我已核对两页报告与采购价」再写入')
+    return
+  }
 
   submitting.value = true
   submitError.value = ''
@@ -3679,9 +3708,16 @@ async function handleAuthorize() {
       return
     }
 
+    // 保存队列 / 刷新核验都可能把勾选重置掉：写入前再判一次，
+    // 并把**实际勾选状态**发出去，而不是写死 true（审计要能还原人到底确认了什么）。
+    if (!reportAcknowledged.value) {
+      ElMessage.warning('内容刚改过，先重新确认「我已核对两页报告与采购价」')
+      return
+    }
+
     const result = await ingredientCreationApi.authorize(draftId, {
       primaryProfileIndex,
-      reportAcknowledged: true,
+      reportAcknowledged: reportAcknowledged.value,
       procurementSku: buildClosingSkuInput({
         ...closingForm,
         sourceScreenshotUrl: shotSourceUrl.value

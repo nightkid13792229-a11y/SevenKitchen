@@ -904,8 +904,8 @@ describe('IngredientCreationController', () => {
     });
   });
 
-  // 控制器方法可以直接调用（绕过管道）时也要剥掉 proposalHistory —— 服务层兜底之外的显式防线。
-  it('直接调用 updateDraft 时也会剥掉 proposalHistory', async () => {
+  // 控制器方法可以直接调用（绕过管道）时也要剥掉服务端专属键 —— 服务层兜底之外的显式防线。
+  it('直接调用 updateDraft 时也会剥掉 proposalHistory 与 aiBaseline', async () => {
     draftService.patch.mockResolvedValue(createDraft());
 
     await controller.updateDraft('draft-1', {
@@ -915,11 +915,18 @@ describe('IngredientCreationController', () => {
         proposalHistory: [
           { kind: 'MERGE', createdAt: '2026-10-22T00:00:00.000Z' },
         ],
+        aiBaseline: {
+          profiles: {},
+          ingredient: { name: { value: '伪造', unit: null, at: 'x' } },
+          updatedAt: '2026-11-21T00:00:00.000Z',
+        },
       },
     } as never, { userId: 'admin-1' } as never);
 
     const payload = draftService.patch.mock.calls[0][2];
     expect(payload).not.toHaveProperty('proposalHistory');
+    expect(payload).not.toHaveProperty('aiBaseline');
+    expect(payload).toHaveProperty('intake');
   });
 
   it('登记例外时审批人与时间由服务端盖章，浏览器带来的值不算', async () => {

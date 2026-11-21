@@ -130,6 +130,10 @@ function createPrismaMock() {
           if (!row) {
             return [];
           }
+          // 真库用 `AND step <> 'COMMIT'` 把「已提交草稿只读」放进同一条语句。
+          if (sql.includes("step <> 'COMMIT'") && row.step === 'COMMIT') {
+            return [];
+          }
           row.payload = { ...(row.payload as object), ...fragment };
           row.step = step;
           row.updatedAt = new Date();
@@ -316,6 +320,49 @@ describe('IngredientCreationDraftService', () => {
     expect(fresh.payload.proposalHistory).toBeUndefined();
   });
 
+  it('patch 兜底剥掉 aiBaseline，只允许 AI 写工具更新它', async () => {
+    const created = await service.create({
+      name: '鸡肝',
+      type: 'FOOD',
+      createdBy: 'u1',
+    });
+
+    await service.patch(created.id, 'PROFILE', {
+      aiBaseline: {
+        profiles: { 'src-1': { 'macros.crudeProtein': { value: 99, unit: 'g', at: 'x' } } },
+        ingredient: {},
+        updatedAt: '2026-11-21T00:00:00.000Z',
+      },
+      intake: { name: '鸡肝' },
+    } as never);
+
+    const [, serializedPayload] = prisma.$queryRaw.mock.calls[0];
+    expect(JSON.parse(serializedPayload as string)).toEqual({
+      intake: { name: '鸡肝' },
+    });
+
+    const fresh = await service.get(created.id);
+    expect(fresh.payload.aiBaseline).toBeUndefined();
+  });
+
+  it('已提交的草稿不能再 patch：409，且 payload 保持原样', async () => {
+    await seedDraft({
+      id: 'draft-committed',
+      step: 'COMMIT',
+      payload: { intake: { name: '鸡肝' } },
+    });
+
+    await expect(
+      service.patch('draft-committed', 'PROFILE', {
+        intake: { name: '改名' },
+      } as never),
+    ).rejects.toBeInstanceOf(ConflictException);
+
+    const fresh = await service.get('draft-committed');
+    expect(fresh.step).toBe('COMMIT');
+    expect(fresh.payload.intake).toEqual({ name: '鸡肝' });
+  });
+
   it('appendProposal 找不到草稿时抛 NotFoundException', async () => {
     await expect(
       service.appendProposal('missing-draft', {}, 'INTAKE'),
@@ -482,11 +529,42 @@ describe('IngredientCreationDraftService', () => {
 
 
 describe('IngredientCreationDraftService · remove（放弃草稿）', () => {
+  const baseRow = {
+    id: 'draft-1',
+    name: '鸡肝',
+    type: 'FOOD',
+    step: 'PROFILE' as string,
+    payload: {},
+    createdBy: 'admin-1',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  /**
+   * 条件删除的假实现：只有 `where` 全命中才会删掉那一行。
+   *
+   * 真实语义靠 `deleteMany({ where: { id, createdBy, step: { not: 'COMMIT' } } })`
+   * 一条语句保证；这里按 where 逐条判断，测试才能证明「条件确实被推给了数据库」。
+   */
   function makeService(row: Record<string, unknown>) {
+    const state = { row: { ...row } as Record<string, unknown> | null };
     const prisma: any = {
       ingredientCreationDraft: {
-        findUnique: jest.fn(async () => row),
-        delete: jest.fn(async () => row),
+        findUnique: jest.fn(async () => state.row),
+        deleteMany: jest.fn(async ({ where }: any) => {
+          const current = state.row as Record<string, unknown> | null;
+          if (!current || where?.id !== current.id) {
+            return { count: 0 };
+          }
+          if (where?.createdBy && where.createdBy !== current.createdBy) {
+            return { count: 0 };
+          }
+          if (where?.step?.not === 'COMMIT' && current.step === 'COMMIT') {
+            return { count: 0 };
+          }
+          state.row = null;
+          return { count: 1 };
+        }),
       },
       ingredientCheckRun: {
         deleteMany: jest.fn(async () => ({ count: 1 })),
@@ -498,46 +576,40 @@ describe('IngredientCreationDraftService · remove（放弃草稿）', () => {
     return { service: new IngredientCreationDraftService(prisma), prisma };
   }
 
-  const row = {
-    id: 'draft-1',
-    name: '鸡肝',
-    type: 'FOOD',
-    step: 'PROFILE',
-    payload: {},
-    createdBy: 'admin-1',
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
   it('删除自己的未提交草稿，并清掉它的核验报告', async () => {
-    const { service, prisma } = makeService(row);
+    const { service, prisma } = makeService(baseRow);
 
     await service.remove('draft-1', 'admin-1');
 
     expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    // 「是谁的 / 有没有提交」和删除放在同一条语句里，不给并发提交留窗口。
+    expect(prisma.ingredientCreationDraft.deleteMany).toHaveBeenCalledWith({
+      where: {
+        id: 'draft-1',
+        createdBy: 'admin-1',
+        step: { not: 'COMMIT' },
+      },
+    });
     expect(prisma.ingredientCheckRun.deleteMany).toHaveBeenCalledWith({
       where: { draftId: 'draft-1' },
     });
-    expect(prisma.ingredientCreationDraft.delete).toHaveBeenCalledWith({
-      where: { id: 'draft-1' },
-    });
   });
 
-  it('别人的草稿不能删', async () => {
-    const { service, prisma } = makeService(row);
+  it('别人的草稿不能删，也不清任何核验报告', async () => {
+    const { service, prisma } = makeService(baseRow);
 
     await expect(service.remove('draft-1', 'other')).rejects.toBeInstanceOf(
       ForbiddenException,
     );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.ingredientCheckRun.deleteMany).not.toHaveBeenCalled();
   });
 
   it('已提交草稿不能删（追溯依据）', async () => {
-    const { service, prisma } = makeService({ ...row, step: 'COMMIT' });
+    const { service, prisma } = makeService({ ...baseRow, step: 'COMMIT' });
 
     await expect(service.remove('draft-1', 'admin-1')).rejects.toBeInstanceOf(
       ConflictException,
     );
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(prisma.ingredientCheckRun.deleteMany).not.toHaveBeenCalled();
   });
 });

@@ -228,6 +228,7 @@ export class SupplementLabelIntakeService {
     const packSpec = buildPackSpec({
       perBottleUnits: analysis?.result.perBottleUnits ?? null,
       unitLabel,
+      servingUnits: analysis?.result.servingUnitsPerDose ?? null,
       nutrients: nutrientForSpec ? [nutrientForSpec] : [],
     });
 

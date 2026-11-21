@@ -23,14 +23,26 @@ describe('buildPackSpec', () => {
     expect(buildPackSpec({ perBottleUnits: null, unitLabel: '粒', nutrients: [] })).toBeNull();
   });
 
-  it('粉按克', () => {
+  it('粉按克：写每份多少克含多少', () => {
     expect(
       buildPackSpec({
-        perBottleUnits: 500,
+        perBottleUnits: 227,
         unitLabel: 'g',
-        nutrients: [{ label: 'EPA', amount: 180, unit: 'mg' }],
+        servingUnits: 0.9,
+        nutrients: [{ label: '牛磺酸', amount: 0.875, unit: 'g' }],
       }),
-    ).toBe('500g/瓶，180mgEPA/g');
+    ).toBe('227g/瓶，每份0.9g含0.875g牛磺酸');
+  });
+
+  it('胶囊每份 2 粒时写「每份2粒含」', () => {
+    expect(
+      buildPackSpec({
+        perBottleUnits: 180,
+        unitLabel: '粒',
+        servingUnits: 2,
+        nutrients: [{ label: '铁', amount: 18, unit: 'mg' }],
+      }),
+    ).toBe('180粒/瓶，每份2粒含18mg铁');
   });
 });
 

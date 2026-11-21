@@ -34,8 +34,13 @@ describe('折算', () => {
     expect(convertPerUnit(650, 0)).toBeNull()
   })
 
-  it('每份粒数不是整数时不折算，返回 null', () => {
-    expect(convertPerUnit(650, 1.5)).toBeNull()
+  it('每份允许小数（粉 0.9 g）', () => {
+    expect(convertPerUnit(0.875, 0.9)).toBeCloseTo(0.9722, 3)
+  })
+
+  it('每份为 0 或空时不折算', () => {
+    expect(convertPerUnit(650, 0)).toBeNull()
+    expect(convertPerUnit(650, null)).toBeNull()
   })
 })
 
@@ -71,10 +76,16 @@ describe('单位闭合', () => {
     expect(item.anchor).toBe('servingUnitsPerDose')
   })
 
-  it('基准单位不是个/件时拦死', () => {
-    const item = gate({ ...base, baseUnit: 'G' }, 'UNIT')
+  it('粉剂按克记账也通过', () => {
+    const item = gate({ ...base, baseUnit: 'G', servingUnitsPerDose: 0.9 }, 'UNIT')
+    expect(item.passed).toBe(true)
+    expect(item.detail).toContain('每 1 g')
+  })
+
+  it('每份为 0 时拦死', () => {
+    const item = gate({ ...base, servingUnitsPerDose: 0 }, 'UNIT')
     expect(item.passed).toBe(false)
-    expect(item.anchor).toBe('baseUnit')
+    expect(item.anchor).toBe('servingUnitsPerDose')
   })
 })
 

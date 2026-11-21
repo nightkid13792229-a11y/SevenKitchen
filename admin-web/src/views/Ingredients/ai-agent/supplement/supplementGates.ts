@@ -49,12 +49,14 @@ function isPositiveNumber(value: number | null): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
-/** 每份值 ÷ 每份粒数。粒数不是正整数时返回 null——不猜，也不当 1。 */
+/** 每份值 ÷ 每份用量。用量不是正数时返回 null——不猜，也不当 1。 */
+
 export function convertPerUnit(
   servingValue: number,
   servingUnitsPerDose: number | null
 ): number | null {
-  if (!isPositiveInteger(servingUnitsPerDose)) {
+  // 粉剂/液体的"每份"是小数量（0.9 g、2.5 ml），不能只认整数
+  if (!isPositiveNumber(servingUnitsPerDose)) {
     return null
   }
   if (typeof servingValue !== 'number' || !Number.isFinite(servingValue)) {
@@ -66,12 +68,12 @@ export function convertPerUnit(
 function checkConversion(input: SupplementGateInput): SupplementGateItem {
   const { servingUnitsPerDose, servingNutrients, perUnitNutrients } = input
 
-  if (!isPositiveInteger(servingUnitsPerDose)) {
+  if (!isPositiveNumber(servingUnitsPerDose)) {
     return {
       key: 'CONVERSION',
       label: GATE_LABELS.CONVERSION,
       passed: false,
-      detail: '先填每份几粒，才知道怎么折',
+      detail: '先填每份多少（粒 / 克 / 毫升），才知道怎么折',
       anchor: 'servingUnitsPerDose'
     }
   }
@@ -110,32 +112,33 @@ function checkConversion(input: SupplementGateInput): SupplementGateItem {
     }
   }
 
+  const unitText = input.baseUnit === 'G' ? 'g' : input.baseUnit === 'ML' ? 'ml' : '粒'
   return {
     key: 'CONVERSION',
     label: GATE_LABELS.CONVERSION,
     passed: true,
-    detail: `每份 ${servingUnitsPerDose} 粒，已折成每粒`,
+    detail: `每份 ${servingUnitsPerDose} ${unitText}，已折成每 1 ${unitText}`,
     anchor: 'servingUnitsPerDose'
   }
 }
 
 function checkUnit(input: SupplementGateInput): SupplementGateItem {
-  if (!isPositiveInteger(input.servingUnitsPerDose)) {
+  if (!isPositiveNumber(input.servingUnitsPerDose)) {
     return {
       key: 'UNIT',
       label: GATE_LABELS.UNIT,
       passed: false,
-      detail: '每份几粒必须是大于 0 的整数',
+      detail: '每份多少必须大于 0（粉按克、液体按毫升，可以是小数）',
       anchor: 'servingUnitsPerDose'
     }
   }
 
-  if (input.baseUnit !== 'PCS') {
+  if (input.baseUnit === 'PCS') {
     return {
       key: 'UNIT',
       label: GATE_LABELS.UNIT,
-      passed: false,
-      detail: '补剂按粒记，基准单位必须是个/件',
+      passed: true,
+      detail: '按粒记账，营养按每 1 粒记',
       anchor: 'baseUnit'
     }
   }
@@ -144,7 +147,10 @@ function checkUnit(input: SupplementGateInput): SupplementGateItem {
     key: 'UNIT',
     label: GATE_LABELS.UNIT,
     passed: true,
-    detail: '按粒记账，营养按 mg/g 记，不串',
+    detail:
+      input.baseUnit === 'G'
+        ? '按克记账，营养按每 1 g 记'
+        : '按毫升记账，营养按每 1 ml 记',
     anchor: 'baseUnit'
   }
 }

@@ -10,24 +10,41 @@
 export interface PackSpecInput {
   perBottleUnits: number | null;
   unitLabel: string;
+  /** 每份多少个基准单位（粒 / 克 / 毫升） */
+  servingUnits?: number | null;
   nutrients: { label: string | null; amount: number | null; unit: string }[];
 }
 
-/** 「180粒/瓶，18mg铁/粒」；没有含量就只写瓶规。 */
+/**
+ * 产品规格，写成**人读得懂**的一句：
+ * - 胶囊/片剂、每份 1 粒：`180粒/瓶，18mg铁/粒`
+ * - 胶囊/片剂、每份 2 粒：`180粒/瓶，每份2粒含18mg铁`
+ * - 粉/液体：`227g/瓶，每份0.9g含0.875g牛磺酸`
+ *
+ * 注意：营养素含量是**每份**的，不要再除一次基准单位。
+ */
 export function buildPackSpec(input: PackSpecInput): string | null {
   const count = input.perBottleUnits;
   if (!count || count <= 0) {
     return null;
   }
   const unit = input.unitLabel || '粒';
+  const serving = input.servingUnits ?? null;
   const first = input.nutrients.find((item) => item.amount !== null && item.amount > 0);
-  if (!first || !first.label) {
+  if (!first || !first.label || first.amount === null) {
     return `${count}${unit}/瓶`;
   }
-  const amount = Number.isInteger(first.amount)
-    ? String(first.amount)
-    : String(first.amount).replace(/0+$/, '');
-  return `${count}${unit}/瓶，${amount}${first.unit}${first.label}/${unit}`;
+  const amount = String(Math.round(first.amount * 1000) / 1000);
+  const nutrient = `${amount}${first.unit}${first.label}`;
+
+  if (unit !== 'g' && unit !== 'ml' && (!serving || serving === 1)) {
+    return `${count}${unit}/瓶，${nutrient}/${unit}`;
+  }
+  if (unit !== 'g' && unit !== 'ml') {
+    return `${count}${unit}/瓶，每份${serving}${unit}含${nutrient}`;
+  }
+  const servingText = serving && serving > 0 ? `每份${serving}${unit}含` : '';
+  return `${count}${unit}/瓶，${servingText}${nutrient}`;
 }
 
 /** 从文字里抠人民币价格：先认「¥77.02」，再认「价格：77.02」。 */

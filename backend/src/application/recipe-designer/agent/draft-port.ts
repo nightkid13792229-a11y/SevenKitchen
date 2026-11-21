@@ -7,7 +7,7 @@
  */
 import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
-import { AgentToolError, type RecipeEditOp } from './agent-types';
+import type { RecipeEditOp } from './agent-types';
 import type {
   AssessmentTargetOverride,
   FediafAssessmentTarget,
@@ -286,25 +286,12 @@ export class RecipeDraftPort {
         }
 
         if (op.op === 'replace') {
-          const before = (await this.designer.getDraft(
-            this.draftId,
-            this.access,
-          )) as any;
-          const oldItem = (before.items ?? []).find(
-            (item: any) => item.id === op.itemId,
-          );
-          if (!oldItem) {
-            throw new AgentToolError('ITEM_NOT_FOUND', '要替换的原料不存在');
-          }
-          const weightG = Number(oldItem.weightG ?? 0);
-          await this.designer.removeItem(op.itemId, this.access);
-          await this.designer.addItem(
-            this.draftId,
+          // 用事务版 replaceItem：失败不删旧项，保留排序/计入开关/预处理/补剂目标。
+          await this.designer.replaceItem(
+            op.itemId,
             {
               nutritionFoodId: op.nutritionFoodId,
               ingredientId: op.ingredientId,
-              weightG,
-              preparationMethod: oldItem.preparationMethod ?? undefined,
             } as any,
             this.access,
           );

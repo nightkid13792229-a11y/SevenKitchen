@@ -127,6 +127,19 @@
         <p v-if="skipped.length > 0" class="upload-card__warn">
           这些没认出来，请照标签补：{{ skipped.join('、') }}
         </p>
+
+        <el-collapse v-if="readDone" class="upload-card__ocr">
+          <el-collapse-item title="看模型读到的原文（字段就是从这来的）" name="ocr">
+            <p class="upload-card__ocr-title">正面图</p>
+            <pre class="upload-card__ocr-text">{{ ocrText.front || '（空）' }}</pre>
+            <p class="upload-card__ocr-title">标签图</p>
+            <pre class="upload-card__ocr-text">{{ ocrText.label || '（空）' }}</pre>
+            <p class="upload-card__ocr-note">
+              名称 / 品牌 / 渠道 / 价格 / 基准单位 / 标签类型与名称 → 模型判断；
+              营养素、每份多少、产品规格、价格兜底 → 代码从上面这段原文算。
+            </p>
+          </el-collapse-item>
+        </el-collapse>
       </div>
     </div>
 
@@ -442,6 +455,8 @@ const skipped = ref<string[]>([])
 const catalogCandidates = ref<{ name: string; dogAllowed: boolean }[]>([])
 const droppedHints = ref<{ field: string; reason: string; value: string }[]>([])
 const diagnosticNotes = ref<string[]>([])
+/** 模型抄回来的原文：字段为什么空着，看这里最快 */
+const ocrText = ref<{ front: string; label: string }>({ front: '', label: '' })
 const showAll = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
@@ -799,6 +814,7 @@ async function readImages(): Promise<void> {
     }))
     readDone.value = true
     diagnosticNotes.value = result.diagnostics?.notes ?? []
+    ocrText.value = { front: result.frontText ?? '', label: result.labelText ?? '' }
     ElMessage.success('读完了，核对一下数字')
   } catch (error) {
     errorText.value = apiErrorMessage(error, '这两张图没读成，可以重试或手填')
@@ -959,6 +975,31 @@ function apiErrorMessage(error: unknown, fallback: string): string {
   font-size: 11.5px;
   color: #8a9099;
   line-height: 1.6;
+}
+.upload-card__ocr {
+  margin-top: 8px;
+}
+.upload-card__ocr-title {
+  margin: 6px 0 4px;
+  font-size: 12px;
+  color: #5b6470;
+}
+.upload-card__ocr-text {
+  max-height: 180px;
+  overflow: auto;
+  margin: 0;
+  padding: 8px;
+  border-radius: 4px;
+  background: #f7f8fa;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.upload-card__ocr-note {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  color: #9aa2ab;
 }
 .upload-card__warn {
   margin: 0;

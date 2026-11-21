@@ -38,7 +38,8 @@ const FLOW_DISABLED_MESSAGE = '补剂草稿流程未开启';
  * 草稿私有性由 `SupplementDraftService` 的 `createdBy` 过滤保证；
  * 最终写入 / 校验 / 核验全部在服务层，控制器不碰 Prisma、不重算营养。
  *
- * `SUPPLEMENT_DRAFT_FLOW=false` 时所有路由 404（默认开启，便于回滚到旧流程）。
+ * `SUPPLEMENT_DRAFT_FLOW` 必须显式设为 `true` 才启用；未设置或 `false` 时
+ * 所有路由 404（默认关，回滚到旧流程只需去掉这个变量）。
  */
 @ApiTags('Admin Supplement Draft')
 @ApiBearerAuth()
@@ -55,7 +56,8 @@ export class SupplementDraftController {
   ) {}
 
   private assertFlowEnabled(): void {
-    if (process.env.SUPPLEMENT_DRAFT_FLOW === 'false') {
+    // spec §13：默认关，只有显式 true 才启用新流程。
+    if (process.env.SUPPLEMENT_DRAFT_FLOW !== 'true') {
       throw new NotFoundException(FLOW_DISABLED_MESSAGE);
     }
   }

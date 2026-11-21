@@ -68,8 +68,8 @@ describe('SupplementDraftController', () => {
       mocks.finalizeService as unknown as SupplementFinalizeService,
       mocks.verificationService as unknown as SupplementVerificationService,
     );
-    // 默认（未设置）即开启
-    delete process.env.SUPPLEMENT_DRAFT_FLOW;
+    // 普通用例先显式打开（默认关，只有 true 才启用）
+    process.env.SUPPLEMENT_DRAFT_FLOW = 'true';
   });
 
   afterEach(() => {
@@ -296,8 +296,9 @@ describe('SupplementDraftController', () => {
   /* 开关                                                              */
   /* ---------------------------------------------------------------- */
 
-  it('SUPPLEMENT_DRAFT_FLOW=false 时所有路由 404，且不调用服务', async () => {
-    process.env.SUPPLEMENT_DRAFT_FLOW = 'false';
+  it('SUPPLEMENT_DRAFT_FLOW 未设置或 false 时所有路由 404，且不调用服务', async () => {
+    // ① 未设置（默认关）
+    delete process.env.SUPPLEMENT_DRAFT_FLOW;
 
     await expect(controller.list(user)).rejects.toBeInstanceOf(
       NotFoundException,
@@ -308,6 +309,16 @@ describe('SupplementDraftController', () => {
     );
     await expect(controller.getVerification(user, 'draft-1')).rejects.toThrow(
       NotFoundException,
+    );
+
+    // ② 显式 false
+    process.env.SUPPLEMENT_DRAFT_FLOW = 'false';
+
+    await expect(controller.list(user)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(controller.finalize(user, 'draft-1', {})).rejects.toThrow(
+      '补剂草稿流程未开启',
     );
 
     expect(mocks.draftService.list).not.toHaveBeenCalled();

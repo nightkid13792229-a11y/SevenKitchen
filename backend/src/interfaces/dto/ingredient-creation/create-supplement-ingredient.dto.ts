@@ -212,7 +212,8 @@ export class CreateSupplementIngredientDto {
 
   @ApiPropertyOptional({
     description:
-      '模型算好的「每 1 个基准单位」含量（键是规范字段路径）。给了就直接用；不给服务端按每份÷份量折',
+      '已废弃：客户端折算的每单位值一律忽略，档案只按「每份含量 ÷ 每份量」由服务端计算；仅为兼容旧客户端保留',
+    deprecated: true,
   })
   @IsOptional()
   @IsObject()

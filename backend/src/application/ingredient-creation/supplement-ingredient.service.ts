@@ -15,10 +15,10 @@ import { findNutritionField } from '../../domain/ingredient/nutrition-field-cata
 /**
  * 补剂建档。
  *
- * 一条补剂 = 标准原料（单层产品模型）+ 一份**待验证**的营养档案 + 主映射 + 标签证据。
+ * 一条补剂 = 标准原料（单层产品模型）+ 一份**已核验**的营养档案 + 主映射 + 标签证据。
  * 四样在一个事务里落，缺一样这条补剂在配方里就选不到。
  *
- * 这里**不判**折算对不对、门禁过没过——那是入口的事，判完才调进来。
+ * 这里**不判**门禁过没过——那是入口的事，判完才调进来。
  * 这里只保证：写进去的东西结构对、状态对、不重复建。
  */
 export type SupplementPhysicalForm = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID';
@@ -65,10 +65,26 @@ export interface CreateSupplementIngredientInput {
   /** 标签上每份的含量，键是规范字段路径（fattyAcids.epa / minerals.zinc）。折算由服务端做。 */
   servingNutrients: Record<string, number>;
   /**
-   * 可选：调用方自己折好的每粒值。带了就必须与「每份 ÷ N」一致，
-   * 否则 400——折算只有服务端说了算，客户端只能提出、不能决定。
+   * 已废弃：客户端折算的每单位值一律忽略，档案只按「每份 ÷ 份数」算。
+   * 字段保留只为兼容旧客户端；新调用方不要传。
    */
   perUnitNutrients?: Record<string, number>;
+  /** 上架：原厂保质期（月）。可选，老调用方不传。 */
+  shelfLifeMonths?: number | null;
+  /** 上架：开盖后保质期（天）。可选，标签写了才填。 */
+  openedShelfLifeDays?: number | null;
+  /** 上架：储存条件。可选。 */
+  storageCondition?: string | null;
+  /** 上架：内容物是否油性。可选，默认 false。 */
+  isOilBased?: boolean;
+  /** 上架：商城是否上架。可选，默认 false。 */
+  supplementRetailEnabled?: boolean;
+  /** DIY：购买链接，写进 properties.purchase_link。可选。 */
+  purchaseLink?: { platform: string; url: string | null } | null;
+  /** DIY：商品图片，写进 properties.image_url。可选。 */
+  imageUrl?: string | null;
+  /** 不上架原因，写进 properties.no_sale_reason；上架时传 null。可选。 */
+  noSaleReason?: string | null;
   evidence: CreateSupplementEvidenceInput;
   createdBy: string;
 }
@@ -116,6 +132,17 @@ function isNutrientGroup(value: string): value is NutrientGroup {
   return (NUTRIENT_GROUPS as readonly string[]).includes(value);
 }
 
+/**
+ * 基准单位 → 档案口径。PCS 用 `PER_SERVING`（按 1 个单位记），不用 `PER_1_PCS`：
+ * 后者不在领域支持的 raw basis 里，配方设计器读路径会当成缺失。
+ * G/ML 用每 1 克/毫升，否则浓度解析会因为没有 servingWeightG 判 MISSING_SERVING_WEIGHT。
+ */
+const RAW_BASIS_BY_BASE_UNIT: Record<'PCS' | 'G' | 'ML', string> = {
+  PCS: 'PER_SERVING',
+  G: 'PER_1_G',
+  ML: 'PER_1_ML',
+};
+
 @Injectable()
 export class SupplementIngredientService {
   private readonly logger = new Logger(SupplementIngredientService.name);
@@ -125,189 +152,10 @@ export class SupplementIngredientService {
   async create(
     input: CreateSupplementIngredientInput
   ): Promise<CreateSupplementIngredientResult> {
-    this.assertInput(input);
-    const perUnitNutrients = this.derivePerUnitNutrients(input);
-    const profile = this.buildProfile(input, perUnitNutrients);
-    const nutritionFoodName = this.buildNutritionFoodName(input);
-
     try {
-      return await this.prisma.$transaction(async (tx) => {
-        // 同一条补剂不许建两个档案。
-        // 库里的 @@unique(name, brand, productModel) 挡不住"品牌或规格为空"的情形——
-        // Postgres 把 NULL 当互不相等。所以这里按同样的三件套做一次显式比较。
-        const duplicate = await tx.ingredient.findFirst({
-          where: {
-            type: IngredientType.SUPPLEMENT,
-            name: input.name,
-            brand: input.brand ?? null,
-            productModel: input.productModel ?? null
-          },
-          select: { id: true, name: true, brand: true, productModel: true }
-        });
-        if (duplicate) {
-          this.logger.warn(
-            `[supplement-create] 重复建档 incoming=${JSON.stringify({
-              name: input.name,
-              brand: input.brand ?? null,
-              productModel: input.productModel ?? null,
-            })} existing=${JSON.stringify(duplicate)}`,
-          );
-          throw new ConflictException(this.duplicateMessage(duplicate));
-        }
-
-        const ingredient = await tx.ingredient.create({
-          data: {
-            name: input.name,
-            type: IngredientType.SUPPLEMENT,
-            baseUnit: (input.baseUnit ?? 'PCS') as 'PCS' | 'G' | 'ML',
-            unitDisplayLabel: input.unitDisplayLabel,
-            brand: input.brand ?? null,
-            productModel: input.productModel ?? null,
-            purchaseChannel: input.purchaseChannel ?? null,
-            purchaseUnit: input.purchaseUnit,
-            purchaseToBaseRatio: input.purchaseToBaseRatio,
-            currentPricePerPurchaseUnit: input.currentPricePerPurchaseUnit,
-            physicalForm: input.physicalForm,
-            diyEnabled: input.diyEnabled,
-            procurementEnabled: input.procurementEnabled,
-            nutritionProfile: profile as unknown as Prisma.InputJsonValue,
-            properties: {
-              category_type: 'OTHER',
-              display_unit: input.unitDisplayLabel,
-              serving_unit_label: input.unitDisplayLabel,
-              serving_units_per_dose: input.servingUnitsPerDose,
-              add_timing: input.addTiming,
-              production_loss_rate: input.productionLossRate,
-              label_category: input.labelCategory,
-              label_names: input.labelNames,
-              label_name_source: input.labelNameSource,
-              tags: input.tagNames
-            }
-          }
-        });
-
-        // 默认目标营养素：显式给了就用，没给按档案里有值的营养素兜底；
-        // 一个都没有就不让建档——否则设计器里加进去没有默认目标，等于白建。
-        const targetFields = (input.defaultTargetFields ?? []).filter(
-          (fieldPath) => Number(perUnitNutrients[fieldPath]) > 0,
-        );
-        const resolvedTargetFields =
-          targetFields.length > 0
-            ? targetFields
-            : Object.keys(perUnitNutrients).filter(
-                (fieldPath) => Number(perUnitNutrients[fieldPath]) > 0,
-              );
-        if (resolvedTargetFields.length === 0) {
-          throw new BadRequestException(
-            '这条补剂没有任何营养素数值，无法确定默认目标营养素；请先把标签上的含量读出来或手填',
-          );
-        }
-        const defaultSupplementTargets = resolvedTargetFields.map((fieldPath) => {
-          const field = findNutritionField(fieldPath);
-          return {
-            fieldPath,
-            label: field?.label ?? null,
-            unit: field?.unit ?? null,
-          };
-        });
-
-        /**
-         * 上一次写入中断（或原料被删）会在 nutrition_food 里留下同名孤儿：
-         * 营养档案的唯一键是 (name, dataSource, version)，孤儿在，这次插入就会撞键，
-         * 还会被误报成「补剂重复」。所以先找同名的无主档案，有就复用（更新数据）。
-         */
-        const existingFood = await tx.nutritionFood.findFirst({
-          where: {
-            name: nutritionFoodName,
-            dataSource: 'MANUAL',
-            version: 1,
-            mappings: { none: {} },
-          },
-          select: { id: true },
-        });
-        const nutritionFood = existingFood
-          ? await tx.nutritionFood.update({
-              where: { id: existingFood.id },
-              data: {
-                externalId: `SUPPLEMENT-MANUAL:${ingredient.id}`,
-                nutritionData: profile as unknown as Prisma.InputJsonValue,
-                defaultSupplementTargets:
-                  defaultSupplementTargets as unknown as Prisma.InputJsonValue,
-                status: 'VERIFIED',
-                verifiedBy: input.createdBy,
-                verifiedAt: new Date(),
-                notes: '补剂标签折算；建档时已逐项核对，随建档确认可用',
-              },
-            })
-          : await tx.nutritionFood.create({
-          data: {
-            name: nutritionFoodName,
-            nameEn: null,
-            displayNameZh: nutritionFoodName,
-            displayNameZhSource: 'MANUAL',
-            displayNameZhReviewedAt: new Date(),
-            displayNameZhReviewedBy: input.createdBy,
-            category: 'SUPPLEMENT',
-            dataSource: 'MANUAL',
-            externalId: `SUPPLEMENT-MANUAL:${ingredient.id}`,
-            preparationState: 'SUPPLEMENT',
-            preparationStateLabel: '补剂',
-            ediblePortionLabel: `每 1 ${input.unitDisplayLabel}`,
-            processingLabel: '标签折算',
-            nutritionData: profile as unknown as Prisma.InputJsonValue,
-            defaultSupplementTargets:
-              defaultSupplementTargets as unknown as Prisma.InputJsonValue,
-            notes: '补剂标签折算；建档时已逐项核对，随建档确认可用',
-            createdBy: input.createdBy,
-            // 建档这一步就是人工核对：填完并写入即视为确认可用，不再多一道"确认可用"
-            status: 'VERIFIED',
-            verifiedBy: input.createdBy,
-            verifiedAt: new Date()
-          }
-        });
-
-        await tx.nutritionFoodMapping.create({
-          data: {
-            nutritionFoodId: nutritionFood.id,
-            ingredientId: ingredient.id,
-            yieldRate: 1,
-            isPrimary: true,
-            notes: '补剂标签折算，待人工确认'
-          }
-        });
-
-        await this.attachTags(tx, ingredient.id, input.tagNames);
-
-        const evidence = await tx.supplementLabelEvidence.create({
-          data: {
-            ingredientId: ingredient.id,
-            nutritionFoodId: nutritionFood.id,
-            productUrl: input.evidence.productUrl ?? null,
-            productName: input.evidence.productName ?? input.name,
-            servingUnitsPerDose: input.servingUnitsPerDose,
-            frontImageUrl: input.evidence.frontImageUrl ?? null,
-            labelImageUrl: input.evidence.labelImageUrl ?? null,
-            labelText: input.evidence.labelText ?? null,
-            selectionSnapshot:
-              (input.evidence.selection as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
-            conversionSnapshot: {
-              servingUnitsPerDose: input.servingUnitsPerDose,
-              servingNutrients: input.servingNutrients,
-              perUnitNutrients,
-              unitDisplayLabel: input.unitDisplayLabel
-            },
-            createdBy: input.createdBy
-          }
-        });
-
-        return {
-          ingredientId: ingredient.id,
-          nutritionFoodId: nutritionFood.id,
-          // 建档即确认：营养档案随写入一起变成「已验证」
-          nutritionFoodStatus: 'VERIFIED' as const,
-          evidenceId: evidence.id
-        };
-      });
+      return await this.prisma.$transaction((tx) =>
+        this.createInTransaction(tx, input),
+      );
     } catch (error) {
       if (this.isUniqueViolation(error)) {
         // 兜底路径（并发或 NULL 比较漏网）：也把撞上的那条查出来写进提示
@@ -335,6 +183,208 @@ export class SupplementIngredientService {
       }
       throw error;
     }
+  }
+
+  /**
+   * 建档事务体：旧 `POST /supplements` 与草稿最终写入共用这一份，
+   * 避免两套建档逻辑分叉。
+   */
+  async createInTransaction(
+    tx: Prisma.TransactionClient,
+    input: CreateSupplementIngredientInput,
+  ): Promise<CreateSupplementIngredientResult> {
+    this.assertInput(input);
+    const perUnitNutrients = this.derivePerUnitNutrients(input);
+    const profile = this.buildProfile(input, perUnitNutrients);
+    const nutritionFoodName = this.buildNutritionFoodName(input);
+
+    // 同一条补剂不许建两个档案。
+    // 库里的 @@unique(name, brand, productModel) 挡不住"品牌或规格为空"的情形——
+    // Postgres 把 NULL 当互不相等。所以这里按同样的三件套做一次显式比较。
+    const duplicate = await tx.ingredient.findFirst({
+      where: {
+        type: IngredientType.SUPPLEMENT,
+        name: input.name,
+        brand: input.brand ?? null,
+        productModel: input.productModel ?? null
+      },
+      select: { id: true, name: true, brand: true, productModel: true }
+    });
+    if (duplicate) {
+      this.logger.warn(
+        `[supplement-create] 重复建档 incoming=${JSON.stringify({
+          name: input.name,
+          brand: input.brand ?? null,
+          productModel: input.productModel ?? null,
+        })} existing=${JSON.stringify(duplicate)}`,
+      );
+      throw new ConflictException(this.duplicateMessage(duplicate));
+    }
+
+    const ingredient = await tx.ingredient.create({
+      data: {
+        name: input.name,
+        type: IngredientType.SUPPLEMENT,
+        baseUnit: (input.baseUnit ?? 'PCS') as 'PCS' | 'G' | 'ML',
+        unitDisplayLabel: input.unitDisplayLabel,
+        brand: input.brand ?? null,
+        productModel: input.productModel ?? null,
+        purchaseChannel: input.purchaseChannel ?? null,
+        purchaseUnit: input.purchaseUnit,
+        purchaseToBaseRatio: input.purchaseToBaseRatio,
+        currentPricePerPurchaseUnit: input.currentPricePerPurchaseUnit,
+        physicalForm: input.physicalForm,
+        diyEnabled: input.diyEnabled,
+        procurementEnabled: input.procurementEnabled,
+        shelfLifeMonths: input.shelfLifeMonths ?? null,
+        openedShelfLifeDays: input.openedShelfLifeDays ?? null,
+        storageCondition: input.storageCondition ?? null,
+        isOilBased: input.isOilBased ?? false,
+        supplementRetailEnabled: input.supplementRetailEnabled ?? false,
+        nutritionProfile: profile as unknown as Prisma.InputJsonValue,
+        properties: {
+          category_type: 'OTHER',
+          display_unit: input.unitDisplayLabel,
+          serving_unit_label: input.unitDisplayLabel,
+          serving_units_per_dose: input.servingUnitsPerDose,
+          add_timing: input.addTiming,
+          production_loss_rate: input.productionLossRate,
+          label_category: input.labelCategory,
+          label_names: input.labelNames,
+          label_name_source: input.labelNameSource,
+          tags: input.tagNames,
+          ...(input.purchaseLink
+            ? { purchase_link: input.purchaseLink }
+            : {}),
+          ...(input.imageUrl ? { image_url: input.imageUrl } : {}),
+          ...(input.noSaleReason
+            ? { no_sale_reason: input.noSaleReason }
+            : {}),
+        }
+      }
+    });
+
+    // 默认目标营养素：显式给了就用，没给按档案里有值的营养素兜底；
+    // 一个都没有就不让建档——否则设计器里加进去没有默认目标，等于白建。
+    const targetFields = (input.defaultTargetFields ?? []).filter(
+      (fieldPath) => Number(perUnitNutrients[fieldPath]) > 0,
+    );
+    const resolvedTargetFields =
+      targetFields.length > 0
+        ? targetFields
+        : Object.keys(perUnitNutrients).filter(
+            (fieldPath) => Number(perUnitNutrients[fieldPath]) > 0,
+          );
+    if (resolvedTargetFields.length === 0) {
+      throw new BadRequestException(
+        '这条补剂没有任何营养素数值，无法确定默认目标营养素；请先把标签上的含量读出来或手填',
+      );
+    }
+    const defaultSupplementTargets = resolvedTargetFields.map((fieldPath) => {
+      const field = findNutritionField(fieldPath);
+      return {
+        fieldPath,
+        label: field?.label ?? null,
+        unit: field?.unit ?? null,
+      };
+    });
+
+    /**
+     * 上一次写入中断（或原料被删）会在 nutrition_food 里留下同名孤儿：
+     * 营养档案的唯一键是 (name, dataSource, version)，孤儿在，这次插入就会撞键，
+     * 还会被误报成「补剂重复」。所以先找同名的无主档案，有就复用（更新数据）。
+     */
+    const existingFood = await tx.nutritionFood.findFirst({
+      where: {
+        name: nutritionFoodName,
+        dataSource: 'MANUAL',
+        version: 1,
+        mappings: { none: {} },
+      },
+      select: { id: true },
+    });
+    const nutritionFood = existingFood
+      ? await tx.nutritionFood.update({
+          where: { id: existingFood.id },
+          data: {
+            externalId: `SUPPLEMENT-MANUAL:${ingredient.id}`,
+            nutritionData: profile as unknown as Prisma.InputJsonValue,
+            defaultSupplementTargets:
+              defaultSupplementTargets as unknown as Prisma.InputJsonValue,
+            status: 'VERIFIED',
+            verifiedBy: input.createdBy,
+            verifiedAt: new Date(),
+            notes: '补剂标签折算；建档时已逐项核对，随建档确认可用',
+          },
+        })
+      : await tx.nutritionFood.create({
+      data: {
+        name: nutritionFoodName,
+        nameEn: null,
+        displayNameZh: nutritionFoodName,
+        displayNameZhSource: 'MANUAL',
+        displayNameZhReviewedAt: new Date(),
+        displayNameZhReviewedBy: input.createdBy,
+        category: 'SUPPLEMENT',
+        dataSource: 'MANUAL',
+        externalId: `SUPPLEMENT-MANUAL:${ingredient.id}`,
+        preparationState: 'SUPPLEMENT',
+        preparationStateLabel: '补剂',
+        ediblePortionLabel: `每 1 ${input.unitDisplayLabel}`,
+        processingLabel: '标签折算',
+        nutritionData: profile as unknown as Prisma.InputJsonValue,
+        defaultSupplementTargets:
+          defaultSupplementTargets as unknown as Prisma.InputJsonValue,
+        notes: '补剂标签折算；建档时已逐项核对，随建档确认可用',
+        createdBy: input.createdBy,
+        // 建档这一步就是人工核对：填完并写入即视为确认可用，不再多一道"确认可用"
+        status: 'VERIFIED',
+        verifiedBy: input.createdBy,
+        verifiedAt: new Date()
+      }
+    });
+
+    await tx.nutritionFoodMapping.create({
+      data: {
+        nutritionFoodId: nutritionFood.id,
+        ingredientId: ingredient.id,
+        yieldRate: 1,
+        isPrimary: true,
+        notes: '补剂标签折算，待人工确认'
+      }
+    });
+
+    await this.attachTags(tx, ingredient.id, input.tagNames);
+
+    const evidence = await tx.supplementLabelEvidence.create({
+      data: {
+        ingredientId: ingredient.id,
+        nutritionFoodId: nutritionFood.id,
+        productUrl: input.evidence.productUrl ?? null,
+        productName: input.evidence.productName ?? input.name,
+        servingUnitsPerDose: input.servingUnitsPerDose,
+        frontImageUrl: input.evidence.frontImageUrl ?? null,
+        labelImageUrl: input.evidence.labelImageUrl ?? null,
+        labelText: input.evidence.labelText ?? null,
+        selectionSnapshot:
+          (input.evidence.selection as Prisma.InputJsonValue | undefined) ?? Prisma.JsonNull,
+        conversionSnapshot: {
+          servingUnitsPerDose: input.servingUnitsPerDose,
+          servingNutrients: input.servingNutrients,
+          perUnitNutrients,
+          unitDisplayLabel: input.unitDisplayLabel
+        },
+        createdBy: input.createdBy
+      }
+    });
+
+    return {
+      ingredientId: ingredient.id,
+      nutritionFoodId: nutritionFood.id,
+      // 建档即确认：营养档案随写入一起变成「已验证」
+      nutritionFoodStatus: 'VERIFIED' as const,
+      evidenceId: evidence.id
+    };
   }
 
   /** 重复建档的统一提示：写清楚撞上哪一条，人才能判断是不是同一款。 */
@@ -380,7 +430,7 @@ export class SupplementIngredientService {
     }
   }
 
-  /** 折算只有这一处：每份 ÷ 每份粒数。客户端送来的每粒值只用来核对。 */
+  /** 折算只有这一处：每份 ÷ 每份量。客户端送来的 perUnitNutrients 一律忽略。 */
   private derivePerUnitNutrients(
     input: CreateSupplementIngredientInput
   ): Record<string, number> {
@@ -388,19 +438,6 @@ export class SupplementIngredientService {
     for (const [key, servingValue] of Object.entries(input.servingNutrients)) {
       derived[key] = servingValue / input.servingUnitsPerDose;
     }
-
-    /**
-     * 模型给了「每 1 个基准单位」的含量就直接用，服务端不再除一遍、也不再比对。
-     *
-     * 之前这里拿 `每份 ÷ 份量` 去校验模型的数，差一点就报错——那等于代码在
-     * 替模型重算一次，还把自己的算法当成标准。模型没给（老客户端）时才折。
-     */
-    for (const [key, claimed] of Object.entries(input.perUnitNutrients ?? {})) {
-      if (Number.isFinite(claimed) && claimed > 0) {
-        derived[key] = claimed;
-      }
-    }
-
     return derived;
   }
 
@@ -411,7 +448,7 @@ export class SupplementIngredientService {
     const profile = createEmptyNutritionProfile();
     profile.meta = {
       ...profile.meta,
-      rawBasisType: 'PER_SERVING',
+      rawBasisType: RAW_BASIS_BY_BASE_UNIT[input.baseUnit ?? 'PCS'],
       sampleState: 'CONCENTRATE',
       isEdiblePortionBasis: true,
       // amountUnitLabel / servingUnitLabel 在 NutritionMeta 里没有声明，但档案读取器
@@ -440,17 +477,7 @@ export class SupplementIngredientService {
   }
 
   private async attachTags(
-    tx: {
-      ingredientTag: {
-        findFirst: (args: { where: { name: string } }) => Promise<{ id: string } | null>;
-        create: (args: { data: { name: string } }) => Promise<{ id: string }>;
-      };
-      ingredientTagAssignment: {
-        create: (args: {
-          data: { ingredientId: string; tagId: string };
-        }) => Promise<unknown>;
-      };
-    },
+    tx: Prisma.TransactionClient,
     ingredientId: string,
     tagNames: string[]
   ): Promise<void> {

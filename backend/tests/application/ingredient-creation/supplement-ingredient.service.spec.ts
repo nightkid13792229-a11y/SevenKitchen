@@ -4,10 +4,10 @@ import type { CreateSupplementIngredientInput } from '../../../src/application/i
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 /**
- * 补剂建档：一条标准原料 + 一份待验证的营养档案 + 一个主映射 + 一条标签证据。
+ * 补剂建档：一条标准原料 + 一份已核验的营养档案 + 一个主映射 + 一条标签证据。
  *
  * 这里只钉四件在库里能验证的事：档案状态、主映射、缺项不补 0、重复不建第二套。
- * 折算对不对不在这里判——那是入口的门禁，判完才调到这里。
+ * 每单位值只由服务端按「每份 ÷ 份数」算；客户端送来的 perUnitNutrients 一律忽略。
  */
 type Tx = {
   ingredient: { create: jest.Mock; findFirst: jest.Mock };
@@ -50,6 +50,7 @@ function createTx(overrides: Partial<Tx> = {}): Tx {
 function createPrisma(tx: Tx): PrismaService {
   return {
     $transaction: jest.fn(async (fn: (client: Tx) => Promise<unknown>) => fn(tx)),
+    ingredient: tx.ingredient,
     nutritionFood: tx.nutritionFood,
     supplementLabelEvidence: tx.supplementLabelEvidence,
   } as unknown as PrismaService;
@@ -80,16 +81,17 @@ const input: CreateSupplementIngredientInput = {
 };
 
 describe('SupplementIngredientService.create', () => {
-  it('营养档案建成待验证，不是已核验', async () => {
+  it('营养档案建档即已核验，不再留待验证', async () => {
     const tx = createTx();
     const service = new SupplementIngredientService(createPrisma(tx));
 
     const result = await service.create(input);
 
-    expect(result.nutritionFoodStatus).toBe('PENDING');
+    expect(result.nutritionFoodStatus).toBe('VERIFIED');
     const created = tx.nutritionFood.create.mock.calls[0][0].data;
-    expect(created.status).toBe('PENDING');
+    expect(created.status).toBe('VERIFIED');
     expect(created.category).toBe('SUPPLEMENT');
+    expect(created.verifiedBy).toBe('user-1');
   });
 
   it('映射建成立即为主档案', async () => {
@@ -212,7 +214,7 @@ describe('SupplementIngredientService.create', () => {
         brand: null,
         productModel: null,
       },
-      select: { id: true },
+      select: { id: true, name: true, brand: true, productModel: true },
     });
   });
 
@@ -247,18 +249,96 @@ describe('SupplementIngredientService.create', () => {
     expect(profile.fattyAcids.epa).toBe(325);
   });
 
-  it('客户端硬塞的每粒值与折算对不上时 400，不写库', async () => {
+  it('客户端硬塞的每粒值一律忽略，档案按每份 ÷ 份数算', async () => {
     const tx = createTx();
     const service = new SupplementIngredientService(createPrisma(tx));
 
-    await expect(
-      service.create({
-        ...input,
-        servingNutrients: { 'fattyAcids.epa': 650 },
-        perUnitNutrients: { 'fattyAcids.epa': 300 },
-      }),
-    ).rejects.toBeInstanceOf(BadRequestException);
-    expect(tx.ingredient.create).not.toHaveBeenCalled();
+    await service.create({
+      ...input,
+      servingNutrients: { 'fattyAcids.epa': 650 },
+      perUnitNutrients: { 'fattyAcids.epa': 300 },
+    });
+
+    const profile = tx.nutritionFood.create.mock.calls[0][0].data.nutritionData;
+    expect(profile.fattyAcids.epa).toBe(325);
+  });
+
+  it('粉剂按克记：证据能存 0.9，档案基准是每 1 克，每克值由每份折出来', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await service.create({
+      ...input,
+      name: '牛磺酸粉',
+      brand: null,
+      productModel: null,
+      baseUnit: 'G',
+      unitDisplayLabel: 'g',
+      physicalForm: 'POWDER',
+      purchaseUnit: '袋',
+      purchaseToBaseRatio: 1000,
+      servingUnitsPerDose: 0.9,
+      servingNutrients: { 'aminoAcids.taurine': 0.875 },
+    });
+
+    const evidence = tx.supplementLabelEvidence.create.mock.calls[0][0].data;
+    expect(evidence.servingUnitsPerDose).toBe(0.9);
+    const profile = tx.nutritionFood.create.mock.calls[0][0].data.nutritionData;
+    expect(profile.meta.rawBasisType).toBe('PER_1_G');
+    expect(profile.aminoAcids.taurine).toBeCloseTo(0.972222, 6);
+  });
+
+  it('液体按毫升记：档案基准是每 1 毫升', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await service.create({
+      ...input,
+      name: '液体锌',
+      baseUnit: 'ML',
+      unitDisplayLabel: 'ml',
+      physicalForm: 'LIQUID',
+      purchaseUnit: '瓶',
+      purchaseToBaseRatio: 100,
+      servingUnitsPerDose: 2.5,
+      servingNutrients: { 'minerals.zinc': 12.5 },
+    });
+
+    const evidence = tx.supplementLabelEvidence.create.mock.calls[0][0].data;
+    expect(evidence.servingUnitsPerDose).toBe(2.5);
+    const profile = tx.nutritionFood.create.mock.calls[0][0].data.nutritionData;
+    expect(profile.meta.rawBasisType).toBe('PER_1_ML');
+    expect(profile.minerals.zinc).toBe(5);
+  });
+
+  it('上架/DIY 可选字段写进原料，properties 只在提供时补对应项', async () => {
+    const tx = createTx();
+    const service = new SupplementIngredientService(createPrisma(tx));
+
+    await service.create({
+      ...input,
+      shelfLifeMonths: 24,
+      openedShelfLifeDays: 60,
+      storageCondition: '阴凉干燥处',
+      isOilBased: true,
+      supplementRetailEnabled: true,
+      purchaseLink: { platform: 'IHERB', url: 'https://www.iherb.com/pr/x' },
+      imageUrl: 'https://img.example.com/x.jpg',
+      noSaleReason: null,
+    });
+
+    const created = tx.ingredient.create.mock.calls[0][0].data;
+    expect(created.shelfLifeMonths).toBe(24);
+    expect(created.openedShelfLifeDays).toBe(60);
+    expect(created.storageCondition).toBe('阴凉干燥处');
+    expect(created.isOilBased).toBe(true);
+    expect(created.supplementRetailEnabled).toBe(true);
+    expect(created.properties.purchase_link).toEqual({
+      platform: 'IHERB',
+      url: 'https://www.iherb.com/pr/x',
+    });
+    expect(created.properties.image_url).toBe('https://img.example.com/x.jpg');
+    expect(created.properties.no_sale_reason).toBeUndefined();
   });
 
   it('证据能按原料查回来，带标签原文与每份几粒', async () => {
@@ -273,14 +353,14 @@ describe('SupplementIngredientService.create', () => {
       productUrl: 'https://www.iherb.com/pr/x',
       createdAt: new Date('2026-11-07T00:00:00Z'),
     });
-    tx.nutritionFood.findFirst.mockResolvedValue({ id: 'nf-1', status: 'PENDING' });
+    tx.nutritionFood.findFirst.mockResolvedValue({ id: 'nf-1', status: 'VERIFIED' });
     const service = new SupplementIngredientService(createPrisma(tx));
 
     const view = await service.getEvidence('ing-1');
 
     expect(view?.servingUnitsPerDose).toBe(2);
     expect(view?.labelText).toBe('Serving Size 2 Softgels');
-    expect(view?.nutritionFoodStatus).toBe('PENDING');
+    expect(view?.nutritionFoodStatus).toBe('VERIFIED');
   });
 
   it('待验证清单只列补剂、只列 PENDING', async () => {

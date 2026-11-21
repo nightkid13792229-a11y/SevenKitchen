@@ -12,9 +12,8 @@
  *   外部配置修好后用 `reverify` 只重跑这一层。
  */
 
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import type { IngredientPhysicalForm } from '@prisma/client';
-import { findNutritionField } from '../../domain/ingredient/nutrition-field-catalog';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { SupplementCatalogService } from '../supplement-shop/supplement-catalog.service';
 import { SupplementDosageService } from '../supplement-shop/supplement-dosage.service';
@@ -42,6 +41,15 @@ const PACKAGING_ACTION: VerificationFeatureAction = {
   label: '去配置包材',
   path: '/supplement-shop/packaging',
 };
+
+/**
+ * 缺少写入时直接字段报告时的补位项。
+ *
+ * 报告形状的 code 联合在 Task 10 只列了七个功能码；这一条不是「功能」，
+ * 而是「没有直接字段证据」的硬失败，按扩展 code 输出，页面据 code 展示。
+ */
+const DIRECT_FIELDS_MISSING_CODE =
+  'DIRECT_FIELDS_MISSING' as unknown as VerificationFeatureCode;
 
 /** 功能核验只需要这三个正式记录 id。 */
 export interface SupplementFeatureVerificationIds {
@@ -151,8 +159,6 @@ function failFeature(
 
 @Injectable()
 export class SupplementVerificationService {
-  private readonly logger = new Logger(SupplementVerificationService.name);
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly catalog: SupplementCatalogService,
@@ -245,11 +251,21 @@ export class SupplementVerificationService {
     }
 
     const ids = this.resolveFinalizedIds(draft);
-    const features = await this.verifyFeatures(draft, ids);
     const stored = isVerificationReport(draft.verification)
       ? draft.verification
       : null;
     const fields: VerificationField[] = stored?.fields ?? [];
+    const features = await this.verifyFeatures(draft, ids);
+    if (!stored) {
+      // 没有写入时的直接字段证据，功能全过也不能判「全部成功」。
+      features.unshift({
+        code: DIRECT_FIELDS_MISSING_CODE,
+        label: '字段核验',
+        ok: false,
+        severity: 'ERROR',
+        detail: '缺少写入时字段核验记录，不能判定全部成功',
+      });
+    }
     const verification = this.buildReport(fields, features);
 
     await this.draftService.saveVerification(draftId, userId, verification);
@@ -394,7 +410,7 @@ export class SupplementVerificationService {
         label,
         'ERROR',
         '配方设计器查不到这条补剂：缺少主映射，或营养档案没有审核通过（VERIFIED）',
-        { label: '去营养档案检查', path: '/nutrition-foods' },
+        { label: '去营养档案检查', path: '/ingredients?tab=nutrition' },
       );
     }
 
@@ -405,7 +421,7 @@ export class SupplementVerificationService {
         label,
         'ERROR',
         '营养档案的默认目标营养素为空，配方设计器不会推荐这条补剂',
-        { label: '去营养档案补默认目标', path: '/nutrition-foods' },
+        { label: '去营养档案补默认目标', path: '/ingredients?tab=nutrition' },
       );
     }
 
@@ -455,6 +471,15 @@ export class SupplementVerificationService {
         label,
         'ERROR',
         'DIY 已开启，但原料档案里没有购买链接（properties.purchase_link.url）',
+      );
+    }
+    if (ingredient.physicalForm === 'LIQUID') {
+      // 制作单不支持液体分装：提醒，不影响「数据已写入」的结论。
+      return failFeature(
+        code,
+        label,
+        'WARN',
+        '液体补剂暂不支持分装，DIY 制作单不会出现',
       );
     }
 
@@ -585,6 +610,9 @@ export class SupplementVerificationService {
       select: {
         status: true,
         isActive: true,
+        nutrientKey: true,
+        nutrientLabel: true,
+        nutrientUnit: true,
         _count: { select: { ingredients: true } },
       },
     });
@@ -594,7 +622,10 @@ export class SupplementVerificationService {
         label,
         'ERROR',
         '等价组不存在或已被删除，替换不会生效',
-        { label: '去等价组检查', path: '/supplement-shop/equivalence' },
+        {
+          label: '去等价组检查',
+          path: '/supplement-shop/equivalence-groups',
+        },
       );
     }
 
@@ -610,7 +641,7 @@ export class SupplementVerificationService {
       softIssues.push(`组内成员只有 ${memberCount} 个，不足 2 个`);
     }
 
-    const concentration = this.checkTargetConcentrations(payload, ingredient);
+    const concentration = this.checkGroupConcentration(group, ingredient);
     softIssues.push(...concentration.issues);
 
     if (softIssues.length > 0) {
@@ -630,41 +661,42 @@ export class SupplementVerificationService {
     );
   }
 
-  /** 目标营养素的浓度解析：缺值/单位不一致都只算「暂不参与替换」的提醒。 */
-  private checkTargetConcentrations(
-    payload: SupplementDraftPayload,
+  /**
+   * 目标营养素的浓度解析：以**等价组自己的 nutrientKey** 为准。
+   *
+   * 草稿的默认目标可能填的是别的营养素；替换时看的是组要换的那个，拿错字段会
+   * 把「不可替换」误判成可替换。缺值/单位不一致都只算「暂不参与替换」的提醒。
+   */
+  private checkGroupConcentration(
+    group: {
+      nutrientKey: string;
+      nutrientLabel: string;
+      nutrientUnit: string;
+    },
     ingredient: VerificationIngredientRow,
   ): { issues: string[] } {
-    const fieldPaths = payload.nutrition.defaultTargetFields ?? [];
-    if (fieldPaths.length === 0) {
-      return { issues: ['没有设置默认目标营养素，无法判断替换浓度'] };
-    }
+    const resolution = this.dosage.resolveConcentration(ingredient, {
+      fieldPath: group.nutrientKey,
+      label: group.nutrientLabel,
+      unit: group.nutrientUnit,
+      targetValuePerKg: 1,
+    });
 
-    const missing: string[] = [];
-    const mismatched: string[] = [];
-    for (const fieldPath of fieldPaths) {
-      const field = findNutritionField(fieldPath);
-      const resolution = this.dosage.resolveConcentration(ingredient, {
-        fieldPath,
-        label: field?.label,
-        unit: field?.unit ?? '',
-        targetValuePerKg: 1,
-      });
-      if (resolution.status === 'MISSING') {
-        missing.push(fieldPath);
-      } else if (resolution.status === 'UNIT_MISMATCH') {
-        mismatched.push(fieldPath);
-      }
+    if (resolution.status === 'MISSING') {
+      return {
+        issues: [
+          `目标营养素浓度缺失：${group.nutrientLabel}（${group.nutrientKey}）`,
+        ],
+      };
     }
-
-    const issues: string[] = [];
-    if (missing.length > 0) {
-      issues.push(`目标营养素浓度缺失：${missing.join('、')}`);
+    if (resolution.status === 'UNIT_MISMATCH') {
+      return {
+        issues: [
+          `目标营养素浓度单位不一致：${group.nutrientLabel}（${group.nutrientKey}）`,
+        ],
+      };
     }
-    if (mismatched.length > 0) {
-      issues.push(`目标营养素浓度单位不一致：${mismatched.join('、')}`);
-    }
-    return { issues };
+    return { issues: [] };
   }
 
   /* ------------------------------------------------------------------ */

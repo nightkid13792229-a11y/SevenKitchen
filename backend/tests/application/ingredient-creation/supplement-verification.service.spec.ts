@@ -200,7 +200,7 @@ async function captureError(run: () => Promise<unknown>): Promise<any> {
 
 function featureOf(
   features: VerificationFeature[],
-  code: VerificationFeatureCode,
+  code: string,
 ): VerificationFeature {
   const found = features.find((feature) => feature.code === code);
   if (!found) {
@@ -235,6 +235,9 @@ describe('SupplementVerificationService', () => {
         findUnique: jest.fn().mockResolvedValue({
           status: 'APPROVED',
           isActive: true,
+          nutrientKey: 'fattyAcids.epa',
+          nutrientLabel: 'EPA',
+          nutrientUnit: 'mg',
           _count: { ingredients: 2 },
         }),
       },
@@ -394,6 +397,7 @@ describe('SupplementVerificationService', () => {
       expect(recipe.ok).toBe(false);
       expect(recipe.severity).toBe('ERROR');
       expect(recipe.detail).toContain('主映射');
+      expect(recipe.action?.path).toBe('/ingredients?tab=nutrition');
     });
 
     it('默认目标营养素为空 → 失败', async () => {
@@ -410,6 +414,7 @@ describe('SupplementVerificationService', () => {
       expect(recipe.ok).toBe(false);
       expect(recipe.severity).toBe('ERROR');
       expect(recipe.detail).toContain('默认目标');
+      expect(recipe.action?.path).toBe('/ingredients?tab=nutrition');
     });
   });
 
@@ -450,6 +455,33 @@ describe('SupplementVerificationService', () => {
       );
 
       expect(diy.ok).toBe(true);
+    });
+
+    it('开启 + 液体补剂 → 提醒（WARN），制作单不会出现', async () => {
+      prismaMock.ingredient.findUnique.mockResolvedValue(
+        ingredientRow({
+          physicalForm: 'LIQUID',
+          diyEnabled: true,
+          properties: {
+            purchase_link: {
+              platform: 'iHerb',
+              url: 'https://example.com/oil',
+            },
+          },
+        }),
+      );
+
+      const diy = featureOf(
+        await service.verifyFeatures(
+          draftView({ payload: payload({ diy: { enabled: true } }) }),
+          ids,
+        ),
+        'DIY',
+      );
+
+      expect(diy.ok).toBe(false);
+      expect(diy.severity).toBe('WARN');
+      expect(diy.detail).toBe('液体补剂暂不支持分装，DIY 制作单不会出现');
     });
 
     it('开启但购买链接缺失 → 失败', async () => {
@@ -562,7 +594,54 @@ describe('SupplementVerificationService', () => {
 
       expect(equivalence.ok).toBe(true);
       expect(equivalence.severity).toBe('INFO');
-      expect(dosageMock.resolveConcentration).toHaveBeenCalled();
+      expect(dosageMock.resolveConcentration).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          fieldPath: 'fattyAcids.epa',
+          label: 'EPA',
+          unit: 'mg',
+          targetValuePerKg: 1,
+        },
+      );
+    });
+
+    it('浓度按等价组自己的 nutrientKey 解析，而不是草稿默认目标', async () => {
+      prismaMock.supplementEquivalenceGroup.findUnique.mockResolvedValue({
+        status: 'APPROVED',
+        isActive: true,
+        nutrientKey: 'minerals.zinc',
+        nutrientLabel: '锌',
+        nutrientUnit: 'mg',
+        _count: { ingredients: 2 },
+      });
+      dosageMock.resolveConcentration.mockImplementation(
+        (_ingredient, target) =>
+          target.fieldPath === 'minerals.zinc'
+            ? { status: 'MISSING' }
+            : { status: 'OK', value: 325, unit: 'mg' },
+      );
+
+      const equivalence = featureOf(
+        await service.verifyFeatures(draftView(), ids),
+        'EQUIVALENCE',
+      );
+
+      expect(dosageMock.resolveConcentration).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          fieldPath: 'minerals.zinc',
+          label: '锌',
+          unit: 'mg',
+          targetValuePerKg: 1,
+        },
+      );
+      expect(dosageMock.resolveConcentration).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ fieldPath: 'fattyAcids.epa' }),
+      );
+      expect(equivalence.ok).toBe(false);
+      expect(equivalence.severity).toBe('WARN');
+      expect(equivalence.detail).toContain('锌');
     });
 
     it('组未审核通过 → 提醒（WARN），不算整体失败', async () => {
@@ -627,6 +706,9 @@ describe('SupplementVerificationService', () => {
       expect(equivalence.ok).toBe(false);
       expect(equivalence.severity).toBe('ERROR');
       expect(equivalence.detail).toContain('不存在');
+      expect(equivalence.action?.path).toBe(
+        '/supplement-shop/equivalence-groups',
+      );
     });
 
     it('档案里的等价组与草稿不一致 → 失败（ERROR）', async () => {
@@ -899,6 +981,26 @@ describe('SupplementVerificationService', () => {
       await expect(
         service.getVerification('user-1', 'draft-1'),
       ).resolves.toBeNull();
+    });
+
+    it('reverify 在缺少写入报告时判 ok=false，并明确标出 DIRECT_FIELDS_MISSING', async () => {
+      draftServiceMock.get.mockResolvedValue(
+        draftView({ status: 'FINALIZED', verification: null }),
+      );
+
+      const verification = await service.reverify('user-1', 'draft-1');
+
+      expect(verification.ok).toBe(false);
+      expect(verification.fields).toEqual([]);
+      const missing = featureOf(verification.features, 'DIRECT_FIELDS_MISSING');
+      expect(missing.ok).toBe(false);
+      expect(missing.severity).toBe('ERROR');
+      expect(missing.detail).toBe('缺少写入时字段核验记录，不能判定全部成功');
+      expect(draftServiceMock.saveVerification).toHaveBeenCalledWith(
+        'draft-1',
+        'user-1',
+        verification,
+      );
     });
 
     it('reverify 只重跑功能核验：合并已存直接字段、保存并返回新报告', async () => {

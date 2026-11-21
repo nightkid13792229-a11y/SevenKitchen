@@ -27,6 +27,7 @@ import {
   summarizeSelection,
 } from './propose-plan';
 import { matchSelectionToLibrary } from './selection-match';
+import type { AgentNutritionPlan } from './propose-plan';
 import {
   AgentToolError,
   fail,
@@ -219,6 +220,8 @@ export interface ToolExecutionContext {
   knowledge: KnowledgeGatewayService;
   /** ask 工具把问题交回运行时：运行时暂停并等用户回答。 */
   onAsk: (question: string, options: string[]) => void;
+  /** 已确认方案；assess 用它做方案专属评估。 */
+  plan?: AgentNutritionPlan | null;
 }
 
 export async function executeTool(
@@ -363,7 +366,22 @@ export async function executeTool(
 
       case 'assess': {
         const summary = await context.port.assess();
-        return ok(summary, summarizeAssessment(summary));
+        const planResult = context.plan
+          ? await context.port.assessPlan(context.plan)
+          : null;
+        const planText = planResult
+          ? planResult.assessment
+            ? `；方案专属评估：${(planResult.assessment as any)?.summary?.isCompliant ? '通过' : '未通过'}${
+                planResult.unsupported.length > 0
+                  ? `（${planResult.unsupported.length} 条方案约束需 Agent/人工判断）`
+                  : ''
+              }`
+            : '；方案专属评估：无引擎可自动计算的约束'
+          : '';
+        return ok(
+          planResult ? { ...summary, planAssessment: planResult } : summary,
+          summarizeAssessment(summary) + planText,
+        );
       }
 
       case 'write_copy': {

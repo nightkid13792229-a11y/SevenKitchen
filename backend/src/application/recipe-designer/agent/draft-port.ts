@@ -8,8 +8,13 @@
 import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
 import { AgentToolError, type RecipeEditOp } from './agent-types';
-import type { AssessmentTargetOverride } from '../../../domain/recipe-designer/types';
+import type {
+  AssessmentTargetOverride,
+  FediafAssessmentTarget,
+} from '../../../domain/recipe-designer/types';
 import type { AgentDesignContext } from './design-context.types';
+import type { AgentNutritionPlan } from './propose-plan';
+import { buildPlanTargetOverrides } from './plan-target-overrides';
 
 type Access = Parameters<RecipeDesignerService['getDraft']>[1];
 
@@ -315,6 +320,40 @@ export class RecipeDraftPort {
   /** 本次会话最后一次评估使用的目标覆盖；edit_recipe 做前后对比时沿用。 */
   getLastTargetOverrides(): AssessmentTargetOverride[] | undefined {
     return this.lastTargetOverrides;
+  }
+
+  async getAssessmentTargets(): Promise<FediafAssessmentTarget[]> {
+    return this.designer.getDraftAssessmentTargets(this.draftId, this.access);
+  }
+
+  /**
+   * 方案专属评估：引擎能算的用引擎算，不写回草稿（编辑器仍显示通用标准）。
+   */
+  async assessPlan(plan: AgentNutritionPlan): Promise<{
+    assessment: any | null;
+    overrides: AssessmentTargetOverride[];
+    unsupported: Array<{ key: string; reason: string }>;
+  }> {
+    const targets = await this.getAssessmentTargets();
+    const resolution = buildPlanTargetOverrides(plan, targets);
+    if (resolution.overrides.length === 0) {
+      return {
+        assessment: null,
+        overrides: [],
+        unsupported: resolution.unsupported,
+      };
+    }
+    this.lastTargetOverrides = resolution.overrides;
+    const result: any = await this.designer.assessDraftForAgentPreview(
+      this.draftId,
+      this.access,
+      resolution.overrides,
+    );
+    return {
+      assessment: result?.assessment ?? null,
+      overrides: resolution.overrides,
+      unsupported: resolution.unsupported,
+    };
   }
 
   /** 跑评估，只回缺口和一个总数；不回全量明细。 */

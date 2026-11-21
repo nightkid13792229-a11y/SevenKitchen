@@ -60,9 +60,11 @@ import {
 import {
   PROPOSE_PLAN_TOOL,
   PROPOSE_SELECTION_TOOL,
+  type AgentNutritionPlan,
   type AgentSelection,
 } from './propose-plan';
 import { assessmentGapSignature } from './assessment-progress';
+import { loadSkillsForPhase } from './skill-loader';
 import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
 import {
   buildKnowledgeImageMessage,
@@ -444,6 +446,11 @@ export class RecipeAgentService implements OnModuleInit {
     let zeroHitNudged = false;
     /** 首次读到的本单档案，强制提交方案时作为干净上下文的一部分。 */
     let designContextJson: string | null = null;
+    const planRow = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+      select: { plan: true },
+    });
+    let currentPlan = planRow?.plan as AgentNutritionPlan | null;
     const phaseMaxToolCalls =
       phase === 'DESIGN' ? MAX_TOOL_CALLS : PHASE_TOOL_BUDGET[phase];
     /** 健康档案附件只在本次运行注入一次，避免模型重读时重复计费。 */
@@ -650,6 +657,7 @@ export class RecipeAgentService implements OnModuleInit {
             catalog,
             this.knowledge,
             call,
+            currentPlan,
             (question, options) => {
               pendingAsk = { question, options };
             },
@@ -717,6 +725,7 @@ export class RecipeAgentService implements OnModuleInit {
 
         // 用户明确要求修改已确认方案：用户的话最高，立即更新方案。
         if (call.function.name === 'revise_plan' && outcome.ok) {
+          currentPlan = outcome.data as AgentNutritionPlan;
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
             data: {
@@ -1033,6 +1042,7 @@ export class RecipeAgentService implements OnModuleInit {
     catalog: RecipeCatalogPort,
     knowledge: KnowledgeGatewayService,
     call: DeepSeekToolCall,
+    plan: AgentNutritionPlan | null,
     onAsk: (question: string, options: string[]) => void,
   ): Promise<{
     outcome: ToolOutcome;
@@ -1095,6 +1105,10 @@ export class RecipeAgentService implements OnModuleInit {
       { role: 'system', content: buildSystemPrompt() },
       { role: 'system', content: phaseSystemLine(phase) },
     ];
+    const skill = loadSkillsForPhase(phase);
+    if (skill) {
+      messages.push({ role: 'system', content: skill });
+    }
     const confirmed = await this.prisma.recipeDesignAgentSession.findUnique({
       where: { id: sessionId },
       select: {

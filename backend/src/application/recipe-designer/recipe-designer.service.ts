@@ -326,7 +326,6 @@ type SeriesReleaseDesignRecord = Prisma.DesignRecipeGetPayload<{
   select: typeof SERIES_RELEASE_DESIGN_SELECT;
 }>;
 
-
 /** 自动打标基准版本：和橱窗默认代表一致（成犬/高活动优先，幼犬最后）。 */
 const SERIES_AUTO_TAG_STAGE_PRIORITY: Record<string, number> = {
   HIGH_ACTIVITY_ADULT: 0,
@@ -5106,7 +5105,11 @@ export class RecipeDesignerService {
     const nutrition = detailed.summary || detailed;
     const moisture = Number(nutrition?.moisture_pct);
     const fatDm = Number(nutrition?.fat_dm_pct);
-    if (!Number.isFinite(moisture) || !Number.isFinite(fatDm) || moisture <= 0) {
+    if (
+      !Number.isFinite(moisture) ||
+      !Number.isFinite(fatDm) ||
+      moisture <= 0
+    ) {
       return false;
     }
     const fatWet = fatDm * (1 - moisture / 100);
@@ -5165,11 +5168,7 @@ export class RecipeDesignerService {
     ) {
       return '鱼';
     }
-    if (
-      name.includes('贝') ||
-      name.includes('虾') ||
-      name.includes('蟹')
-    ) {
+    if (name.includes('贝') || name.includes('虾') || name.includes('蟹')) {
       return '贝类';
     }
     if (name.includes('奶')) return '奶';
@@ -7572,6 +7571,45 @@ export class RecipeDesignerService {
       });
     }
     return result;
+  }
+
+  /** 给 Agent 读取当前草稿的通用评估目标（只读，不写回）。 */
+  async getDraftAssessmentTargets(
+    id: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<FediafAssessmentTarget[]> {
+    const draft = await this.getDraft(id, access);
+    return this.targetProvider.getTargets(draft.fediafDogScenario);
+  }
+
+  /**
+   * 方案专属评估预览：用方案覆盖后的目标跑一遍，但**不写回草稿**，
+   * 保证食谱编辑器的可视化仍然显示通用标准。
+   */
+  async assessDraftForAgentPreview(
+    id: string,
+    access: RecipeDesignerAccessInput,
+    targetOverrides?: AssessmentTargetOverride[],
+  ): Promise<{
+    contentRevision: number;
+    assessment: DesignRecipeAssessmentResult;
+    allergenWarnings: DraftAllergenWarning[];
+  }> {
+    const draft = await this.getDraft(id, access);
+    if (this.isPublishedDraft(draft)) {
+      throw new BadRequestException('已发布草稿不能由 Agent 重新评估');
+    }
+    const targets = this.applyAssessmentTargetOverrides(
+      await this.targetProvider.getTargets(draft.fediafDogScenario),
+      targetOverrides,
+    );
+    const result = await this.assessLoadedDraft(draft, targets);
+    const allergenWarnings = await this.buildDraftAllergenWarnings(draft);
+    return {
+      contentRevision: draft.contentRevision,
+      assessment: result,
+      allergenWarnings,
+    };
   }
 
   async assessDraftForAgent(

@@ -40,6 +40,7 @@ describe('recipe agent phase policy', () => {
     expect(tools).toContain('assess');
     expect(tools).toContain('write_copy');
     expect(tools).toContain('revise_plan');
+    expect(tools).toContain('reopen_selection');
     expect(tools).not.toContain('propose_plan');
     expect(tools).not.toContain('propose_selection');
   });

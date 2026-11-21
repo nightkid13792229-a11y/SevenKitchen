@@ -193,6 +193,20 @@ export const REVISE_PLAN_TOOL: DeepSeekToolDefinition = {
   },
 };
 
+export const REOPEN_SELECTION_TOOL: DeepSeekToolDefinition = {
+  type: 'function',
+  function: {
+    name: 'reopen_selection',
+    description:
+      '用户明确要求重新选材/修改已确认选材时使用。方案不变，清空当前选材并回到选材阶段，等用户重新确认清单。',
+    parameters: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+  },
+};
+
 export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
   type: 'function',
   function: {

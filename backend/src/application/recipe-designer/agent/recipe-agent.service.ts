@@ -694,6 +694,27 @@ export class RecipeAgentService implements OnModuleInit {
             '无法确定的约束删掉，或给一个大致边界并在 basis 写「待确认」。不要重新检索。';
         }
 
+        // 用户明确要求重新选材：方案不变，回到选材阶段。
+        if (call.function.name === 'reopen_selection' && outcome.ok) {
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: {
+              phase: 'SELECT',
+              selection: Prisma.DbNull,
+              selectionConfirmedAt: null,
+              status: 'WAITING_USER',
+              endedAt: new Date(),
+            },
+          });
+          await this.appendMessage(
+            sessionId,
+            'ASSISTANT',
+            '已回到选材阶段；请重新确认食材清单。',
+          );
+          await this.markWaiting(sessionId);
+          return;
+        }
+
         // 用户明确要求修改已确认方案：用户的话最高，立即更新方案。
         if (call.function.name === 'revise_plan' && outcome.ok) {
           await this.prisma.recipeDesignAgentSession.update({

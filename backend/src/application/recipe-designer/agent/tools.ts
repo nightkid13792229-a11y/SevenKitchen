@@ -20,6 +20,7 @@ import {
   PROPOSE_PLAN_TOOL,
   PROPOSE_SELECTION_TOOL,
   REVISE_PLAN_TOOL,
+  REOPEN_SELECTION_TOOL,
   normalizePlan,
   normalizeSelection,
   summarizePlan,
@@ -207,6 +208,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   PROPOSE_PLAN_TOOL,
   PROPOSE_SELECTION_TOOL,
   REVISE_PLAN_TOOL,
+  REOPEN_SELECTION_TOOL,
   ...KNOWLEDGE_TOOL_DEFINITIONS,
 ];
 
@@ -245,6 +247,10 @@ export async function executeTool(
           context.port.findFoods(input),
         );
         return ok(matched, summarizeSelection(matched));
+      }
+
+      case 'reopen_selection': {
+        return ok(null, '已回到选材阶段');
       }
 
       case 'read_draft': {

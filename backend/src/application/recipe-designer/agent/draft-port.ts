@@ -7,14 +7,20 @@
  */
 import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
-import type { RecipeEditOp } from './agent-types';
+import { AgentToolError, type RecipeEditOp } from './agent-types';
 import type {
   AssessmentTargetOverride,
   FediafAssessmentTarget,
 } from '../../../domain/recipe-designer/types';
 import type { AgentDesignContext } from './design-context.types';
+import type { DraftLaunchReadiness } from '../../../domain/recipe-designer/launch-readiness';
 import type { AgentNutritionPlan } from './propose-plan';
 import { buildPlanTargetOverrides } from './plan-target-overrides';
+import { scanForbiddenClaims } from '../recipe-copywriting-compliance';
+import {
+  RECIPE_NAME_MAX_LENGTH,
+  countRecipeNameLength,
+} from '../../../domain/recipe-designer/series-name';
 
 type Access = Parameters<RecipeDesignerService['getDraft']>[1];
 
@@ -30,8 +36,15 @@ export interface DraftSummary {
   items: Array<{
     itemId: string;
     name: string;
+    type: 'FOOD' | 'SUPPLEMENT' | null;
     weightG: number;
     preparationMethod: string | null;
+    supplementTargets: Array<{
+      fieldPath: string;
+      label: string;
+      unit: string;
+      targetValuePerKg: number | null;
+    }>;
   }>;
   lastAssessment: {
     isCompliant: boolean;
@@ -83,6 +96,13 @@ export interface FoodCandidate {
     basisLabel: string;
     displayText: string;
   } | null;
+}
+
+export interface FoodSearchGroups {
+  foods: FoodCandidate[];
+  supplements: FoodCandidate[];
+  foodTotal: number;
+  supplementTotal: number;
 }
 
 export interface AssessmentGap {
@@ -164,6 +184,11 @@ export class RecipeDraftPort {
     return this.designer.getAgentDesignContext(this.draftId, this.access);
   }
 
+  /** 读上线检查：交付前还差什么。 */
+  async readLaunchReadiness(): Promise<DraftLaunchReadiness> {
+    return this.designer.getDraftLaunchReadiness(this.draftId, this.access);
+  }
+
   /** 读草稿摘要：不含营养明细，那些由 assess 给。 */
   async readDraft(): Promise<DraftSummary> {
     const draft = (await this.designer.getDraft(
@@ -199,9 +224,23 @@ export class RecipeDraftPort {
           item.nutritionFood?.displayNameZh ??
           item.nutritionFood?.name ??
           '未命名',
+        type: item.ingredient?.type ?? null,
         weightG: Number(item.weightG ?? 0),
         preparationMethod:
           item.preparationMethodLabel ?? item.preparationMethod ?? null,
+        supplementTargets: Array.isArray(item.supplementTargets)
+          ? item.supplementTargets.map((target: any) => ({
+              fieldPath: String(target?.fieldPath ?? ''),
+              label: String(target?.label ?? ''),
+              unit: String(target?.unit ?? ''),
+              targetValuePerKg:
+                Number.isFinite(Number(target?.targetValuePerKg))
+                  ? Number(target.targetValuePerKg)
+                  : Number.isFinite(Number(target?.targetValue))
+                    ? Number(target.targetValue)
+                    : null,
+            }))
+          : [],
       })),
       lastAssessment:
         assessmentRevision === null
@@ -230,8 +269,48 @@ export class RecipeDraftPort {
       nutrientKey: input.nutrientKey,
       page: 1,
       pageSize: limit,
+      type: 'FOOD',
     } as any)) as any;
+    return this.mapFoodCandidates(result, limit);
+  }
 
+  /** 食材优先、补剂单独一组的候选；给 find_food 工具用。 */
+  async findFoodGroups(input: {
+    search?: string;
+    nutrientKey?: string;
+    limit?: number;
+  }): Promise<FoodSearchGroups> {
+    const limit = Math.min(20, Math.max(1, Number(input.limit ?? 8)));
+    const [foodResult, supplementResult] = await Promise.all([
+      this.designer.listIngredientOptions({
+        search: input.search,
+        nutrientKey: input.nutrientKey,
+        page: 1,
+        pageSize: Math.min(50, limit * 2),
+        type: 'FOOD',
+      } as any),
+      this.designer.listIngredientOptions({
+        search: input.search,
+        nutrientKey: input.nutrientKey,
+        page: 1,
+        pageSize: 50,
+        type: 'SUPPLEMENT',
+      } as any),
+    ]);
+    const foods = this.mapFoodCandidates(foodResult as any, limit);
+    const supplements = this.mapFoodCandidates(
+      supplementResult as any,
+      limit,
+    );
+    return {
+      foods,
+      supplements,
+      foodTotal: Number((foodResult as any)?.total ?? foods.length),
+      supplementTotal: supplements.length,
+    };
+  }
+
+  private mapFoodCandidates(result: any, limit: number): FoodCandidate[] {
     const rows: any[] = Array.isArray(result?.data) ? result.data : [];
     const candidates: FoodCandidate[] = [];
     for (const row of rows) {
@@ -688,6 +767,28 @@ export class RecipeDraftPort {
     sellingPoint?: string;
     description?: string;
   }): Promise<string[]> {
+    if (patch.name) {
+      const length = countRecipeNameLength(patch.name);
+      if (length > RECIPE_NAME_MAX_LENGTH) {
+        throw new AgentToolError(
+          'NAME_TOO_LONG',
+          `食谱名称最多 ${RECIPE_NAME_MAX_LENGTH} 个字（当前 ${length} 字）`,
+        );
+      }
+    }
+    const hits = scanForbiddenClaims(
+      patch.name,
+      patch.coverTitle,
+      patch.sellingPoint,
+      patch.description,
+    );
+    if (hits.length > 0) {
+      throw new AgentToolError(
+        'COPY_COMPLIANCE',
+        `文案含禁用表述：${hits.join('、')}；请改写后再提交`,
+      );
+    }
+
     const draft = (await this.designer.getDraft(
       this.draftId,
       this.access,

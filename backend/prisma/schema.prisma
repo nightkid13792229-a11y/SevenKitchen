@@ -3197,6 +3197,8 @@ model OrderRecipeDesign {
   status              OrderRecipeDesignStatus @default(EDITING) @map("status")
   /// 生命阶段不匹配提示：只提示，不阻止创建 / 编辑 / 就绪 / 最终交付
   stageWarning        String?                 @map("stage_warning") @db.Text
+  /// 加入待提交时的草稿内容版本；之后又改过就能识别出来
+  stagedContentRevision Int?                  @map("staged_content_revision")
   createdBy           String?                 @map("created_by")
   createdAt           DateTime                @default(now()) @map("created_at")
   updatedAt           DateTime                @updatedAt @map("updated_at")

@@ -16,6 +16,7 @@ import {
   ValidationPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { IsOptional, IsString, MaxLength } from 'class-validator';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -112,6 +113,13 @@ function isAllowedSupplementLabelUpload(file?: Express.Multer.File): boolean {
   }
   const extension = file.originalname?.split('.').pop()?.toLowerCase() || '';
   return SUPPLEMENT_LABEL_ALLOWED_EXTENSIONS.has(extension);
+}
+
+class StageOrderDesignDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(4000)
+  reviewNote?: string;
 }
 
 @ApiTags('Recipe Designer')
@@ -257,12 +265,14 @@ export class RecipeDesignerController {
   async stageOrderDesign(
     @Param('orderId') orderId: string,
     @Param('designId') designId: string,
+    @Body() dto: StageOrderDesignDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
     const staged = await this.orderRecipeDesignService.stageDraft(
       orderId,
       designId,
       user.userId,
+      dto?.reviewNote,
     );
     return ApiResponseDto.success(staged);
   }

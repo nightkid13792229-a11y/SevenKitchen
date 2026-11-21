@@ -45,6 +45,8 @@ export interface DeepSeekToolsResult {
   content: string | null;
   toolCalls: DeepSeekToolCall[];
   usage: DeepSeekToolsUsage | null;
+  /** 思考模式下模型返回的 reasoning_content；非思考调用为 null */
+  reasoningContent?: string | null;
 }
 
 export interface DeepSeekToolsOptions {
@@ -169,12 +171,16 @@ function parseDeepSeekToolsResponse(
   const content = typeof message?.content === 'string' ? message.content : null;
   const toolCalls = normalizeToolCalls(message?.tool_calls);
   const usage = readUsage(body);
+  const reasoningContent =
+    typeof message?.reasoning_content === 'string'
+      ? message.reasoning_content
+      : null;
 
   if (usage && onUsage) {
     onUsage(usage);
   }
 
-  return { content, toolCalls, usage };
+  return { content, toolCalls, usage, reasoningContent };
 }
 
 function readChoicesMessage(

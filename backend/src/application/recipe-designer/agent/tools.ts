@@ -7,6 +7,7 @@
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
  */
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
+import type { DraftLaunchReadiness } from '../../../domain/recipe-designer/launch-readiness';
 import { KnowledgeGatewayService } from '../../knowledge-v3/knowledge-gateway.service';
 import {
   KNOWLEDGE_TOOL_DEFINITIONS,
@@ -99,7 +100,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'find_food',
       description:
-        '按关键词或营养素找原料。按营养素找时，每条会带该营养素的含量、单位和基准；补剂只返回已开启生产/采购的。一次最多 8 条。',
+        '按关键词或营养素找原料。返回两组：foods（食材，优先看）和 supplements（补剂，只返回已开启生产/采购的）；每条带营养素含量、单位和基准。一次最多 8 条。',
       parameters: {
         type: 'object',
         properties: {
@@ -226,6 +227,31 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'read_launch_readiness',
+      description:
+        '读当前草稿的上线检查：能不能交付、还差哪些阻断项/提醒项。设计完成前先读；只读，不改草稿。',
+      parameters: NO_ARGS,
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'finish',
+      description:
+        '设计完成时调用。提交完成摘要，返回上线检查结果；之后本次运行结束，状态为已完成。',
+      parameters: {
+        type: 'object',
+        properties: {
+          summary: { type: 'string', maxLength: 2000 },
+        },
+        required: ['summary'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'write_copy',
       description: '写名称、封面标题、卖点和描述。配方定了再写。',
       parameters: {
@@ -333,17 +359,17 @@ export async function executeTool(
         if (!search && !nutrientKey) {
           return fail('INVALID_ARGUMENT', 'search 或 nutrientKey 至少给一个');
         }
-        const candidates = await context.port.findFoods({
+        const groups = await context.port.findFoodGroups({
           search: search || undefined,
           nutrientKey: nutrientKey || undefined,
           limit: typeof args.limit === 'number' ? args.limit : undefined,
         });
         const label = nutrientKey ? `营养素 ${nutrientKey}` : `「${search}」`;
         return ok(
-          candidates,
-          candidates.length === 0
+          groups,
+          groups.foods.length + groups.supplements.length === 0
             ? `没有找到${label}，换个说法或先入库`
-            : `找到 ${candidates.length} 条`,
+            : `食材 ${groups.foods.length} 条（共 ${groups.foodTotal}）、补剂 ${groups.supplements.length} 条`,
         );
       }
 
@@ -463,6 +489,20 @@ export async function executeTool(
         return ok(
           planResult ? { ...summary, planAssessment: planResult } : summary,
           summarizeAssessment(summary) + planText,
+        );
+      }
+
+      case 'read_launch_readiness': {
+        const readiness = await context.port.readLaunchReadiness();
+        return ok(readiness, summarizeReadiness(readiness));
+      }
+
+      case 'finish': {
+        const summary = readText(args.summary) ?? '设计完成';
+        const readiness = await context.port.readLaunchReadiness();
+        return ok(
+          { summary, readiness },
+          `设计完成：${summary}；${summarizeReadiness(readiness)}`,
         );
       }
 
@@ -611,6 +651,18 @@ function parseOps(
     return { ok: false, message: `不认识的 op：${String(op)}` };
   }
   return { ok: true, ops };
+}
+
+function summarizeReadiness(readiness: DraftLaunchReadiness): string {
+  const blockers = readiness.blockers.length;
+  const warnings = readiness.warnings.length;
+  const firstBlockers = readiness.blockers
+    .slice(0, 3)
+    .map((blocker) => blocker.message)
+    .join('；');
+  return `${readiness.ready ? '可交付' : '还有阻断'}：阻断 ${blockers} 项、提醒 ${warnings} 项${
+    firstBlockers ? `；${firstBlockers}` : ''
+  }`;
 }
 
 function summarizeTaxonomy(result: unknown): string {

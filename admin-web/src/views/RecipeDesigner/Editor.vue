@@ -110,6 +110,14 @@
         >
           {{ orderDesignStatusLabel(currentOrderSlot.status) }}
         </el-tag>
+        <el-tag
+          v-if="currentOrderSlot?.stale"
+          size="small"
+          type="danger"
+          effect="plain"
+        >
+          有新改动未重新入仓
+        </el-tag>
       </div>
       <div class="order-design-banner__actions">
         <span v-if="!isAdmin" class="order-design-banner__lock">
@@ -124,6 +132,12 @@
         class="order-design-banner__warning"
       >
         {{ currentOrderSlot.stageWarning }}（只提示，不影响加入待提交）
+      </div>
+      <div
+        v-if="currentOrderSlot?.stale"
+        class="order-design-banner__warning"
+      >
+        这份食谱在加入待提交后又改过；请重新上线检查并加入待提交，否则交付会用旧版本。
       </div>
     </div>
 
@@ -419,6 +433,8 @@
       v-model="agentDrawerVisible"
       :draft-id="currentDraftId"
       @draft-changed="handleAgentDraftChanged"
+      @running-changed="handleAgentRunningChanged"
+      @open-launch-readiness="launchReadinessVisible = true"
     />
   </div>
 </template>
@@ -851,12 +867,79 @@ async function handleAgentDraftChanged() {
   if (!draft.value || agentDraftRefresh) return
   agentDraftRefresh = (async () => {
     try {
+      // 先把人工未保存的修改落盘，避免 AI 刷新把本地改动盖掉。
+      await flushNow()
+      if (hasPending()) {
+        ElMessage.warning("还有未保存的修改，稍后会自动刷新")
+        return
+      }
       await loadDraft(draft.value?.id)
     } finally {
       agentDraftRefresh = null
     }
   })()
 }
+
+/**
+ * AI 运行时，编辑器自己也要跟着刷新；不能因为用户关掉对话抽屉就停在旧数据。
+ * 只在 running 时轮询；结束后再拉一次并停表。
+ */
+let agentSyncTimer: number | null = null;
+let agentSyncBusy = false;
+let agentLastEditId: string | null = null;
+
+function handleAgentRunningChanged(running: boolean) {
+  if (running) {
+    startAgentSync();
+  } else {
+    stopAgentSync();
+    void handleAgentDraftChanged();
+  }
+}
+
+function startAgentSync() {
+  if (agentSyncTimer !== null) return;
+  agentSyncTimer = window.setInterval(() => void syncAgentDraft(), 2000);
+}
+
+function stopAgentSync() {
+  if (agentSyncTimer !== null) {
+    window.clearInterval(agentSyncTimer);
+    agentSyncTimer = null;
+  }
+}
+
+async function syncAgentDraft() {
+  if (!currentDraftId.value || agentSyncBusy) return;
+  agentSyncBusy = true;
+  try {
+    const result = await recipeDesignerApi.getAgentSession(
+      currentDraftId.value,
+    );
+    const session = result?.session;
+    if (!session) return;
+    const messages = result?.messages ?? [];
+    const edits = messages.filter(
+      (message) =>
+        message.role === "TOOL" && message.toolName === "edit_recipe",
+    );
+    const lastEdit = edits[edits.length - 1];
+    if (lastEdit && lastEdit.id !== agentLastEditId) {
+      agentLastEditId = lastEdit.id;
+      await handleAgentDraftChanged();
+    }
+    if (session.status !== "RUNNING") {
+      stopAgentSync();
+      await handleAgentDraftChanged();
+    }
+  } catch {
+    // 轮询失败不打扰用户；下一轮再试
+  } finally {
+    agentSyncBusy = false;
+  }
+}
+
+onBeforeUnmount(() => stopAgentSync());
 
 const referenceDogId = ref<string | null>(null)
 

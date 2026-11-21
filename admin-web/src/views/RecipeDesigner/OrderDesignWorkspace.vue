@@ -188,7 +188,23 @@
             <span>更新于 {{ formatDateTime(slot.updatedAt) }}</span>
             <span v-if="slot.recipeId">已生成私密食谱</span>
             <span v-else>还没有加入本单待提交</span>
+            <el-tag v-if="slot.stale" size="small" type="danger" effect="plain">
+              有新改动未重新入仓
+            </el-tag>
           </div>
+
+          <el-alert
+            v-if="slot.stale"
+            class="slot-warning"
+            type="error"
+            :closable="false"
+            show-icon
+            title="这份食谱在加入待提交后又改过"
+          >
+            <template #default>
+              请打开编辑器，在「上线检查」里重新点一次「加入本单待提交」；否则最终交付会用旧版本。
+            </template>
+          </el-alert>
 
           <el-alert
             v-if="slot.stageWarning"
@@ -216,6 +232,18 @@
 
       <template v-else-if="progress.ready === progress.total">
         <div class="submit-title">本单 {{ progress.total }} 份已全部就绪</div>
+        <el-alert
+          v-if="staleSlots.length"
+          class="slot-warning"
+          type="error"
+          :closable="false"
+          show-icon
+          :title="`有 ${staleSlots.length} 份在加入待提交后又改过`"
+        >
+          <template #default>
+            请重新加入待提交后再最终提交，否则顾客会收到旧版本。
+          </template>
+        </el-alert>
         <p class="submit-desc">
           最终提交会把本单 {{ progress.total }} 份食谱一次性交付给顾客，
           顾客只会收到一条通知。提交后请在订单页跟进交付状态。
@@ -224,6 +252,7 @@
           v-if="isAdmin && progress.ready === progress.total"
           type="success"
           :loading="submitting"
+          :disabled="staleSlots.length > 0"
           @click="submitDesigns"
         >
           最终提交并交付（{{ progress.total }} 份）
@@ -317,6 +346,7 @@ const canAddSlot = computed(() =>
 )
 
 const hasNoSlots = computed(() => slots.value.length === 0)
+const staleSlots = computed(() => slots.value.filter((slot) => slot.stale))
 
 const usedSourceRecipeIds = computed(() =>
   slots.value

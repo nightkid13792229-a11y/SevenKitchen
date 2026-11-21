@@ -30,6 +30,9 @@ function slot(
     recipeId: null,
     sourceRecipeId: null,
     stageWarning: null,
+    stagedContentRevision: null,
+    currentContentRevision: null,
+    stale: false,
     updatedAt: '2026-10-22T00:00:00.000Z',
     ...patch,
   }

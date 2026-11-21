@@ -44,6 +44,12 @@ export interface OrderDesignWorkspaceSlot {
   recipeId: string | null;
   sourceRecipeId: string | null;
   stageWarning: string | null;
+  /** 加入待提交时记录的草稿内容版本 */
+  stagedContentRevision: number | null;
+  /** 草稿当前内容版本 */
+  currentContentRevision: number | null;
+  /** 加入待提交后草稿又改过 */
+  stale: boolean;
   updatedAt: Date;
 }
 
@@ -145,7 +151,9 @@ export class OrderRecipeDesignService {
       },
       include: {
         series: { select: { name: true } },
-        designDraft: { select: { name: true, updatedAt: true } },
+        designDraft: {
+          select: { name: true, updatedAt: true, contentRevision: true },
+        },
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
@@ -168,6 +176,13 @@ export class OrderRecipeDesignService {
         recipeId: slot.recipeId,
         sourceRecipeId: slot.sourceRecipeId,
         stageWarning: slot.stageWarning,
+        stagedContentRevision: slot.stagedContentRevision ?? null,
+        currentContentRevision: slot.designDraft?.contentRevision ?? null,
+        stale:
+          slot.status === OrderRecipeDesignStatus.READY &&
+          slot.stagedContentRevision !== null &&
+          slot.designDraft?.contentRevision !== undefined &&
+          slot.stagedContentRevision !== slot.designDraft.contentRevision,
         updatedAt: slot.designDraft?.updatedAt ?? slot.updatedAt,
       })),
     };
@@ -500,6 +515,7 @@ export class OrderRecipeDesignService {
     orderId: string,
     designId: string,
     operatorId: string,
+    reviewNote?: string,
   ): Promise<StageOrderDesignResult> {
     const order = await this.resolveOrder(orderId);
 
@@ -548,6 +564,7 @@ export class OrderRecipeDesignService {
       customerId: order.customerId,
       dogId: order.dogId,
       operatorId,
+      reviewNote,
     });
 
     await this.prisma.orderRecipeDesign.update({
@@ -555,6 +572,7 @@ export class OrderRecipeDesignService {
       data: {
         status: OrderRecipeDesignStatus.READY,
         recipeId: published.recipeRowId,
+        stagedContentRevision: published.contentRevision,
       },
     });
 

@@ -250,6 +250,39 @@
             </div>
           </div>
         </div>
+
+        <div
+          v-if="session?.status === 'COMPLETED'"
+          class="agent-plan agent-complete"
+        >
+          <div class="agent-plan__title">设计完成</div>
+          <div class="agent-plan__summary">
+            配方已提交。{{
+              finishReadiness
+                ? `上线检查：阻断 ${finishReadiness.blockers?.length ?? 0} 项、提醒 ${finishReadiness.warnings?.length ?? 0} 项。`
+                : "请打开上线检查确认是否可交付。"
+            }}
+          </div>
+          <div
+            v-if="finishReadiness?.blockers?.length"
+            class="agent-plan__notes"
+          >
+            <div
+              v-for="(blocker, index) in finishReadiness.blockers"
+              :key="index"
+            >
+              · {{ blocker.message }}
+            </div>
+          </div>
+          <div class="agent-plan__actions">
+            <el-button
+              size="small"
+              type="primary"
+              @click="emit('open-launch-readiness')"
+              >打开上线检查</el-button
+            >
+          </div>
+        </div>
       </div>
 
       <div class="agent-compose">
@@ -291,7 +324,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import {
   recipeDesignerApi,
   type AgentMessage,
@@ -303,6 +336,8 @@ const props = defineProps<{ modelValue: boolean; draftId: string }>();
 const emit = defineEmits<{
   (event: "update:modelValue", value: boolean): void;
   (event: "draft-changed"): void;
+  (event: "open-launch-readiness"): void;
+  (event: "running-changed", value: boolean): void;
 }>();
 
 const visible = computed({
@@ -322,7 +357,7 @@ const hasOutsideSelection = computed(() =>
   selectionFoodItems.value.some((item) => item.dataStatus === "MISSING"),
 );
 const MEDICATION_PATTERN =
-  /用药|药物|处方|服药|口服|注射|溃速平|潘飞龙|抗生素|止痛药|激素|mg\/kg/i;
+  /用药|药物|处方|服药|口服|注射|抗生素|止痛药|激素/i;
 
 function stripMedicationText(text: string) {
   return text
@@ -402,6 +437,24 @@ const preparationChanges = computed<PreparationChange[]>(() => {
   }
 });
 
+const finishReadiness = computed<{
+  ready?: boolean;
+  blockers?: Array<{ message?: string }>;
+  warnings?: Array<{ message?: string }>;
+} | null>(() => {
+  const finishMessages = messages.value.filter(
+    (message) => message.role === "TOOL" && message.toolName === "finish",
+  );
+  const last = finishMessages[finishMessages.length - 1];
+  if (!last) return null;
+  try {
+    const parsed = JSON.parse(last.content);
+    return parsed?.data?.readiness ?? null;
+  } catch {
+    return null;
+  }
+});
+
 function prepChangeKey(change: PreparationChange): string {
   return `${change.itemId}|${change.before}|${change.after}`;
 }
@@ -456,8 +509,10 @@ const statusLabel = computed(() => {
   const status = session.value?.status;
   if (status === "RUNNING") return "运行中";
   if (status === "WAITING_USER") return "等你回答";
+  if (status === "COMPLETED") return "已完成";
   if (status === "FAILED") return "失败";
   if (status === "STOPPED") return "已停止";
+  if (status === "INTERRUPTED") return "已中断";
   return "已结束";
 });
 const phaseLabel = computed(() => {
@@ -622,6 +677,19 @@ watch(
 );
 
 watch(
+  running,
+  (value) => emit("running-changed", value),
+  { immediate: true },
+);
+
+onBeforeUnmount(() => {
+  if (timer !== null) {
+    window.clearInterval(timer);
+    timer = null;
+  }
+});
+
+watch(
   () => props.modelValue,
   (value) => {
     if (!value && timer !== null) {
@@ -709,6 +777,10 @@ watch(
 .agent-prep {
   border-color: #f3d19e;
   background: #fdf6ec;
+}
+.agent-complete {
+  border-color: #b3e19d;
+  background: #f0f9eb;
 }
 .agent-prep__row {
   display: flex;

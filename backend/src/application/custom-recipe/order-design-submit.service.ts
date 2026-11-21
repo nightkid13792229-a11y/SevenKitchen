@@ -82,6 +82,8 @@ interface SubmitSlot {
   dogId: string;
   status: OrderRecipeDesignStatus;
   recipeId: string | null;
+  stagedContentRevision: number | null;
+  currentContentRevision: number | null;
 }
 
 type LatestBatchSummary = Omit<OrderDesignSubmitResult, 'replayed'> & {
@@ -202,7 +204,7 @@ export class OrderDesignSubmitService {
   }
 
   private async loadSlots(order: SubmitOrder): Promise<SubmitSlot[]> {
-    return this.prisma.orderRecipeDesign.findMany({
+    const rows = await this.prisma.orderRecipeDesign.findMany({
       where: {
         orderId: order.id,
         status: { not: OrderRecipeDesignStatus.REMOVED },
@@ -213,9 +215,20 @@ export class OrderDesignSubmitService {
         dogId: true,
         status: true,
         recipeId: true,
+        stagedContentRevision: true,
+        designDraft: { select: { contentRevision: true } },
       },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
+    return rows.map((row) => ({
+      id: row.id,
+      orderId: row.orderId,
+      dogId: row.dogId,
+      status: row.status,
+      recipeId: row.recipeId,
+      stagedContentRevision: row.stagedContentRevision ?? null,
+      currentContentRevision: row.designDraft?.contentRevision ?? null,
+    }));
   }
 
   /**
@@ -258,6 +271,24 @@ export class OrderDesignSubmitService {
     if (!Number.isInteger(order.recipeQuantity) || order.recipeQuantity <= 0) {
       throw new BadRequestException(
         `该订单的份数配置异常（${order.recipeQuantity}），无法提交设计；请检查订单数据`,
+      );
+    }
+
+    const staleSlots = slots
+      .map((slot, index) => ({ slot, index }))
+      .filter(
+        ({ slot }) =>
+          slot.status === OrderRecipeDesignStatus.READY &&
+          slot.stagedContentRevision !== null &&
+          slot.currentContentRevision !== null &&
+          slot.stagedContentRevision !== slot.currentContentRevision,
+      );
+    if (staleSlots.length > 0) {
+      const labels = staleSlots
+        .map(({ index }) => `第 ${index + 1} 份`)
+        .join('、');
+      throw new BadRequestException(
+        `${labels}食谱在加入待提交后又改过，请重新加入待提交后再提交`,
       );
     }
 

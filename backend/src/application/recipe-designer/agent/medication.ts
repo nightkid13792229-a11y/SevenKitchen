@@ -3,7 +3,7 @@
  * 仅用于方案/选材文本的清洗；聊天安全网仍保留 dose-redaction。
  */
 const MEDICATION_PATTERN =
-  /用药|药物|处方|服药|口服|注射|抗生素|止痛药|激素|mg\/kg/i;
+  /用药|药物|处方|服药|口服|注射|抗生素|止痛药|激素/i;
 
 export function stripMedicationSentences(text: string): string {
   return text

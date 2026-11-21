@@ -762,18 +762,44 @@ async function stageOrder(): Promise<void> {
     ElMessage.warning('上线检查未通过或本单信息不完整，暂时不能加入待提交')
     return
   }
-  try {
-    await ElMessageBox.confirm(
-      `确认把「${props.draftName || '当前设计'}」加入本单待提交吗？加入后顾客还看不到，管理员最终提交时才交付。`,
-      '加入本单待提交',
-      { type: 'warning', confirmButtonText: '加入待提交', cancelButtonText: '取消' }
-    )
-  } catch {
-    return
+  let reviewNote: string | undefined
+  if (
+    readiness.value.warnings.some((warning) => warning.code === 'REVIEW_REQUIRED')
+  ) {
+    try {
+      const result = await ElMessageBox.prompt(
+        '配方未完全合规，请填写审核说明',
+        '审核说明',
+        {
+          confirmButtonText: '继续加入待提交',
+          cancelButtonText: '取消',
+          inputType: 'textarea',
+          inputValidator: (value) =>
+            Boolean(String(value ?? '').trim()) || '审核说明不能为空',
+        }
+      )
+      reviewNote = String(result.value ?? '').trim()
+    } catch {
+      return
+    }
+  } else {
+    try {
+      await ElMessageBox.confirm(
+        `确认把「${props.draftName || '当前设计'}」加入本单待提交吗？加入后顾客还看不到，管理员最终提交时才交付。`,
+        '加入本单待提交',
+        { type: 'warning', confirmButtonText: '加入待提交', cancelButtonText: '取消' }
+      )
+    } catch {
+      return
+    }
   }
   staging.value = true
   try {
-    await orderRecipeDesignApi.markReady(props.orderId, props.designId)
+    await orderRecipeDesignApi.markReady(
+      props.orderId,
+      props.designId,
+      reviewNote
+    )
     ElMessage.success('已加入本单待提交')
     emit('staged')
   } catch {

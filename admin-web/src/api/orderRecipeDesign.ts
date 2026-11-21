@@ -66,9 +66,11 @@ export const orderRecipeDesignApi = {
   markReady: (
     orderId: string,
     designId: string,
+    reviewNote?: string,
   ): Promise<StageOrderDesignResult> =>
     api.post(
       `/recipe-designer/orders/${segment(orderId)}/designs/${segment(designId)}/ready`,
+      reviewNote ? { reviewNote } : {},
     ),
 
   /**

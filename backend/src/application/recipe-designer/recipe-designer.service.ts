@@ -7919,9 +7919,15 @@ export class RecipeDesignerService {
     draftId: string;
     customerId: string;
     dogId: string;
-    /** 操作人（管理员），仅留痕；本方法不写操作人字段 */
+    /** 操作人（管理员），仅留痕 */
     operatorId: string;
-  }): Promise<{ recipeRowId: string; recipeId: string }> {
+    /** 非合规配方必须填写的审核说明 */
+    reviewNote?: string;
+  }): Promise<{
+    recipeRowId: string;
+    recipeId: string;
+    contentRevision: number;
+  }> {
     const draft = await this.loadDraft(input.draftId);
     if (draft.customerDogId && draft.customerDogId !== input.dogId) {
       throw new BadRequestException('设计草稿与订单狗狗不一致');
@@ -7936,6 +7942,23 @@ export class RecipeDesignerService {
     this.assertLaunchReadinessReady(launchReadiness);
     if (!assessment) {
       throw new BadRequestException('配方评估未完成，无法进入下一步');
+    }
+
+    const reviewNote = input.reviewNote?.trim() || null;
+    if (assessment.overallStatus !== 'COMPLIANT' && !reviewNote) {
+      throw new BadRequestException(
+        '配方未完全合规，请填写审核说明后再加入待提交',
+      );
+    }
+    if (reviewNote) {
+      await this.prisma.designRecipe.update({
+        where: { id: draft.id },
+        data: {
+          reviewNote,
+          reviewedBy: input.operatorId,
+          reviewedAt: new Date(),
+        },
+      });
     }
 
     /**
@@ -7980,7 +8003,11 @@ export class RecipeDesignerService {
       },
     );
 
-    return { recipeRowId: recipe.id, recipeId: recipe.recipeId };
+    return {
+      recipeRowId: recipe.id,
+      recipeId: recipe.recipeId,
+      contentRevision: publishableDraft.contentRevision,
+    };
   }
 
   private async createOrUpdatePrivateRecipeSnapshot(

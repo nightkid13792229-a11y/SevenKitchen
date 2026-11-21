@@ -516,6 +516,7 @@ export class RecipeAgentService implements OnModuleInit {
     let editsSinceAssess = 0;
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
+    let lastAssessHadGaps = false;
     /**
      * 每次运行的第一轮强制读设计上下文。
      *
@@ -558,14 +559,23 @@ export class RecipeAgentService implements OnModuleInit {
         return;
       }
 
+      const thinkingEnabled = shouldEnableThinking(
+        phase,
+        toolCalls,
+        lastAssessHadGaps,
+        editsSinceAssess,
+      );
       const callModel = (forcedTool: string | null) =>
         callDeepSeekTools({
           baseUrl: config.baseUrl,
           model: config.model,
           apiKey: config.apiKey,
-          requestTimeoutMs: config.requestTimeoutMs,
+          requestTimeoutMs: thinkingEnabled
+            ? Math.max(config.requestTimeoutMs, 300_000)
+            : config.requestTimeoutMs,
           messages,
           tools,
+          thinking: thinkingEnabled ? 'enabled' : 'disabled',
           toolChoice: forcedTool
             ? { type: 'function', function: { name: forcedTool } }
             : 'auto',
@@ -699,6 +709,9 @@ export class RecipeAgentService implements OnModuleInit {
         role: 'assistant',
         content: response.content ?? null,
         tool_calls: calls,
+        ...(thinkingEnabled && response.reasoningContent
+          ? { reasoning_content: response.reasoningContent }
+          : {}),
       });
       // 方案/选材以卡片呈现；同一轮的说明文字不再写入消息，避免和卡片重复。
       const hasCardProposal = calls.some(
@@ -792,6 +805,35 @@ export class RecipeAgentService implements OnModuleInit {
 
         await this.recordTool(sessionId, call, outcome);
 
+        // 设计完成：显式收口，前端显示“已完成”和上线检查结果。
+        if (call.function.name === 'finish' && outcome.ok) {
+          const finishData = outcome.data as {
+            summary?: string;
+            readiness?: { blockers?: unknown[] };
+          };
+          const blockerCount = Array.isArray(finishData.readiness?.blockers)
+            ? finishData.readiness!.blockers!.length
+            : 0;
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: {
+              status: 'COMPLETED',
+              endedAt: new Date(),
+              lastError: null,
+            },
+          });
+          await this.appendMessage(
+            sessionId,
+            'ASSISTANT',
+            `设计完成：${finishData.summary ?? '已完成'}。${
+              blockerCount > 0
+                ? `上线检查还有 ${blockerCount} 项阻断，请打开上线检查处理。`
+                : '可以打开上线检查交付。'
+            }`,
+          );
+          return;
+        }
+
         if (
           (call.function.name === 'propose_plan' ||
             call.function.name === 'propose_selection') &&
@@ -878,6 +920,9 @@ export class RecipeAgentService implements OnModuleInit {
 
         if (call.function.name === 'assess') {
           const signature = assessmentGapSignature(outcome);
+          lastAssessHadGaps = Boolean(
+            signature && signature !== 'compliant',
+          );
           if (signature === 'compliant') {
             lastGapSignature = null;
             sameGapCount = 0;
@@ -1318,6 +1363,30 @@ export class RecipeAgentService implements OnModuleInit {
 /**
  * 同一轮里可能并行读同一页两次；按锚点/页码去重，避免重复注入同一张图。
  */
+/**
+ * 思考模式的“阶段/决策点”开关（不是随机百分比）。
+ *
+ * - PLAN：一定开，方案取舍最需要推理；
+ * - SELECT：关，方案已定，主要是按约束列清单；
+ * - DESIGN：第一轮/刚拿到评估缺口/连续改多次时开，机械工具调用时关。
+ * - RECIPE_AGENT_THINKING=off 可整体关闭。
+ */
+function shouldEnableThinking(
+  phase: AgentPhase,
+  toolCalls: number,
+  lastAssessHadGaps: boolean,
+  editsSinceAssess: number,
+): boolean {
+  const mode = (process.env.RECIPE_AGENT_THINKING ?? 'stage')
+    .trim()
+    .toLowerCase();
+  if (mode === 'off') return false;
+  if (phase === 'PLAN') return true;
+  if (phase === 'SELECT') return false;
+  if (phase !== 'DESIGN') return false;
+  return toolCalls <= 1 || lastAssessHadGaps || editsSinceAssess >= 8;
+}
+
 function dedupeKnowledgeImages(
   images: KnowledgePageImage[],
 ): KnowledgePageImage[] {

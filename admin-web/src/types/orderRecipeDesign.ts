@@ -67,6 +67,12 @@ export interface OrderDesignWorkspaceSlot {
   sourceRecipeId: string | null
   /** 模板阶段与本单狗狗阶段不一致时的提示；只提示不阻断 */
   stageWarning: string | null
+  /** 加入待提交时记录的草稿内容版本 */
+  stagedContentRevision: number | null
+  /** 草稿当前内容版本 */
+  currentContentRevision: number | null
+  /** 加入待提交后草稿又改过 */
+  stale: boolean
   updatedAt: string
 }
 

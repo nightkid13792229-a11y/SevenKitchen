@@ -109,3 +109,34 @@ describe('draft completeness', () => {
     expect(computeDraftCompleteness(payload).missing).not.toContain('linkUrl');
     expect(computeDraftCompleteness(payload).missing).not.toContain('platform');
   });
+
+  it('标签分类标签是选填：不填不影响必填完成度', () => {
+    const payload = normalizeSupplementDraftPayload({
+      basic: {
+        name: '鱼油',
+        baseUnit: 'PCS',
+        unitDisplayLabel: '粒',
+        physicalForm: 'CAPSULE',
+        servingUnitsPerDose: 2,
+        purchaseUnit: '瓶',
+        purchaseToBaseRatio: 120,
+        currentPricePerPurchaseUnit: 398,
+        addTiming: 'BEFORE_MIXING',
+      },
+      nutrition: {
+        servingNutrients: { 'fattyAcids.epa': 650 },
+        defaultTargetFields: ['fattyAcids.epa'],
+      },
+      label: {
+        labelCategory: 'FEED_ADDITIVE',
+        labelNames: ['鱼油'],
+        tagNames: [],
+      },
+      retail: { enabled: true, shelfLifeMonths: 24, noSaleReason: null },
+      diy: { enabled: false },
+      procurement: { enabled: true },
+      equivalence: { groupId: '__SKIP__' },
+    });
+
+    expect(computeDraftCompleteness(payload).missing).not.toContain('tagNames');
+  });

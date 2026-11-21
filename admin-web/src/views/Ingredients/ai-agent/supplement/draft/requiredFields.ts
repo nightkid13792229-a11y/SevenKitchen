@@ -34,7 +34,6 @@ const REQUIRED_FIELD_META: Record<string, RequiredFieldMeta> = {
   nutrition: { label: '营养含量与默认目标', section: 'nutrition' },
   labelCategory: { label: '标签分类', section: 'label' },
   labelNames: { label: '标签名称', section: 'label' },
-  tagNames: { label: '分类标签', section: 'label' },
   shelfLifeMonths: { label: '原厂保质期', section: 'retail' },
   noSaleReason: { label: '不上架原因', section: 'retail' },
   platform: { label: 'DIY 平台', section: 'diy' },

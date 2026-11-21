@@ -99,7 +99,7 @@
 
         <label class="draft-field">
           <span class="draft-field__label">
-            <span>标签分类标签</span>
+            <span>标签分类标签（选填）</span>
             <AiFieldTag :tag="aiTag('label.tagNames')" />
             <span
               v-if="isManual('label.tagNames')"
@@ -120,11 +120,8 @@
             style="width: 100%"
             @update:model-value="(value: string[]) => updateTagNames(value)"
           />
-          <em v-if="label.tagNames.length === 0 && missingReason('label.tagNames')" class="draft-field__missing" :title="missingReason('label.tagNames')">
-            AI 没找到，请补
-          </em>
           <em class="draft-field__hint">
-            按允许词表填写；AI 从标签里认出来的会先放在这里，最终审核会再核对。
+            选填，只用于原料库筛选（如「氨基酸」「矿物质」）；不填不影响标签、配方和写入。
           </em>
         </label>
       </div>

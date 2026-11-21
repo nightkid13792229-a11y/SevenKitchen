@@ -448,14 +448,6 @@ export function validateSupplementDraftBasics(
       fieldPath: 'label.labelNames',
     });
   }
-  if (!label.tagNames.some((value) => hasText(value))) {
-    issues.push({
-      code: 'TAG_NAMES_REQUIRED',
-      level: 'BLOCKER',
-      message: '请至少选择一个标签分类标签',
-      fieldPath: 'label.tagNames',
-    });
-  }
 
   // ⑨ 添加时机
   if (!ALLOWED_ADD_TIMINGS.includes(basic.addTiming.trim())) {

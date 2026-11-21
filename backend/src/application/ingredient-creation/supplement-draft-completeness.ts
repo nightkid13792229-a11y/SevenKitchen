@@ -94,7 +94,6 @@ export function computeDraftCompleteness(
     // ③ 标签：分类 + 标签名称 + 分类标签
     { key: 'labelCategory', filled: label.labelCategory !== null },
     { key: 'labelNames', filled: label.labelNames.length > 0 },
-    { key: 'tagNames', filled: label.tagNames.length > 0 },
 
     // ④ 上架：开 → 保质期；关 → 不上架原因
     ...(retail.enabled

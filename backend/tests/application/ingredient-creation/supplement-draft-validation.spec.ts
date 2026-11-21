@@ -287,7 +287,6 @@ describe('validateSupplementDraftBasics', () => {
       { label: { labelNames: ['  ', ''] } },
       'LABEL_NAMES_REQUIRED',
     ],
-    ['分类标签为空', { label: { tagNames: [] } }, 'TAG_NAMES_REQUIRED'],
     ['添加时机为空', { basic: { addTiming: '' } }, 'ADD_TIMING_INVALID'],
     [
       '添加时机不在允许值内',
@@ -316,6 +315,10 @@ describe('validateSupplementDraftBasics', () => {
   });
 
   describe('允许的情形', () => {
+    it('标签分类标签是选填：空数组不阻断', () => {
+      expect(issuesOf({ label: { tagNames: [] } })).toEqual([]);
+    });
+
     it('粉剂每份 0.9 g 可以是小数', () => {
       const issues = issuesOf({
         basic: {

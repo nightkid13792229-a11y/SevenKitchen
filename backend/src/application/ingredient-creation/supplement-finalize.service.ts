@@ -39,7 +39,9 @@ import {
   buildFinalizeInput,
   type DirectVerificationSnapshot,
   type SupplementWriteVerification,
+  type VerificationFeature,
 } from './supplement-verification';
+import { SupplementVerificationService } from './supplement-verification.service';
 
 /** 「暂不归组」的显式表态值（与草稿/校验模块一致）。 */
 const GROUP_SKIPPED_ID = '__SKIP__';
@@ -152,6 +154,7 @@ export class SupplementFinalizeService {
     private readonly reviewService: SupplementDraftReviewService,
     private readonly ingredientService: SupplementIngredientService,
     private readonly equivalence: SupplementEquivalenceService,
+    private readonly verificationService: SupplementVerificationService,
   ) {}
 
   async finalize(
@@ -315,12 +318,34 @@ export class SupplementFinalizeService {
       throw error;
     }
 
-    // 功能核验在 Task 11 接上；Task 10 只保证直接字段全部对上。
+    // 数据已经提交：功能核验（依赖其它服务的查询）只出报告，失败不回滚、不抛错。
+    // 核验本身炸了也不能把成功的写入报成失败；给 ok=false，页面不会显示「全部成功」。
+    let features: VerificationFeature[] = [];
+    let featuresAvailable = true;
+    try {
+      features = await this.verificationService.verifyFeatures(draft, {
+        ingredientId: outcome.created.ingredientId,
+        nutritionFoodId: outcome.created.nutritionFoodId,
+        evidenceId: outcome.created.evidenceId,
+      });
+    } catch (error) {
+      featuresAvailable = false;
+      this.logger.error(
+        `[supplement-finalize] 功能核验失败 draft=${draftId}：` +
+          (error instanceof Error ? error.message : String(error)),
+      );
+    }
+
     const verification: SupplementWriteVerification = {
-      ok: outcome.fields.every((field) => field.ok),
+      ok:
+        featuresAvailable &&
+        outcome.fields.every((field) => field.ok) &&
+        features.every(
+          (feature) => !(feature.severity === 'ERROR' && !feature.ok),
+        ),
       checkedAt: new Date().toISOString(),
       fields: outcome.fields,
-      features: [],
+      features,
     };
 
     // 数据已经提交：报告没存上不能把「写入成功」报成失败（reverify 可重新生成报告）。

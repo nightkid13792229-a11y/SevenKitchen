@@ -23,7 +23,11 @@ import {
   type SupplementDraftReview,
 } from '../../../src/application/ingredient-creation/supplement-draft.types';
 import type { SupplementDraftIssue } from '../../../src/application/ingredient-creation/supplement-draft-validation';
-import type { SupplementWriteVerification } from '../../../src/application/ingredient-creation/supplement-verification';
+import type {
+  SupplementWriteVerification,
+  VerificationFeature,
+} from '../../../src/application/ingredient-creation/supplement-verification';
+import type { SupplementVerificationService } from '../../../src/application/ingredient-creation/supplement-verification.service';
 import type { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 /* ------------------------------------------------------------------ */
@@ -287,6 +291,20 @@ type DraftServiceMock = {
 type ReviewServiceMock = { validate: jest.Mock };
 type IngredientServiceMock = { createInTransaction: jest.Mock };
 type EquivalenceMock = { assignInTransaction: jest.Mock };
+type VerificationServiceMock = { verifyFeatures: jest.Mock };
+
+function okFeature(
+  code: VerificationFeature['code'],
+  label: string,
+  severity: VerificationFeature['severity'] = 'INFO',
+): VerificationFeature {
+  return { code, label, ok: true, severity, detail: '通过' };
+}
+
+const DEFAULT_FEATURES: VerificationFeature[] = [
+  okFeature('RETAIL', '商城上架'),
+  okFeature('PACKAGING', '分装包材'),
+];
 
 async function captureError(run: () => Promise<unknown>): Promise<any> {
   try {
@@ -307,10 +325,13 @@ describe('SupplementFinalizeService.finalize', () => {
   let reviewServiceMock: ReviewServiceMock;
   let ingredientServiceMock: IngredientServiceMock;
   let equivalenceMock: EquivalenceMock;
+  let verificationMock: VerificationServiceMock;
   let service: SupplementFinalizeService;
+  let currentDraft: SupplementDraftView;
 
   /** 让 get / validate 都看到同一份草稿（真实链路里 validate 会重新读一次）。 */
   function useDraft(draft: SupplementDraftView): void {
+    currentDraft = draft;
     draftServiceMock.get.mockResolvedValue(draft);
     reviewServiceMock.validate.mockResolvedValue({
       draft,
@@ -330,14 +351,15 @@ describe('SupplementFinalizeService.finalize', () => {
     };
     prisma = prismaMock as unknown as PrismaService;
 
+    currentDraft = draftView();
     draftServiceMock = {
-      get: jest.fn().mockResolvedValue(draftView()),
+      get: jest.fn().mockResolvedValue(currentDraft),
       markFinalized: jest.fn().mockResolvedValue(undefined),
       saveVerification: jest.fn().mockResolvedValue(undefined),
     };
     reviewServiceMock = {
       validate: jest.fn().mockResolvedValue({
-        draft: draftView(),
+        draft: currentDraft,
         blockers: [],
         warnings: [],
         completeness: COMPLETENESS,
@@ -356,6 +378,9 @@ describe('SupplementFinalizeService.finalize', () => {
         .fn()
         .mockResolvedValue({ moved: 1, skipped: 0 }),
     };
+    verificationMock = {
+      verifyFeatures: jest.fn().mockResolvedValue(DEFAULT_FEATURES),
+    };
 
     service = new SupplementFinalizeService(
       prisma,
@@ -363,6 +388,7 @@ describe('SupplementFinalizeService.finalize', () => {
       reviewServiceMock as unknown as SupplementDraftReviewService,
       ingredientServiceMock as unknown as SupplementIngredientService,
       equivalenceMock as unknown as SupplementEquivalenceService,
+      verificationMock as unknown as SupplementVerificationService,
     );
   });
 
@@ -516,13 +542,81 @@ describe('SupplementFinalizeService.finalize', () => {
     expect(tx.supplementEquivalenceGroup.findUnique).toHaveBeenCalledTimes(2);
     expect(tx.supplementCreationDraft.findUnique).toHaveBeenCalledTimes(1);
 
-    // ⑤ 提交后写报告并返回。
+    // ⑤ 提交后跑功能核验、合并报告并返回。
+    expect(verificationMock.verifyFeatures).toHaveBeenCalledWith(currentDraft, {
+      ingredientId: 'ing-1',
+      nutritionFoodId: 'nf-1',
+      evidenceId: 'ev-1',
+    });
     expect(result).toMatchObject({
       ingredientId: 'ing-1',
       nutritionFoodId: 'nf-1',
       evidenceId: 'ev-1',
     });
     expect(result.verification.ok).toBe(true);
+    expect(result.verification.features).toEqual(DEFAULT_FEATURES);
+    expect(result.verification.fields.length).toBeGreaterThan(40);
+    expect(draftServiceMock.saveVerification).toHaveBeenCalledWith(
+      'draft-1',
+      'user-1',
+      result.verification,
+    );
+  });
+
+  it('功能核验有 ERROR 失败时报告 ok=false，但写入已提交、不抛错', async () => {
+    verificationMock.verifyFeatures.mockResolvedValue([
+      {
+        code: 'RETAIL',
+        label: '商城上架',
+        ok: false,
+        severity: 'ERROR',
+        detail: '上架清单查不到这条原料',
+      },
+    ]);
+
+    const result = await service.finalize(user, 'draft-1');
+
+    expect(result.ingredientId).toBe('ing-1');
+    expect(result.verification.ok).toBe(false);
+    expect(result.verification.features).toHaveLength(1);
+    expect(draftServiceMock.saveVerification).toHaveBeenCalledWith(
+      'draft-1',
+      'user-1',
+      result.verification,
+    );
+  });
+
+  it('功能核验只有 WARN 失败时报告 ok 仍为 true', async () => {
+    verificationMock.verifyFeatures.mockResolvedValue([
+      {
+        code: 'PACKAGING',
+        label: '分装包材',
+        ok: false,
+        severity: 'WARN',
+        detail: '没有匹配的袋型规则',
+        action: { label: '去配置包材', path: '/supplement-shop/packaging' },
+      },
+    ]);
+
+    const result = await service.finalize(user, 'draft-1');
+
+    expect(result.verification.ok).toBe(true);
+    expect(result.verification.features[0].severity).toBe('WARN');
+  });
+
+  it('功能核验本身抛错时也不把已提交的写入报成失败，报告 ok=false', async () => {
+    verificationMock.verifyFeatures.mockRejectedValue(
+      new Error('catalog service down'),
+    );
+
+    const result = await service.finalize(user, 'draft-1');
+
+    expect(result).toMatchObject({
+      ingredientId: 'ing-1',
+      nutritionFoodId: 'nf-1',
+      evidenceId: 'ev-1',
+    });
+    expect(result.verification.ok).toBe(false);
     expect(result.verification.features).toEqual([]);
     expect(result.verification.fields.length).toBeGreaterThan(40);
     expect(draftServiceMock.saveVerification).toHaveBeenCalledWith(

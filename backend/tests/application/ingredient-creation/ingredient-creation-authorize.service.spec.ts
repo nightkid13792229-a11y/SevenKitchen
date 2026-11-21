@@ -370,8 +370,15 @@ describe('IngredientCreationAuthorizeService', () => {
       profiles: DRAFT_PROFILES,
       primaryProfileIndex: 0,
       reportAcknowledgedAt: expect.any(String),
+      // 授权时刻只取一次：档案的 verifiedAt 与返回的 authorizedAt 必须是同一瞬间，
+      // 否则审计里「谁在什么时候确认可用」会有两个对不上的时间。
+      authorizedAt: expect.any(String),
     });
+    const commitInput = commitService.commit.mock.calls[0][0] as {
+      authorizedAt?: string;
+    };
     const { authorizedAt, ...submitted } = result;
+    expect(commitInput.authorizedAt).toBe(authorizedAt);
     expect(submitted).toEqual({
       ingredientId: 'ing-1',
       nutritionFoodIds: ['nf-1'],
@@ -400,6 +407,7 @@ describe('IngredientCreationAuthorizeService', () => {
       profiles: DRAFT_PROFILES,
       primaryProfileIndex: 0,
       reportAcknowledgedAt: expect.any(String),
+      authorizedAt: expect.any(String),
     });
   });
 

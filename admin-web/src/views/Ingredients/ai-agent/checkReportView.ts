@@ -49,6 +49,11 @@ const VALID_DOMAINS: readonly CheckDomain[] = ['INGREDIENT', 'NUTRITION']
 export interface CheckRunSummary {
   domain: CheckDomain
   fresh: boolean
+  /**
+   * 报告是不是当前规则版本跑出来的（与内容是否改过无关）。
+   * `fresh=false` 时用它把原因说准：版本升级不等于「你改过草稿」。
+   */
+  versionFresh: boolean
   blocking: number
   exceptionable: number
   warning: number
@@ -153,7 +158,8 @@ export function checkDomainLabel(domain: CheckDomain): string {
  */
 export function toCheckRunSummary(
   run: CheckRunView | null | undefined,
-  fresh: boolean
+  fresh: boolean,
+  versionFresh: boolean
 ): CheckRunSummary | null {
   if (!run) {
     return null
@@ -184,6 +190,7 @@ export function toCheckRunSummary(
   return {
     domain: isCheckDomain(run.domain) ? run.domain : 'INGREDIENT',
     fresh: fresh === true,
+    versionFresh: versionFresh === true,
     blocking: Math.max(countBlocking, blockingItems.length),
     exceptionable: Math.max(
       countExceptionable,
@@ -210,12 +217,17 @@ export function staleBannerText(input: {
   hasRun: boolean
   fresh: boolean
   touchedSinceLoad: boolean
+  /** 过期原因是规则升级（不是人改过内容）。 */
+  versionStale?: boolean
 }): string {
   if (input.fresh) {
     return ''
   }
   if (input.hasRun) {
-    return '报告已过期，改过之后要重跑'
+    // 规则升级也会让报告失效，但那不是「人改过」，文案不能怪到人头上。
+    return input.versionStale
+      ? '核验规则升级了，这份报告不再算数，重跑一次核验才能授权'
+      : '报告已过期，改过之后要重跑'
   }
   return input.touchedSinceLoad
     ? '改动后还没核验，跑一次才能授权'
@@ -268,7 +280,9 @@ export function gateState(input: GateInput): GateState {
 
     if (!summary.fresh) {
       reasons.push(
-        `${label}的核验报告已过期（核验之后又改过草稿），重跑核验才能授权。`
+        summary.versionFresh === false
+          ? `${label}的核验报告是旧规则版本跑出来的，重跑核验才能授权。`
+          : `${label}的核验报告已过期（核验之后又改过草稿），重跑核验才能授权。`
       )
       continue
     }
@@ -413,7 +427,7 @@ export function toCheckReportSections(
 export function checkRunCounts(
   run: CheckRunView | null | undefined
 ): CheckRunCountsView {
-  const summary = toCheckRunSummary(run, true)
+  const summary = toCheckRunSummary(run, true, true)
   if (!summary) {
     return { blocking: 0, exceptionable: 0, warning: 0, total: 0 }
   }

@@ -730,6 +730,20 @@ describe('IngredientCreationCommitService', () => {
     });
   });
 
+  it('授权时刻下传时，档案 verifiedAt 与审计确认时间都等于它', async () => {
+    const { service, prisma, store } = await createHarness();
+    const authorizedAt = '2026-11-21T12:34:56.000Z';
+
+    await service.commit({ ...baseInput, authorizedAt });
+
+    const rawFoodData = prisma.nutritionFood.create.mock.calls[0][0].data;
+    expect(rawFoodData.verifiedAt).toEqual(new Date(authorizedAt));
+    const audit = store.audits[0] as unknown as {
+      changes: { confirmation: { verifiedAt: string; reportAcknowledgedAt: string | null } };
+    };
+    expect(audit.changes.confirmation.verifiedAt).toBe(authorizedAt);
+  });
+
   it('原料卡审计按存储字段读可食部：AI 原值 60 → 最终 62', async () => {
     const draft = buildDraft({
       aiBaseline: {

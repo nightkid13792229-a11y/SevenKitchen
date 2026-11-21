@@ -43,7 +43,7 @@ function makeRun(overrides: Partial<CheckRunView> = {}): CheckRunView {
 }
 
 function freshSummary(run: CheckRunView): CheckRunSummary {
-  const summary = toCheckRunSummary(run, true)
+  const summary = toCheckRunSummary(run, true, true)
   if (!summary) {
     throw new Error('expected a summary')
   }
@@ -281,6 +281,21 @@ describe('授权闸门 gateState', () => {
     expect(gate.reasons[0]).toContain('例外')
   })
 
+  it('报告是旧规则版本时，原因说的是「规则升级」而不是「你改过草稿」', () => {
+    const ingredient = toCheckRunSummary(makeRun(), false, false)
+    const nutrition = toCheckRunSummary(makeRun({ domain: 'NUTRITION' }), false, false)
+
+    const gate = gateState({
+      ingredient,
+      nutrition,
+      exceptions: []
+    })
+
+    expect(gate.ready).toBe(false)
+    expect(gate.reasons[0]).toContain('规则')
+    expect(gate.reasons[0]).not.toContain('改过草稿')
+  })
+
   it('正在保存草稿时不可点，且不丢掉真正挡路的原因', () => {
     const ingredient = freshSummary(makeRun())
     const nutrition = freshSummary(makeRun({ domain: 'NUTRITION' }))
@@ -290,6 +305,38 @@ describe('授权闸门 gateState', () => {
     ).toEqual({ ready: false, reasons: ['正在保存草稿，保存完再授权。'] })
   })
 })
+
+describe('页签横幅文案 staleBannerText · 规则版本', () => {
+  it('规则升级导致过期时不写「改过之后」', () => {
+    expect(
+      staleBannerText({
+        hasRun: true,
+        fresh: false,
+        touchedSinceLoad: false,
+        versionStale: true
+      })
+    ).toContain('规则')
+    expect(
+      staleBannerText({
+        hasRun: true,
+        fresh: false,
+        touchedSinceLoad: false,
+        versionStale: true
+      })
+    ).not.toContain('改过')
+  })
+
+  it('内容改过仍是原来的过期文案', () => {
+    expect(
+      staleBannerText({
+        hasRun: true,
+        fresh: false,
+        touchedSinceLoad: true,
+        versionStale: false
+      })
+    ).toBe('报告已过期，改过之后要重跑')
+  })
+});
 
 describe('页签横幅文案 staleBannerText', () => {
   it('有报告且新鲜 → 不提示', () => {
@@ -319,8 +366,8 @@ describe('页签横幅文案 staleBannerText', () => {
 
 describe('toCheckRunSummary', () => {
   it('没有报告时返回 null（页面据此提示「还没核验」）', () => {
-    expect(toCheckRunSummary(null, false)).toBeNull()
-    expect(toCheckRunSummary(undefined, true)).toBeNull()
+    expect(toCheckRunSummary(null, false, true)).toBeNull()
+    expect(toCheckRunSummary(undefined, true, true)).toBeNull()
   })
 
   it('计数与三档明细都从报告来', () => {
@@ -332,7 +379,7 @@ describe('toCheckRunSummary', () => {
       }
     })
 
-    expect(toCheckRunSummary(run, true)).toMatchObject({
+    expect(toCheckRunSummary(run, true, true)).toMatchObject({
       domain: 'INGREDIENT',
       fresh: true,
       blocking: 1,
@@ -355,7 +402,7 @@ describe('toCheckRunSummary', () => {
       counts: undefined
     } as unknown as CheckRunView
 
-    const summary = toCheckRunSummary(run, false)
+    const summary = toCheckRunSummary(run, false, true)
 
     expect(summary).toMatchObject({ blocking: 0, exceptionable: 1, warning: 0 })
     expect(summary?.fresh).toBe(false)
@@ -367,7 +414,7 @@ describe('toCheckRunSummary', () => {
       result: { blocking: 'oops', exceptionable: null, warnings: 3 }
     } as unknown as CheckRunView
 
-    expect(toCheckRunSummary(run, true)).toMatchObject({
+    expect(toCheckRunSummary(run, true, true)).toMatchObject({
       blocking: 0,
       exceptionable: 0,
       warning: 0,

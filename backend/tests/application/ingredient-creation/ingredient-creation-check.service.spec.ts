@@ -563,6 +563,7 @@ describe('IngredientCreationCheckService', () => {
       ingredient: ingredientRun,
       nutrition: nutritionRun,
       fresh: { ingredient: true, nutrition: false },
+      versionFresh: { ingredient: true, nutrition: true },
     });
     // 过期判定拿的是「当前草稿」，不是报告里的快照。
     expect(checkRunService.isFresh).toHaveBeenCalledWith(
@@ -571,19 +572,27 @@ describe('IngredientCreationCheckService', () => {
     );
   });
 
-  it('规则版本不是当前版本 → fresh=false（旧报告不能授权）', async () => {
+  it('规则版本不是当前版本 → fresh=false，且 versionFresh 单独标出来', async () => {
     checkRunService.latestRuns.mockResolvedValue({
       INGREDIENT: {
         id: 'run-old',
         rulesVersion: 'ingredient-card-v1',
       } as never,
-      NUTRITION: null,
+      NUTRITION: {
+        id: 'run-new',
+        rulesVersion: CHECK_RULES_VERSION.NUTRITION,
+      } as never,
     });
     checkRunService.isFresh.mockReturnValue(true);
 
     const view = await service.latestChecks('draft-1');
 
     expect(view.fresh.ingredient).toBe(false);
+    // 页面据此把原因说成「规则升级了」，而不是「你改过草稿」。
+    expect(view.versionFresh).toEqual({
+      ingredient: false,
+      nutrition: true,
+    });
   });
 
   it('latestChecks 没有报告的一域 fresh 为 false', async () => {
@@ -603,6 +612,7 @@ describe('IngredientCreationCheckService', () => {
       ingredient: ingredientRun,
       nutrition: null,
       fresh: { ingredient: true, nutrition: false },
+      versionFresh: { ingredient: true, nutrition: false },
     });
     expect(checkRunService.isFresh).toHaveBeenCalledTimes(1);
   });

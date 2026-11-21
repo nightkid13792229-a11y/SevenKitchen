@@ -231,6 +231,9 @@ export class IngredientCreationAuthorizeService {
       primaryProfileIndex: input.primaryProfileIndex,
       procurementSku: input.procurementSku,
       reportAcknowledgedAt: authorizedAt,
+      // 授权时刻只取一次，下发给提交服务当 verifiedAt：
+      // 否则审计里的「确认时间」和接口返回的「授权时间」会差几毫秒对不上。
+      authorizedAt,
     });
 
     return { ...result, authorizedAt };

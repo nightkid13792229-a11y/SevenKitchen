@@ -1927,6 +1927,9 @@ function handleScreenshotDrop(event: DragEvent): void {
 function handlePaste(event: ClipboardEvent): void {
   if (commitResult.value || line.value !== 'FOOD' || shotRecognizing.value)
     return
+  // 采购卡没出现时不接粘贴：否则图片被悄悄识别进看不见的表单，
+  // 还把输入框里正常粘贴的截图/图片吞掉（D10）。
+  if (!showProcurementCard.value) return
 
   const item = Array.from(event.clipboardData?.items ?? []).find((entry) =>
     entry.type.startsWith('image/')
@@ -2194,13 +2197,15 @@ const nutritionReviewCount = computed(
 const ingredientCheck = computed(() =>
   toCheckRunSummary(
     checksView.value?.ingredient ?? null,
-    checksView.value?.fresh.ingredient === true
+    checksView.value?.fresh.ingredient === true,
+    checksView.value?.versionFresh?.ingredient === true
   )
 )
 const nutritionCheck = computed(() =>
   toCheckRunSummary(
     checksView.value?.nutrition ?? null,
-    checksView.value?.fresh.nutrition === true
+    checksView.value?.fresh.nutrition === true,
+    checksView.value?.versionFresh?.nutrition === true
   )
 )
 
@@ -2318,11 +2323,17 @@ function staleNotice(domain: CheckDomain): string {
 
   const fresh =
     domain === 'INGREDIENT' ? view.fresh.ingredient : view.fresh.nutrition
+  const versionFresh =
+    domain === 'INGREDIENT'
+      ? view.versionFresh?.ingredient
+      : view.versionFresh?.nutrition
   const run = domain === 'INGREDIENT' ? view.ingredient : view.nutrition
   return staleBannerText({
     hasRun: Boolean(run),
     fresh,
-    touchedSinceLoad: draftTouched.value
+    touchedSinceLoad: draftTouched.value,
+    // 旧接口没有 versionFresh：退回按「过期」说，不硬说成规则升级。
+    versionStale: fresh === false && versionFresh === false
   })
 }
 

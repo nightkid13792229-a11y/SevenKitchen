@@ -74,6 +74,12 @@ export interface CommitIngredientCreationInput {
    * 只用于审计；不传时保持旧调用方兼容。
    */
   reportAcknowledgedAt?: string;
+  /**
+   * 授权那一刻（2026-11-21）：授权服务取一次时间同时给
+   * `verifiedAt` 与返回的 `authorizedAt`，审计与接口对得上。
+   * 不传时退回提交时的 `new Date()`（旧调用方 / 直接调用 commit 的场景）。
+   */
+  authorizedAt?: string;
 }
 
 export interface CommitIngredientCreationResult {
@@ -614,8 +620,8 @@ function buildNutritionData(
  * 原料、营养档案、映射、审计全部在一个 `$transaction` 里写：
  * 任何一步失败（含并发撞唯一键）整笔回滚，不会留下半条数据。
  *
- * 营养档案一律落 `PENDING`：变成 `VERIFIED` 只能由人在「确认可用」时点一下，
- * 本服务不写 `verifiedBy` / `verifiedAt`。
+ * 营养档案**写入即确认**（2026-11-21 起，与补剂线一致）：直接落 `VERIFIED`，
+ * `verifiedBy` / `verifiedAt` 由本服务在同一事务里写入，配方立即可选。
  */
 @Injectable()
 export class IngredientCreationCommitService {
@@ -668,7 +674,10 @@ export class IngredientCreationCommitService {
       ? draft.payload.proposalHistory
       : [];
     // 写入即确认：本次授权的时刻就是这些档案的 verifiedAt。
-    const verifiedAt = new Date();
+    // 优先用授权服务传下来的那一瞬间（与接口返回的 authorizedAt 一致）。
+    const verifiedAt = input.authorizedAt
+      ? new Date(input.authorizedAt)
+      : new Date();
     const changes = buildAuditChanges(draft, input.profiles, {
       verifiedAt: verifiedAt.toISOString(),
       verifiedBy: input.userId,

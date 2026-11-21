@@ -18,11 +18,19 @@ import type {
  * `GET drafts/:id/checks` 的返回体：两域各自的最新报告 + 是否还对得上当前草稿。
  *
  * `fresh` 为 false：没跑过（null）、跑完之后草稿又改过、或报告的规则版本不是当前版本。
+ * 后两种原因分开告诉页面（`fresh` + `versionFresh`），授权按钮的提示才不会指错方向。
  */
 export interface IngredientDraftChecksView {
   ingredient: CheckRunView | null;
   nutrition: CheckRunView | null;
   fresh: { ingredient: boolean; nutrition: boolean };
+  /**
+   * 报告是不是**当前规则版本**跑出来的（与内容是否改过无关）。
+   *
+   * 页面靠它把「报告过期」的原因说准：版本升级导致的不能授权，
+   * 不能写成「你改过草稿」（人根本没改，却被告知改过）。
+   */
+  versionFresh: { ingredient: boolean; nutrition: boolean };
 }
 
 /**
@@ -138,7 +146,19 @@ export class IngredientCreationCheckService {
         ingredient: this.isCurrentRun('INGREDIENT', runs.INGREDIENT, draft),
         nutrition: this.isCurrentRun('NUTRITION', runs.NUTRITION, draft),
       },
+      versionFresh: {
+        ingredient: this.isCurrentVersion('INGREDIENT', runs.INGREDIENT),
+        nutrition: this.isCurrentVersion('NUTRITION', runs.NUTRITION),
+      },
     };
+  }
+
+  /** 这份报告是不是按当前规则版本跑出来的（没跑过也算不是）。 */
+  private isCurrentVersion(
+    domain: CheckDomain,
+    run: CheckRunView | null,
+  ): boolean {
+    return Boolean(run && run.rulesVersion === CHECK_RULES_VERSION[domain]);
   }
 
   /**

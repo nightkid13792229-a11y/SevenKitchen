@@ -277,6 +277,14 @@ export interface IngredientDraftChecksView {
     ingredient: boolean
     nutrition: boolean
   }
+  /**
+   * 报告是不是当前规则版本（旧版本报告不算新鲜）。
+   * 与 `fresh` 一起用，页面才能区分「你改过内容」和「规则升级了」。
+   */
+  versionFresh: {
+    ingredient: boolean
+    nutrition: boolean
+  }
 }
 
 /** 授权被拒的机器可读原因码（后端 `AuthorizeBlockedReasonCode`）。 */

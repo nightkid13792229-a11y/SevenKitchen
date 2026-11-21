@@ -23,4 +23,11 @@ describe('补剂单位 1:1 校验', () => {
       toSupplementBaseQuantity('平勺', 1, 'G', '海藻粉'),
     ).toThrow(BadRequestException);
   });
+
+  it('胶囊按个计，和粒/片一样 1:1', () => {
+    expect(isSupplementUnitOneToOne('胶囊', 'PCS')).toBe(true);
+  });
+  it('份不是 1:1 单位', () => {
+    expect(isSupplementUnitOneToOne('份', 'PCS')).toBe(false);
+  });
 });

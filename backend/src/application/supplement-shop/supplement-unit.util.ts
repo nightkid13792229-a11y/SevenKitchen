@@ -21,7 +21,8 @@ export function isSupplementUnitOneToOne(
 
   const isGram = ['g', '克', 'gram'].includes(normalized);
   const isMl = ['ml', '毫升'].includes(normalized);
-  const isPcs = ['粒', '片', '个', '颗', '平勺', '勺', 'pcs'].includes(
+  // 「胶囊」按个计，和粒/片一样 1:1；「份」不是 1:1 单位，故意不收。
+  const isPcs = ['粒', '片', '胶囊', '个', '颗', '平勺', '勺', 'pcs'].includes(
     normalized,
   );
 

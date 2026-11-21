@@ -431,10 +431,14 @@ export class IngredientCreationController {
     // 例外的审批人/时间只能由服务端盖章，浏览器带来的值一律忽略。
     const payload = stripServerOwnedPayload(dto.payload);
     if (payload.verify !== undefined) {
+      // 同一条例外（code + 理由都没变）沿用草稿里原来的审批留痕：
+      // 页面每次登记都发整份数组，不能把上一个人批的那条改成当前人。
+      const current = await this.draftService.get(id);
       const sanitized = sanitizeVerifyExceptions(
         payload.verify,
         user.userId,
         new Date().toISOString(),
+        current.payload.verify?.exceptions,
       );
       if (!sanitized.ok) {
         throw new BadRequestException(sanitized.error);

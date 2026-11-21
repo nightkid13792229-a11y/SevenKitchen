@@ -930,6 +930,7 @@ describe('IngredientCreationController', () => {
   });
 
   it('登记例外时审批人与时间由服务端盖章，浏览器带来的值不算', async () => {
+    draftService.get.mockResolvedValue(createDraft());
     draftService.patch.mockResolvedValue(createDraft());
 
     await controller.updateDraft(
@@ -965,7 +966,50 @@ describe('IngredientCreationController', () => {
     );
   });
 
+  it('同一条例外重存时沿用原审批人，不把别人的留痕改成当前人', async () => {
+    const earlier = {
+      code: 'EDIBLE_RANGE',
+      reason: '按供应商给的可食部 60% 登记',
+      approvedBy: 'alice',
+      approvedAt: '2026-11-01T08:00:00.000Z',
+    };
+    draftService.get.mockResolvedValue(
+      createDraft({ payload: { verify: { exceptions: [earlier] } } }),
+    );
+    draftService.patch.mockResolvedValue(createDraft());
+
+    await controller.updateDraft(
+      'draft-1',
+      {
+        step: 'CHECK',
+        payload: {
+          verify: {
+            exceptions: [
+              earlier,
+              { code: 'NAME_SIMILAR', reason: '和「鸡心」不是一回事' },
+            ],
+          },
+        },
+      } as never,
+      { userId: 'bob' } as never,
+    );
+
+    const payload = draftService.patch.mock.calls[0][2] as {
+      verify: { exceptions: Array<Record<string, unknown>> };
+    };
+    expect(payload.verify.exceptions[0]).toMatchObject({
+      code: 'EDIBLE_RANGE',
+      approvedBy: 'alice',
+      approvedAt: '2026-11-01T08:00:00.000Z',
+    });
+    expect(payload.verify.exceptions[1]).toMatchObject({
+      code: 'NAME_SIMILAR',
+      approvedBy: 'bob',
+    });
+  });
+
   it('例外没有理由 → 400，不落库', async () => {
+    draftService.get.mockResolvedValue(createDraft());
     draftService.patch.mockClear();
 
     await expect(

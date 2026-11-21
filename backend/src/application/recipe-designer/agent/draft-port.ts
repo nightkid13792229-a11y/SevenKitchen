@@ -105,6 +105,17 @@ export interface FoodSearchGroups {
   supplementTotal: number;
 }
 
+export interface FoodNameMatch {
+  query: string;
+  ingredientId: string;
+  nutritionFoodId: string;
+  name: string;
+  type: 'FOOD' | 'SUPPLEMENT' | null;
+  category: string | null;
+  preparationState: string | null;
+  isPrimary: boolean;
+}
+
 export interface AssessmentGap {
   key: string;
   label: string;
@@ -272,6 +283,46 @@ export class RecipeDraftPort {
       type: 'FOOD',
     } as any)) as any;
     return this.mapFoodCandidates(result, limit);
+  }
+
+  /**
+   * SELECT 阶段只做“名字对库”：把模型给出的同物异名/标准名查成候选。
+   * 不返回营养值，避免模型拿它重新挑食材。
+   */
+  async matchFoodNames(names: string[]): Promise<FoodNameMatch[]> {
+    const matches: FoodNameMatch[] = [];
+    const seen = new Set<string>();
+    for (const raw of names) {
+      const query = String(raw ?? '').trim();
+      if (!query) continue;
+      let candidates: FoodCandidate[] = [];
+      try {
+        candidates = await this.findFoods({ search: query, limit: 8 });
+      } catch {
+        candidates = [];
+      }
+      for (const candidate of candidates) {
+        const key = `${query}|${candidate.ingredientId}|${candidate.nutritionFoodId}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        matches.push({
+          query,
+          ingredientId: candidate.ingredientId,
+          nutritionFoodId: candidate.nutritionFoodId,
+          name: candidate.name,
+          type:
+            candidate.type === 'SUPPLEMENT'
+              ? 'SUPPLEMENT'
+              : candidate.type === 'FOOD'
+                ? 'FOOD'
+                : null,
+          category: candidate.category,
+          preparationState: candidate.preparationState,
+          isPrimary: candidate.isPrimary,
+        });
+      }
+    }
+    return matches;
   }
 
   /** 食材优先、补剂单独一组的候选；给 find_food 工具用。 */

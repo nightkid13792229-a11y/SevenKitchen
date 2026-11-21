@@ -515,6 +515,16 @@ export class RecipeAgentService implements OnModuleInit {
     if (items.length === 0) {
       throw new BadRequestException('选中的食材不在当前清单里');
     }
+    const unavailable = items.filter(
+      (item) => item.dataStatus !== 'AVAILABLE',
+    );
+    if (unavailable.length > 0) {
+      throw new BadRequestException(
+        `还有 ${unavailable.length} 项食材未匹配或营养档案不全（${unavailable
+          .map((item) => item.name)
+          .join('、')}），不能保存选中清单；请先让 AI 判断同物异名或补档案`,
+      );
+    }
     const updated: AgentSelection = {
       ...selection,
       items,
@@ -664,6 +674,17 @@ export class RecipeAgentService implements OnModuleInit {
     }
     if (!session.selection) {
       throw new BadRequestException('还没有提交选材候选');
+    }
+    const selection = session.selection as unknown as AgentSelection;
+    const unavailable = (selection.items ?? []).filter(
+      (item) => item.dataStatus !== 'AVAILABLE',
+    );
+    if (unavailable.length > 0) {
+      throw new BadRequestException(
+        `选材清单还有 ${unavailable.length} 项未匹配或营养档案不全（${unavailable
+          .map((item) => item.name)
+          .join('、')}），不能进入配方编辑；请先让 AI 判断同物异名或补档案`,
+      );
     }
     await this.prisma.recipeDesignAgentSession.update({
       where: { id: session.id },
@@ -827,6 +848,7 @@ export class RecipeAgentService implements OnModuleInit {
     let sameGapCount = 0;
     let lastAssessHadGaps = false;
     let thinkingFallbackDisabled = false;
+    let selectionRepairAttempts = 0;
     const verifiedCitationIds = new Set<string>();
     /**
      * 每次运行的第一轮强制读设计上下文。
@@ -1055,6 +1077,7 @@ export class RecipeAgentService implements OnModuleInit {
       let pendingZeroHitNudge: string | null = null;
       let pendingForceAsk = false;
       let pendingProposeRepair: string | null = null;
+      let pendingSelectionRepair: string | null = null;
 
       for (const call of calls) {
         if (toolCalls >= phaseMaxToolCalls) {
@@ -1252,6 +1275,19 @@ export class RecipeAgentService implements OnModuleInit {
             where: { id: sessionId },
             data: selectionSubmissionUpdate(selection),
           });
+          const unavailable = selection.items.filter(
+            (item) => item.dataStatus !== 'AVAILABLE',
+          );
+          if (unavailable.length > 0 && selectionRepairAttempts < 2) {
+            selectionRepairAttempts += 1;
+            pendingSelectionRepair =
+              `选材清单里有 ${unavailable.length} 项未匹配或档案不全：` +
+              `${unavailable.map((item) => `${item.name}（${item.dataStatus}）`).join('、')}。` +
+              '请用 match_food_name 结合你的知识判断同物异名/标准名（例如鲭鱼/青花鱼、马铃薯/土豆），' +
+              '确认后用库内标准名再次提交 propose_selection；不要用其他食材替代，也不要因为营养值改食材。' +
+              '确实没有就保留 MISSING 并明确告诉用户。';
+            continue;
+          }
           return;
         }
 
@@ -1373,6 +1409,9 @@ export class RecipeAgentService implements OnModuleInit {
       }
       if (pendingProposeRepair) {
         messages.push({ role: 'system', content: pendingProposeRepair });
+      }
+      if (pendingSelectionRepair) {
+        messages.push({ role: 'system', content: pendingSelectionRepair });
       }
       if (pendingForceAsk) {
         forceAsk = true;

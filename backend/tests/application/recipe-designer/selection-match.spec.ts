@@ -53,7 +53,7 @@ describe('selection name matching', () => {
     expect(matched.items).toHaveLength(3);
   });
 
-  it('matches common aliases like 兔肉 → 兔里脊', async () => {
+  it('does not use static aliases; model must resolve synonyms', async () => {
     const selection = {
       summary: 'x',
       items: [
@@ -76,10 +76,7 @@ describe('selection name matching', () => {
     const matched = await matchSelectionToLibrary(selection, async (input) =>
       input.search.includes('兔') ? [candidate('兔里脊', 'rabbit')] : [],
     );
-    expect(matched.items[0]).toMatchObject({
-      ingredientId: 'rabbit',
-      dataStatus: 'AVAILABLE',
-    });
+    expect(matched.items[0].dataStatus).toBe('MISSING');
   });
 
   it('only annotates matches and does not drop supplements or categories', async () => {

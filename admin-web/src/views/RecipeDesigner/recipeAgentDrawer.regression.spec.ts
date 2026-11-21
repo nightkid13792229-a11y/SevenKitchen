@@ -113,3 +113,19 @@ describe('AI 设计对话 · 长理由折叠', () => {
     expect(drawerSource).toContain('is-collapsed')
   })
 })
+
+describe('AI 设计对话 · 选材硬边界与手动添加', () => {
+  it('未匹配/档案不全时不能保存或确认，并提示先解决', () => {
+    expect(drawerSource).toContain('unavailableSelectionItems')
+    expect(drawerSource).toContain('unavailableCheckedSelectionItems')
+    expect(drawerSource).toContain('不能保存')
+    expect(drawerSource).toContain('不能进入配方编辑')
+  })
+
+  it('可以手动输入食材，让模型判断同物异名后再加入', () => {
+    expect(drawerSource).toContain('manualSelectionName')
+    expect(drawerSource).toContain('addSelectionByName')
+    expect(drawerSource).toContain('match_food_name')
+    expect(drawerSource).toContain('让 AI 判断并加入')
+  })
+})

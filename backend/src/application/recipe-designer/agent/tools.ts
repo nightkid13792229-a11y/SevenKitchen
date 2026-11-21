@@ -62,6 +62,27 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'match_food_name',
+      description:
+        '只在选材阶段用于把已选食材对上库。传入你根据知识判断的同物异名/标准名（如 鲭鱼、青花鱼、马铃薯、土豆），返回库内候选；只按名称/类别判断，不要用营养值改食材，也不要用它挑新食材。',
+      parameters: {
+        type: 'object',
+        properties: {
+          names: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 10,
+            items: { type: 'string' },
+          },
+        },
+        required: ['names'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'read_draft',
       description:
         '读当前草稿：名称、阶段、现有原料与克数、上次评估是否最新、上次评估的缺口与过敏/忌口提示。第一步先读；即使新建草稿也要读，用来确认是否为空。',
@@ -131,7 +152,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       name: 'edit_recipe',
       description:
         '修改当前草稿的原料。一次可传多个操作，按顺序执行并逐条回报结果。' +
-        '预处理方式按“部位/状态/处理”写，斜杠分隔，不写原料名；原料名已含部位/状态的那一段直接省略。' +
+        '预处理方式按“部位/状态/处理”写，斜杠分隔，不写原料名；原料名已含部位/状态的那一段直接省略；不写预煮/煮熟/蒸/烤等加热动作，加热放制作步骤。' +
         '补剂目标只传 fieldPath（营养素字段），具体数值由系统按档案计算。',
       parameters: {
         type: 'object',
@@ -320,6 +341,25 @@ export async function executeTool(
       case 'read_design_context': {
         const designContext = await context.port.readDesignContext();
         return ok(designContext, summarizeDesignContext(designContext));
+      }
+
+      case 'match_food_name': {
+        const names = Array.isArray(args.names)
+          ? args.names
+              .filter((name): name is string => typeof name === 'string')
+              .map((name) => name.trim())
+              .filter(Boolean)
+          : [];
+        if (names.length === 0) {
+          return fail('INVALID_ARGUMENT', 'names 至少给一个');
+        }
+        const matches = await context.port.matchFoodNames(names);
+        return ok(
+          matches,
+          matches.length > 0
+            ? `找到 ${matches.length} 条候选`
+            : '没有匹配到库内食材；可以保留 MISSING 或让用户新增原料',
+        );
       }
 
       case 'propose_supplement': {

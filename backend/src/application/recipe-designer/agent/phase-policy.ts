@@ -30,11 +30,14 @@ export const PHASE_TOOL_BUDGET = {
 } as const;
 
 const PROPOSE_TOOLS = new Set(['propose_plan', 'propose_selection']);
+// 选材专用的“名字对库”工具：DESIGN 不再需要。
+const SELECT_ONLY_TOOLS = new Set(['match_food_name']);
 const PLAN_TOOLS = new Set([...READ_TOOLS, 'propose_plan']);
 // 选材只需要：读档案、问用户、提交候选、用户要求改方案。不要知识库/原料库查询。
 const SELECT_TOOLS = new Set([
   'read_design_context',
   'ask',
+  'match_food_name',
   'propose_selection',
   'revise_plan',
 ]);
@@ -49,7 +52,9 @@ export function toolsForPhase(
     if (flow === 'ORDER' && name === 'read_taxonomy') {
       return false;
     }
-    if (phase === 'DESIGN') return !PROPOSE_TOOLS.has(name);
+    if (phase === 'DESIGN') {
+      return !PROPOSE_TOOLS.has(name) && !SELECT_ONLY_TOOLS.has(name);
+    }
     if (phase === 'PLAN') return PLAN_TOOLS.has(name);
     return SELECT_TOOLS.has(name);
   });

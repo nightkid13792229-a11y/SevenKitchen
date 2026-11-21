@@ -45,8 +45,18 @@ describe('RecipeAgentService 第三阶段动作', () => {
       selection: {
         summary: '清单',
         items: [
-          { kind: 'FOOD', name: '鸡胸肉', reason: '蛋白' },
-          { kind: 'FOOD', name: '南瓜', reason: '纤维' },
+          {
+            kind: 'FOOD',
+            name: '鸡胸肉',
+            reason: '蛋白',
+            dataStatus: 'AVAILABLE',
+          },
+          {
+            kind: 'FOOD',
+            name: '南瓜',
+            reason: '纤维',
+            dataStatus: 'AVAILABLE',
+          },
         ],
       },
     });

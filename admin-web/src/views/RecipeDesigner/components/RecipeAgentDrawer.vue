@@ -274,6 +274,28 @@
               </tr>
             </tbody>
           </table>
+          <el-alert
+            v-if="unavailableSelectionItems.length"
+            class="agent-selection-block"
+            type="error"
+            :closable="false"
+            show-icon
+            :title="`有 ${unavailableSelectionItems.length} 项食材未匹配或营养档案不全`"
+          >
+            <template #default>
+              <div>
+                {{
+                  unavailableSelectionItems
+                    .map((item) => `${item.name}（${dataStatusLabel(item.dataStatus)}）`)
+                    .join("、")
+                }}
+              </div>
+              <div>
+                勾选的食材未解决前不能保存，也不能进入配方编辑；不想要的可以先取消勾选。可以让 AI 判断同物异名，或先补原料/营养档案。
+              </div>
+            </template>
+          </el-alert>
+
           <div
             v-if="session.phase === 'SELECT' && !session.selectionConfirmedAt"
             class="agent-plan__actions"
@@ -281,7 +303,10 @@
             <el-button
               size="small"
               :loading="savingSelection"
-              :disabled="selectionChecked.length === 0"
+              :disabled="
+                selectionChecked.length === 0 ||
+                unavailableCheckedSelectionItems.length > 0
+              "
               @click="saveSelectionItems"
               >保存选中清单</el-button
             >
@@ -292,7 +317,9 @@
               size="small"
               type="primary"
               :loading="deciding"
-              :disabled="selectionDirty"
+              :disabled="
+                selectionDirty || unavailableCheckedSelectionItems.length > 0
+              "
               @click="decideSelection('APPROVE')"
               >确认选材，开始设计</el-button
             >
@@ -301,6 +328,34 @@
               :loading="deciding"
               @click="decideSelection('CONTINUE')"
               >继续讨论</el-button
+            >
+          </div>
+
+          <div
+            v-if="session.phase === 'SELECT' && !session.selectionConfirmedAt"
+            class="agent-selection-add"
+          >
+            <el-input
+              v-model="manualSelectionName"
+              size="small"
+              placeholder="清单里没有想要的食材？输入名称，让 AI 判断"
+              maxlength="40"
+              @keydown.enter.prevent="addSelectionByName"
+            />
+            <el-button
+              size="small"
+              type="primary"
+              plain
+              :disabled="!manualSelectionName.trim() || running"
+              @click="addSelectionByName"
+              >让 AI 判断并加入</el-button
+            >
+            <el-button
+              v-if="unavailableSelectionItems.length"
+              size="small"
+              :disabled="running"
+              @click="askModelToMatch"
+              >让 AI 判断同物异名</el-button
             >
           </div>
           <div class="agent-plan__hint">
@@ -518,6 +573,17 @@ const selectionFoodItems = computed(() =>
 const hasOutsideSelection = computed(() =>
   selectionFoodItems.value.some((item) => item.dataStatus === "MISSING"),
 );
+const unavailableSelectionItems = computed(() =>
+  selectionFoodItems.value.filter((item) => item.dataStatus !== "AVAILABLE"),
+);
+const unavailableCheckedSelectionItems = computed(() =>
+  selectionFoodItems.value.filter(
+    (item) =>
+      selectionChecked.value.includes(item.name) &&
+      item.dataStatus !== "AVAILABLE",
+  ),
+);
+const manualSelectionName = ref("");
 const selectionChecked = ref<string[]>([]);
 const savingSelection = ref(false);
 const selectionDirty = computed(() => {
@@ -543,10 +609,33 @@ function toggleSelectionChecked(name: string, checked: unknown) {
   selectionChecked.value = [...set];
 }
 
+function addSelectionByName() {
+  const name = manualSelectionName.value.trim();
+  if (!name || running.value) return;
+  manualSelectionName.value = "";
+  input.value =
+    `请把「${name}」加入选材候选。先用你的知识判断它和库里的同物异名/标准名，` +
+    "可以调用 match_food_name 查候选；确认后用 propose_selection 重新提交。不要用其他食材替代。";
+  void send();
+}
+
+function askModelToMatch() {
+  const names = unavailableSelectionItems.value.map((item) => item.name);
+  if (names.length === 0 || running.value) return;
+  input.value =
+    `请用你的知识判断以下食材的同物异名/标准名，并用 match_food_name 查库：${names.join("、")}。` +
+    "确认后用库内标准名重新提交 propose_selection；不要用其他食材替代。";
+  void send();
+}
+
 async function saveSelectionItems() {
   if (!session.value || savingSelection.value) return;
   if (selectionChecked.value.length === 0) {
     ElMessage.warning("至少要保留一条选材");
+    return;
+  }
+  if (unavailableCheckedSelectionItems.value.length > 0) {
+    ElMessage.warning("勾选的食材里还有未匹配或档案不全的，不能保存");
     return;
   }
   savingSelection.value = true;
@@ -962,6 +1051,13 @@ async function decideSelection(decision: "APPROVE" | "CONTINUE") {
     ElMessage.warning("请先保存选中清单");
     return;
   }
+  if (
+    decision === "APPROVE" &&
+    unavailableCheckedSelectionItems.value.length > 0
+  ) {
+    ElMessage.warning("勾选的食材里还有未匹配或档案不全的，不能确认选材");
+    return;
+  }
   deciding.value = true;
   try {
     await recipeDesignerApi.confirmAgentSelection(props.draftId, decision);
@@ -1115,6 +1211,17 @@ watch(
   border-color: #d3d4d6;
   background: #f4f4f5;
 }
+.agent-selection-block {
+  margin: 6px 0 8px;
+}
+.agent-selection-add {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
 .agent-prep__row {
   display: flex;
   flex-direction: column;

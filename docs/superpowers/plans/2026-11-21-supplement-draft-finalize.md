@@ -148,9 +148,7 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿表与证据小数迁
 - Create: `backend/src/application/ingredient-creation/supplement-draft-completeness.ts`
 - Modify: `backend/src/application/supplement-shop/supplement-unit.util.ts`
 - Test: `backend/tests/application/ingredient-creation/supplement-draft-completeness.spec.ts`
-  tests/application/ingredient-creation/supplement-draft-profile.spec.ts \
 - Test: `backend/tests/application/supplement-shop/supplement-unit.util.spec.ts` (add cases)
-  tests/application/supplement-shop/supplement-equivalence.service.spec.ts \
 
 **Interfaces:**
 - Produces:
@@ -234,8 +232,6 @@ it('份不是 1:1 单位', () => {
 - [ ] **Step 2: Run tests and confirm they fail**
 
 Run: `cd backend && npx jest tests/application/ingredient-creation/supplement-draft-completeness.spec.ts tests/application/supplement-shop/supplement-unit.util.spec.ts --runInBand`
-  tests/application/ingredient-creation/supplement-draft-profile.spec.ts \
-  tests/application/supplement-shop/supplement-equivalence.service.spec.ts \
 Expected: FAIL — modules/functions missing.
 
 - [ ] **Step 3: Implement types, normalization, completeness and the unit alias**
@@ -255,8 +251,6 @@ Expected: FAIL — modules/functions missing.
 - [ ] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/application/ingredient-creation/supplement-draft-completeness.spec.ts tests/application/supplement-shop/supplement-unit.util.spec.ts --runInBand`
-  tests/application/ingredient-creation/supplement-draft-profile.spec.ts \
-  tests/application/supplement-shop/supplement-equivalence.service.spec.ts \
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -267,9 +261,7 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿载荷与完整度计
   backend/src/application/ingredient-creation/supplement-draft-completeness.ts \
   backend/src/application/supplement-shop/supplement-unit.util.ts \
   backend/tests/application/ingredient-creation/supplement-draft-completeness.spec.ts \
-  tests/application/ingredient-creation/supplement-draft-profile.spec.ts \
   backend/tests/application/supplement-shop/supplement-unit.util.spec.ts
-  tests/application/supplement-shop/supplement-equivalence.service.spec.ts \
 ```
 
 ---
@@ -725,7 +717,6 @@ bash scripts/session.sh commit -m "refactor(supplement): 建档事务复用与�
 - Create: `backend/src/application/ingredient-creation/supplement-verification.ts`
 - Modify: `backend/src/application/supplement-shop/supplement-equivalence.service.ts`
 - Test: `backend/tests/application/ingredient-creation/supplement-finalize.service.spec.ts`
-  tests/application/ingredient-creation/supplement-verification.spec.ts \
 - Test: `backend/tests/application/ingredient-creation/supplement-verification.spec.ts`
 - Test: `backend/tests/application/supplement-shop/supplement-equivalence.service.spec.ts` (add cases)
 
@@ -754,7 +745,6 @@ bash scripts/session.sh commit -m "refactor(supplement): 建档事务复用与�
 - [ ] **Step 2: Run and confirm failure**
 
 Run: `cd backend && npx jest tests/application/ingredient-creation/supplement-verification.spec.ts tests/application/ingredient-creation/supplement-finalize.service.spec.ts --runInBand`
-  tests/application/ingredient-creation/supplement-verification.spec.ts \
 Expected: FAIL — modules missing.
 
 - [ ] **Step 3: Implement the pure builders and the service**
@@ -796,7 +786,6 @@ Expected: FAIL — modules missing.
 - [ ] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/application/ingredient-creation/supplement-verification.spec.ts tests/application/ingredient-creation/supplement-finalize.service.spec.ts tests/application/supplement-shop/supplement-equivalence.service.spec.ts --runInBand`
-  tests/application/ingredient-creation/supplement-verification.spec.ts \
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
@@ -807,7 +796,6 @@ bash scripts/session.sh commit -m "feat(supplement): 一次性写入与直接字
   backend/src/application/ingredient-creation/supplement-verification.ts \
   backend/src/application/supplement-shop/supplement-equivalence.service.ts \
   backend/tests/application/ingredient-creation/supplement-finalize.service.spec.ts \
-  tests/application/ingredient-creation/supplement-verification.spec.ts \
   backend/tests/application/ingredient-creation/supplement-verification.spec.ts \
   backend/tests/application/supplement-shop/supplement-equivalence.service.spec.ts
 ```
@@ -856,7 +844,6 @@ Expected: FAIL — service missing.
 - [ ] **Step 4: Run tests**
 
 Run: `cd backend && npx jest tests/application/ingredient-creation/supplement-verification.service.spec.ts tests/application/ingredient-creation/supplement-finalize.service.spec.ts --runInBand`
-  tests/application/ingredient-creation/supplement-verification.spec.ts \
 Expected: PASS.
 
 - [ ] **Step 5: Commit**

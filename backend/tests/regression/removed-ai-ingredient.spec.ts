@@ -59,7 +59,7 @@ describe('removed AI ingredient creation workflow (auto-write path)', () => {
     }
   });
 
-  it('never auto-verifies nutrition profiles created by the wizard', () => {
+  it('授权写入即确认：营养档案直接 VERIFIED 并带确认人/时间', () => {
     const commitService = join(
       backendRoot,
       'src',
@@ -71,10 +71,10 @@ describe('removed AI ingredient creation workflow (auto-write path)', () => {
     expect(existsSync(commitService)).toBe(true);
     const source = readFileSync(commitService, 'utf8');
 
-    // 必须仍以 PENDING 落库
-    expect(source).toMatch(/status:\s*'PENDING'/);
-    // 不允许出现任何把状态写成已验证的代码（注释里提到 VERIFIED 不算）
-    expect(source).not.toMatch(/status:\s*'VERIFIED'/);
-    expect(source).not.toMatch(/status:\s*NutritionFoodStatus\.VERIFIED/);
+    // 2026-11-21 起与补剂线一致：授权写入即确认可用。
+    expect(source).toMatch(/status:\s*'VERIFIED'/);
+    expect(source).toMatch(/verifiedBy:\s*createdBy/);
+    expect(source).toMatch(/verifiedAt/);
+    expect(source).not.toMatch(/status:\s*'PENDING'/);
   });
 });

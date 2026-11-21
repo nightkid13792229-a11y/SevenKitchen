@@ -22,7 +22,7 @@
  * `verification` / `finalizing` / `dirty` / `saveError` / `reset`：
  * 审核屏与核验页要读它们；Flow 返回列表时要 `reset()` 清掉上下文。
  */
-import { getCurrentScope, onScopeDispose, ref, watch, type Ref } from 'vue'
+import { computed, getCurrentScope, onScopeDispose, ref, watch, type Ref } from 'vue'
 import {
   supplementDraftsApi,
   type SupplementDraftFinalizeResult,
@@ -57,6 +57,40 @@ function signatureOf(draft: SupplementDraftView | null): string {
   return JSON.stringify([draft.name, draft.payload, draft.manualFields])
 }
 
+/**
+ * 审核结果是否过期只看「业务内容」，**不看提醒确认记录**。
+ *
+ * 勾选提醒会改 `payload.review.acknowledgedWarnings`；它不改变 blockers/warnings，
+ * 如果算进签名，审核屏会永远显示「已过期」。ack 是否齐全由 `canFinalize`
+ * 单独判断（与后端 finalize 同一口径）。
+ */
+function reviewSignatureOf(draft: SupplementDraftView | null): string {
+  if (!draft) return ''
+  return JSON.stringify([
+    draft.name,
+    { ...draft.payload, review: { acknowledgedWarnings: [] } },
+    draft.manualFields
+  ])
+}
+
+/** 重复建档 409 的响应体带已有原料 id；其它错误返回 null。 */
+function ingredientIdOf(error: unknown): string | null {
+  const data = (
+    error as { response?: { data?: { ingredientId?: unknown } } } | null
+  )?.response?.data
+  const value = data?.ingredientId
+  return typeof value === 'string' && value.trim() ? value.trim() : null
+}
+
+/** 最终写入失败的 HTTP 状态与重复记录 id；审核屏据此给修复入口。 */
+export interface SupplementDraftFinalizeFailure {
+  status: number | null
+  /** 409 重复建档时后端回传的已有原料 id */
+  ingredientId: string | null
+  /** 已转成中文的失败原因（与顶部 error 一致） */
+  message: string
+}
+
 /** axios 错误的 HTTP 状态码；不是 HTTP 错误返回 null。 */
 function statusOf(error: unknown): number | null {
   const status = (error as { response?: { status?: unknown } } | null)?.response
@@ -75,6 +109,8 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   const draft = ref<SupplementDraftView | null>(null)
   const review = ref<SupplementDraftReview | null>(null)
   const verification = ref<SupplementWriteVerification | null>(null)
+  /** 最近一次最终写入的失败信息；400/409 后审核屏据此显示修复入口。 */
+  const finalizeFailure = ref<SupplementDraftFinalizeFailure | null>(null)
 
   const loading = ref(false)
   const saving = ref(false)
@@ -113,6 +149,13 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   /** 最近一次 validate 针对的内容签名；内容变了就说明审核结果已过期。 */
   let validatedSignature = ''
   let disposed = false
+
+  /** 审核结果是否已经和当前草稿内容对不上（提醒勾选不算）。 */
+  const reviewIsStale = computed(
+    () =>
+      review.value !== null &&
+      reviewSignatureOf(draft.value) !== validatedSignature
+  )
 
   /** 开启新一轮请求代次，让所有在飞的旧请求失效。 */
   function nextEpoch(): number {
@@ -292,6 +335,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     draft.value = null
     review.value = null
     verification.value = null
+    finalizeFailure.value = null
     loading.value = false
     saving.value = false
     aiRunning.value = false
@@ -317,6 +361,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     clearAutosaveTimer()
     pendingAutosave.value = false
     review.value = null
+    finalizeFailure.value = null
     validatedSignature = ''
     error.value = null
     loadErrorStatus.value = null
@@ -568,7 +613,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       if (!isCurrent(epochAtStart, idAtStart)) return null
       review.value = result
       mergeServerMeta(result.draft)
-      validatedSignature = signatureOf(result.draft)
+      validatedSignature = reviewSignatureOf(result.draft)
       return result
     } catch (err) {
       if (!isCurrent(epochAtStart, idAtStart)) return null
@@ -594,6 +639,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   async function finalize(): Promise<SupplementDraftFinalizeResult | null> {
     if (!draft.value || loading.value || finalizing.value) return null
 
+    finalizeFailure.value = null
     const flushed = await flushPendingSave()
     if (!flushed) {
       if (!error.value && !saveError.value) {
@@ -604,7 +650,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
 
     const idAtStart = draftId.value
     const epochAtStart = epoch
-    const currentSignature = signatureOf(draft.value)
+    const currentSignature = reviewSignatureOf(draft.value)
     const currentReview =
       review.value && validatedSignature === currentSignature
         ? review.value
@@ -645,7 +691,13 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       return result
     } catch (err) {
       if (!isCurrent(epochAtStart, target.id)) return null
-      error.value = getApiErrorMessage(err, '写入失败，草稿已保留')
+      const message = getApiErrorMessage(err, '写入失败，草稿已保留')
+      error.value = message
+      finalizeFailure.value = {
+        status: statusOf(err),
+        ingredientId: ingredientIdOf(err),
+        message
+      }
       return null
     } finally {
       if (epochAtStart === epoch) {
@@ -713,6 +765,11 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     })
   }
 
+  /** 清掉上一次写入失败的修复入口（重新进入审核屏时调用）。 */
+  function clearFinalizeFailure(): void {
+    finalizeFailure.value = null
+  }
+
   /** 还有没落库的东西：未保存、保存中、或攒着一次补存。 */
   function hasUnsavedWork(): boolean {
     return dirty.value || saving.value || pendingAutosave.value
@@ -722,6 +779,8 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     draft,
     review,
     verification,
+    finalizeFailure,
+    reviewIsStale,
     loading,
     saving,
     aiRunning,
@@ -737,6 +796,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     pendingAutosave,
     markManual,
     hasUnsavedWork,
+    clearFinalizeFailure,
     load,
     save,
     runAi,

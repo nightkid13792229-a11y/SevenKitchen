@@ -97,7 +97,18 @@ function aiSnapshot(): Record<string, unknown> {
   return {
     status: 'OK',
     fields: {},
-    missing: [],
+    missing: [
+      {
+        fieldPath: 'basic.brand',
+        reason: '标签上没有品牌',
+        suggestion: '请手动补品牌'
+      },
+      {
+        fieldPath: 'nutrition.servingNutrients.minerals.copper',
+        reason: '标签数字看不清',
+        suggestion: '请对照商品页补每份含量'
+      }
+    ],
     warnings: [],
     decisions,
     proposedDecisions: {
@@ -170,6 +181,8 @@ interface ReviewProps {
   draft: SupplementDraftView
   acknowledged: string[]
   finalizing: boolean
+  reviewStale: boolean
+  blockedReason: string
 }
 
 function mountReview(overrides: Partial<ReviewProps> = {}) {
@@ -179,6 +192,8 @@ function mountReview(overrides: Partial<ReviewProps> = {}) {
       draft: draftView(),
       acknowledged: [],
       finalizing: false,
+      reviewStale: false,
+      blockedReason: '',
       ...overrides
     },
     global: { plugins: [ElementPlus] }
@@ -276,6 +291,70 @@ describe('补剂草稿最终审核页', () => {
     expect(wrapper.find('[data-field-path="basic.name"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('ingredient.name')
     expect(wrapper.find('[data-field-map-section="商品与基本"]').exists()).toBe(true)
+  })
+
+  it('功能就绪卡按草稿意向估算，并列出写入后会核验的 7 项', () => {
+    const wrapper = mountReview()
+
+    expect(wrapper.text()).toContain('功能就绪')
+    expect(wrapper.text()).toContain('按草稿意向估算')
+    expect(wrapper.find('[data-readiness-count]').text()).toContain('4/6')
+
+    const retail = wrapper.find('[data-readiness-item="retail"]')
+    expect(retail.attributes('data-status')).toBe('off')
+    expect(retail.text()).toContain('未启用')
+    expect(retail.text()).toContain('自制原料')
+
+    const diy = wrapper.find('[data-readiness-item="diy"]')
+    expect(diy.attributes('data-status')).toBe('ready')
+
+    const procurement = wrapper.find('[data-readiness-item="procurement"]')
+    expect(procurement.attributes('data-status')).toBe('ready')
+
+    const equivalence = wrapper.find('[data-readiness-item="equivalence"]')
+    expect(equivalence.attributes('data-status')).toBe('warn')
+    expect(equivalence.text()).toContain('打回待审核')
+    expect(equivalence.text()).toContain('写入后核验')
+
+    expect(
+      wrapper.find('[data-readiness-item="defaultTargets"]').attributes('data-status')
+    ).toBe('ready')
+    expect(
+      wrapper.find('[data-readiness-item="evidence"]').attributes('data-status')
+    ).toBe('ready')
+
+    expect(wrapper.findAll('[data-verification-checklist-item]')).toHaveLength(7)
+    const checklistText = wrapper.text()
+    expect(checklistText).toContain('配方可选')
+    expect(checklistText).toContain('等价替换')
+    expect(checklistText).toContain('无重复')
+    expect(checklistText).toContain('包材匹配')
+  })
+
+  it('决策日志补标签名称/默认目标，并列出 AI 没找到的项', () => {
+    const wrapper = mountReview()
+
+    expect(wrapper.find('[data-decision="labelNames"]').text()).toContain('铜')
+    expect(
+      wrapper.find('[data-decision="defaultTargetFields"]').text()
+    ).toContain('minerals.copper')
+
+    const missing = wrapper.findAll('[data-ai-missing-item]')
+    expect(missing).toHaveLength(2)
+    expect(wrapper.text()).toContain('basic.brand')
+    expect(wrapper.text()).toContain('标签上没有品牌')
+    expect(wrapper.text()).toContain('请手动补品牌')
+    expect(wrapper.text()).toContain('nutrition.servingNutrients.minerals.copper')
+    expect(wrapper.text()).toContain('标签数字看不清')
+  })
+
+  it('审核结果过期时禁用写入，并提示重新审核', async () => {
+    const wrapper = mountReview({ reviewStale: true })
+
+    const button = wrapper.find('[data-action="finalize"]')
+    expect(button.attributes('disabled')).toBeDefined()
+    expect(wrapper.text()).toContain('草稿内容在校验后又变了')
+    expect(wrapper.text()).toContain('还不能写入')
   })
 
   it('返回修改发出 back；写入中返回与写入都禁用', async () => {

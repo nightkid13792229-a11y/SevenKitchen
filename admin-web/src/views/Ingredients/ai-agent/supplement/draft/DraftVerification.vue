@@ -176,6 +176,16 @@
         >
           重新核验
         </el-button>
+        <el-button
+          type="success"
+          data-action="create-another"
+          @click="emit('create-another')"
+        >
+          再建一条
+        </el-button>
+        <el-button data-action="back-to-list" @click="emit('back-to-list')">
+          返回草稿列表
+        </el-button>
       </div>
     </footer>
   </section>
@@ -218,6 +228,10 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (event: 'reverify'): void
+  /** 再建一条：Flow 回列表并新建草稿 */
+  (event: 'create-another'): void
+  /** 返回草稿列表：Flow 清空当前草稿上下文 */
+  (event: 'back-to-list'): void
 }>()
 
 const router = useRouter()

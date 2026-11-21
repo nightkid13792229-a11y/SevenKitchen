@@ -289,6 +289,16 @@ describe('补剂写入核验结果页', () => {
     expect(router.push).toHaveBeenLastCalledWith('/recipe-designer')
   })
 
+  it('再建一条 / 返回草稿列表发出对应事件', async () => {
+    const wrapper = mountVerification()
+
+    await wrapper.find('[data-action="create-another"]').trigger('click')
+    expect(wrapper.emitted('create-another')).toHaveLength(1)
+
+    await wrapper.find('[data-action="back-to-list"]').trigger('click')
+    expect(wrapper.emitted('back-to-list')).toHaveLength(1)
+  })
+
   it('重新核验发出 reverify，核验中禁用', async () => {
     const wrapper = mountVerification()
 

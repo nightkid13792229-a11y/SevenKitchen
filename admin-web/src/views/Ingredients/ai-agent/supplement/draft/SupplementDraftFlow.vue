@@ -63,12 +63,58 @@
         class="draft-flow__alert"
       />
 
+      <div
+        v-if="finalizeFailure?.ingredientId"
+        class="draft-flow__failure draft-flow__failure--duplicate"
+        data-duplicate-record
+      >
+        <div>
+          <strong class="draft-flow__failure-title">这条补剂已有记录</strong>
+          <p class="draft-flow__failure-text">
+            同名同品牌同规格的原料已经存在，ID：
+            <code>{{ finalizeFailure.ingredientId }}</code>。草稿保留，可以先去原料库查看已有记录，避免重复建档。
+          </p>
+        </div>
+        <el-button
+          type="primary"
+          plain
+          data-action="go-ingredients"
+          @click="goIngredients"
+        >
+          去原料库查看
+        </el-button>
+      </div>
+
+      <div
+        v-else-if="finalizeFailure?.status === 409"
+        class="draft-flow__failure draft-flow__failure--stale"
+        data-stale-conflict
+      >
+        <div>
+          <strong class="draft-flow__failure-title">草稿已被更新</strong>
+          <p class="draft-flow__failure-text">
+            服务端已经有更新的内容，需要重新加载并重新校验后才能继续写入。
+          </p>
+        </div>
+        <el-button
+          type="primary"
+          plain
+          data-action="review-reload"
+          :disabled="loading"
+          @click="handleReviewReload"
+        >
+          重新加载草稿
+        </el-button>
+      </div>
+
       <DraftReview
         v-if="review && draft"
         :review="review"
         :draft="draft"
         :acknowledged="acknowledged"
         :finalizing="finalizing"
+        :review-stale="reviewIsStale"
+        :blocked-reason="reviewBlockedReason"
         @finalize="handleFinalize"
         @back="backToEditor"
         @update:acknowledged="handleAcknowledged"
@@ -107,6 +153,8 @@
         :draft="draft"
         :reverifying="reverifying"
         @reverify="handleReverify"
+        @create-another="handleCreateAnother"
+        @back-to-list="returnToList"
       />
 
       <el-card v-else shadow="never" class="draft-flow__empty">
@@ -171,8 +219,9 @@
  * 所有接口动作都在这里收口：列表新建/继续/放弃，编辑页保存/AI/审核/返回/放弃。
  * 编辑内容本身由 `useSupplementDraft` 自动保存（800ms 防抖 + 乐观锁）。
  */
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { useRouter } from 'vue-router'
 import {
   supplementDraftsApi,
   type SupplementDraftAcknowledgedWarning,
@@ -207,6 +256,7 @@ const FINALIZE_STEPS = [
   '回读核验'
 ] as const
 
+const router = useRouter()
 const view = ref<FlowView>('list')
 const selectedDraftId = ref<string | null>(null)
 
@@ -223,6 +273,8 @@ const {
   draft,
   review,
   verification,
+  finalizeFailure,
+  reviewIsStale,
   loading,
   dirty,
   saving,
@@ -236,6 +288,7 @@ const {
   loadErrorStatus,
   markManual,
   hasUnsavedWork,
+  clearFinalizeFailure,
   load,
   save,
   runAi,
@@ -245,6 +298,16 @@ const {
   reverify,
   reset
 } = useSupplementDraft(selectedDraftId)
+
+/** 写入失败后必须先处理的动作；非空时审核屏禁用「确认写入」。 */
+const reviewBlockedReason = computed(() => {
+  const failure = finalizeFailure.value
+  if (failure?.status !== 409) return ''
+  if (failure.ingredientId) {
+    return '已有同名记录：先去原料库确认已有记录，或返回修改名称后再审核'
+  }
+  return '草稿已被更新：请先点「重新加载草稿」取回最新内容再写入'
+})
 
 interface AiDiffState {
   before: ReturnType<typeof cloneDraftPayload>
@@ -521,7 +584,7 @@ async function handleBack(): Promise<void> {
   await returnToList()
 }
 
-/** 最终审核：先让服务端校验，拿到阻断/提醒后再进审核视图。 */
+/** 最终审核：先保存/校验，确认审核结果与当前草稿一致后再进审核视图。 */
 async function handleReview(): Promise<void> {
   const idAtStart = selectedDraftId.value
   if (!idAtStart) return
@@ -530,11 +593,36 @@ async function handleReview(): Promise<void> {
     ElMessage.warning(busy)
     return
   }
-  const result = await validate()
+  clearFinalizeFailure()
+  // 进入审核屏前先把本地改动落库；保存不成功就不审旧内容。
+  if (hasUnsavedWork()) {
+    const saved = await save()
+    if (!saved) {
+      if (!error.value && !saveError.value) {
+        ElMessage.warning('草稿还没保存成功，先保存再审核')
+      }
+      return
+    }
+    if (hasUnsavedWork()) {
+      ElMessage.warning('保存还没完成，请等保存状态变成「已保存」再审核')
+      return
+    }
+  }
+  let result = await validate()
   if (!result) return
   // 校验期间如果已经切走（reset/打开别的草稿），不要把视图拉到旧草稿的审核屏。
   if (selectedDraftId.value !== idAtStart) return
   if (!review.value) return
+  if (dirty.value || reviewIsStale.value) {
+    // 校验期间又有改动：再补一次保存+校验；仍不一致就不进审核屏。
+    result = await validate()
+    if (!result) return
+    if (selectedDraftId.value !== idAtStart) return
+    if (dirty.value || reviewIsStale.value) {
+      ElMessage.warning('草稿还有未保存的修改，请等保存完成后再进最终审核')
+      return
+    }
+  }
   // 每次进入审核屏都重新逐条确认；上一次的勾选不能带进来。
   acknowledged.value = []
   view.value = 'review'
@@ -594,7 +682,22 @@ async function handleFinalize(): Promise<void> {
   const idAtStart = selectedDraftId.value
   if (!idAtStart) return
   const result = await finalize()
-  if (!result) return
+  if (!result) {
+    // 400/409：写入前的校验可能已经变了，必须刷新审核屏，不能继续显示旧的
+    // 「可以写入」。错误提示保留在顶部，刷新失败时把两边原因都带上。
+    const failure = finalizeFailure.value
+    if (failure && (failure.status === 400 || failure.status === 409)) {
+      const failureMessage = error.value
+      const refreshed = await validate()
+      if (selectedDraftId.value !== idAtStart) return
+      if (failureMessage) {
+        error.value = refreshed
+          ? failureMessage
+          : `${failureMessage}（刷新最新校验失败：${error.value ?? '请重试'}）`
+      }
+    }
+    return
+  }
   // 同 validate：写入结果只属于发起它的那张草稿。
   if (selectedDraftId.value !== idAtStart) return
   if (!verification.value) {
@@ -602,6 +705,53 @@ async function handleFinalize(): Promise<void> {
     return
   }
   view.value = 'verification'
+}
+
+/** 重复建档入口：去原料库看已有记录。 */
+function goIngredients(): void {
+  void router.push('/ingredients')
+}
+
+/** 409「草稿已被更新」：确认后重新加载最新草稿，再重新校验。 */
+async function handleReviewReload(): Promise<void> {
+  if (!selectedDraftId.value || loading.value) return
+  try {
+    await ElMessageBox.confirm(
+      '重新加载会用服务端最新内容覆盖当前草稿，并重新校验。确定重新加载吗？',
+      '重新加载草稿',
+      {
+        confirmButtonText: '重新加载',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch (err) {
+    if (!isUserCancel(err)) {
+      ElMessage.error(getApiErrorMessage(err, '重新加载草稿失败'))
+    }
+    return
+  }
+  const loaded = await load()
+  if (!loaded) {
+    if (loadErrorStatus.value === 404) {
+      ElMessage.warning('这张草稿已不存在，已返回草稿列表')
+      await returnToList()
+      return
+    }
+    ElMessage.error(
+      error.value || '重新加载失败，请检查网络后重试；本地内容仍保留'
+    )
+    return
+  }
+  ElMessage.success('已重新加载服务端草稿')
+  if (view.value !== 'review') return
+  await handleReview()
+}
+
+/** 核验页「再建一条」：先回列表，再新建一张空草稿。 */
+async function handleCreateAnother(): Promise<void> {
+  await returnToList()
+  await handleCreate()
 }
 
 /** 核验页「重新核验」：只重跑功能核验，不再次写数据。 */
@@ -676,6 +826,45 @@ onMounted(() => {
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 14px;
+}
+
+.draft-flow__failure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #f5dab1;
+  border-radius: 10px;
+  background: #fdf6ec;
+}
+
+.draft-flow__failure--duplicate {
+  border-color: #fbc4c4;
+  background: #fef0f0;
+}
+
+.draft-flow__failure-title {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 13px;
+  color: #1f2733;
+}
+
+.draft-flow__failure-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #5b6470;
+}
+
+.draft-flow__failure-text code {
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #eef1f5;
+  font-size: 11.5px;
+  color: #3b4654;
+  word-break: break-all;
 }
 
 .draft-flow__finalize-mask {

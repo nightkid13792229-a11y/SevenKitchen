@@ -80,7 +80,7 @@
       class="draft-editor__body"
       :class="{ 'draft-editor__body--locked': formLocked }"
       :aria-busy="formLocked"
-      :inert="formLocked"
+      :inert="formLocked ? true : undefined"
     >
       <nav class="draft-editor__nav" aria-label="草稿区块">
         <button
@@ -212,17 +212,14 @@
         />
       </main>
 
-      <div v-if="formLocked" class="draft-editor__lock" data-ai-lock>
-        <p class="draft-editor__lock-title">
-          {{ aiRunning ? 'AI 正在读图起草…' : '请先处理 AI 差异' }}
-        </p>
-        <p class="draft-editor__lock-desc">
-          {{
-            aiRunning
-              ? '起草期间表单锁定，避免 AI 结果覆盖你正在改的内容。请稍候。'
-              : '差异弹窗关闭前不能编辑草稿；请选择「采用所选」或「保留我的」。'
-          }}
-        </p>
+      <div
+        v-if="formLocked"
+        class="draft-editor__lock"
+        data-ai-lock
+        :data-lock-state="lockState"
+      >
+        <p class="draft-editor__lock-title">{{ lockTitle }}</p>
+        <p class="draft-editor__lock-desc">{{ lockDescription }}</p>
       </div>
     </div>
 
@@ -357,10 +354,46 @@ const aiSnapshot = computed<SupplementDraftAiSnapshot | null>(
   () => props.draft?.aiSnapshot ?? null
 )
 
-/** AI 起草中或差异弹窗打开时，整个表单都锁住。 */
+/**
+ * 表单锁定：AI 起草、差异弹窗、最终校验、最终写入期间都不能改草稿。
+ *
+ * 校验后如果还能改，审核屏拿到的 blockers/warnings 会立刻过期；写入期间更
+ * 不能让本地值再变。锁定优先顺序与遮罩文案保持一致。
+ */
 const formLocked = computed(
-  () => props.aiRunning || props.locked === true
+  () =>
+    props.aiRunning ||
+    props.locked === true ||
+    props.validating ||
+    props.finalizing
 )
+
+const lockState = computed(() => {
+  if (props.finalizing) return 'finalizing'
+  if (props.validating) return 'validating'
+  if (props.aiRunning) return 'ai'
+  return 'diff'
+})
+
+const lockTitle = computed(() => {
+  if (props.finalizing) return '正在写入正式数据…'
+  if (props.validating) return '正在校验草稿…'
+  if (props.aiRunning) return 'AI 正在读图起草…'
+  return '请先处理 AI 差异'
+})
+
+const lockDescription = computed(() => {
+  if (props.finalizing) {
+    return '写入在一个事务里完成，期间表单锁定；请不要关闭页面。'
+  }
+  if (props.validating) {
+    return '校验期间表单锁定，避免审核结果和草稿内容对不上。请稍候。'
+  }
+  if (props.aiRunning) {
+    return '起草期间表单锁定，避免 AI 结果覆盖你正在改的内容。请稍候。'
+  }
+  return '差异弹窗关闭前不能编辑草稿；请选择「采用所选」或「保留我的」。'
+})
 
 /** 点路径 → 编辑页区块；只认 payload 里的业务区块。 */
 function sectionOfPath(path: string): SectionKey | null {

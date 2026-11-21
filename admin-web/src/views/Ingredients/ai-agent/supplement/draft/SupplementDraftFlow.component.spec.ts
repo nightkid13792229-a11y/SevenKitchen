@@ -11,6 +11,7 @@ import ElementPlus, { ElMessageBox } from 'element-plus'
 import type {
   SupplementDraftPayload,
   SupplementDraftReview,
+  SupplementDraftValidationIssue,
   SupplementDraftView,
   SupplementWriteVerification
 } from '@/api/supplementDrafts'
@@ -126,11 +127,15 @@ function deferred<T>(): {
   return { promise, resolve }
 }
 
-function reviewFor(draft: SupplementDraftView): SupplementDraftReview {
+function reviewFor(
+  draft: SupplementDraftView,
+  blockers: SupplementDraftValidationIssue[] = [],
+  warnings: SupplementDraftValidationIssue[] = []
+): SupplementDraftReview {
   return {
     draft,
-    blockers: [],
-    warnings: [],
+    blockers,
+    warnings,
     completeness: draft.completeness
   }
 }
@@ -448,6 +453,250 @@ describe('草稿流程导航守卫', () => {
     expect(wrapper.find('[data-finalize-overlay]').exists()).toBe(false)
     expect(wrapper.find('[data-verification-screen]').exists()).toBe(true)
     expect(wrapper.text()).toContain('已写入并核验通过')
+    wrapper.unmount()
+  })
+
+  it('核验页「再建一条」回列表并新建下一张草稿', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate.mockResolvedValue(reviewFor(draft))
+    api.finalize.mockResolvedValueOnce({
+      ingredientId: 'ingredient-1',
+      nutritionFoodId: 'nutrition-1',
+      evidenceId: 'evidence-1',
+      verification: verificationFor()
+    })
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+    await wrapper.find('[data-action="finalize"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-verification-screen]').exists()).toBe(true)
+
+    await wrapper.find('[data-action="create-another"]').trigger('click')
+    await flushPromises()
+
+    expect(api.create).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-action="back"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('校验期间锁住编辑，校验回来前不显示审核屏', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+
+    const pending = deferred<SupplementDraftReview>()
+    api.validate.mockReturnValueOnce(pending.promise)
+
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+
+    // 校验还没回来：不能提前进审核屏，也不能继续改草稿。
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(false)
+    expect(wrapper.find('[data-lock-state="validating"]').exists()).toBe(true)
+    expect(wrapper.find('.draft-editor__body').attributes('inert')).toBeDefined()
+
+    pending.resolve(reviewFor(draft))
+    await flushPromises()
+
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(true)
+    expect(wrapper.find('[data-lock-state="validating"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('进审核前保存失败时不切审核屏，并显示保存原因', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+    await wrapper.find('.draft-editor__name input').setValue('铜（改）')
+    await flushPromises()
+
+    api.update.mockRejectedValueOnce({
+      response: { status: 500, data: { message: '数据库连接失败' } }
+    })
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(false)
+    expect(api.validate).not.toHaveBeenCalled()
+    expect(wrapper.text()).toContain('数据库连接失败')
+    wrapper.unmount()
+  })
+
+  it('审核屏勾选提醒把 ackKey 写回草稿，参数含多个冒号也不丢', async () => {
+    const draft = draftView()
+    const warning: SupplementDraftValidationIssue = {
+      code: 'LABEL_NAME_UNVERIFIED',
+      level: 'WARNING',
+      message: '标签名称还没在目录里核对',
+      fieldPath: 'label.labelNames',
+      ackKey: 'LABEL_NAME_UNVERIFIED:铜:Swanson'
+    }
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate.mockResolvedValue(reviewFor(draft, [], [warning]))
+    api.update.mockResolvedValue(draft)
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(true)
+
+    await wrapper.find('[data-warning] input[type="checkbox"]').setValue(true)
+    // 自动保存有 800ms 防抖；等它把 ack 写回草稿。
+    await new Promise((resolve) => setTimeout(resolve, 850))
+    await flushPromises()
+
+    expect(api.update).toHaveBeenCalledWith(
+      'draft-1',
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          review: {
+            acknowledgedWarnings: [
+              { code: 'LABEL_NAME_UNVERIFIED', paramsHash: '铜:Swanson' }
+            ]
+          }
+        })
+      })
+    )
+    wrapper.unmount()
+  })
+
+  it('finalize 400 后刷新 review，阻断项出现且「确认写入」禁用', async () => {
+    const draft = draftView()
+    const blocker: SupplementDraftValidationIssue = {
+      code: 'NAME_REQUIRED',
+      level: 'BLOCKER',
+      message: '请填写原料名称',
+      fieldPath: 'basic.name'
+    }
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate
+      .mockResolvedValueOnce(reviewFor(draft))
+      .mockResolvedValueOnce(reviewFor(draft, [blocker]))
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+
+    api.finalize.mockRejectedValueOnce({
+      response: {
+        status: 400,
+        data: { message: '有 1 个阻断项，暂时不能写入' }
+      }
+    })
+    await wrapper.find('[data-action="finalize"]').trigger('click')
+    await flushPromises()
+
+    // 失败后必须重新校验；审核屏不能继续显示旧的「可以写入」。
+    expect(api.validate).toHaveBeenCalledTimes(2)
+    expect(wrapper.text()).toContain('请填写原料名称')
+    expect(wrapper.text()).toContain('有 1 个阻断项，暂时不能写入')
+    expect(wrapper.find('[data-action="finalize"]').attributes('disabled')).toBeDefined()
+    wrapper.unmount()
+  })
+
+  it('409 重复建档显示已有记录入口，可跳原料库', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate.mockResolvedValue(reviewFor(draft))
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+
+    api.finalize.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: {
+          message: '同名同品牌同规格的补剂已存在',
+          ingredientId: 'ingredient-existing'
+        }
+      }
+    })
+    await wrapper.find('[data-action="finalize"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-duplicate-record]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('ingredient-existing')
+    expect(wrapper.text()).toContain('这条补剂已有记录')
+    expect(wrapper.find('[data-action="finalize"]').attributes('disabled')).toBeDefined()
+
+    await wrapper.find('[data-action="go-ingredients"]').trigger('click')
+    expect(router.push).toHaveBeenCalledWith('/ingredients')
+    wrapper.unmount()
+  })
+
+  it('409 草稿被更新时显示重新加载按钮，确认后重新加载并校验', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+    api.validate.mockResolvedValue(reviewFor(draft))
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+    await wrapper.find('[data-action="review"]').trigger('click')
+    await flushPromises()
+
+    api.finalize.mockRejectedValueOnce({
+      response: {
+        status: 409,
+        data: { message: '草稿已被更新，请刷新后再试' }
+      }
+    })
+    await wrapper.find('[data-action="finalize"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-stale-conflict]').exists()).toBe(true)
+    expect(wrapper.find('[data-action="finalize"]').attributes('disabled')).toBeDefined()
+    const reload = wrapper.find('[data-action="review-reload"]')
+    expect(reload.exists()).toBe(true)
+
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValueOnce('confirm' as never)
+    api.get.mockResolvedValueOnce(draftView('服务端版本'))
+
+    await reload.trigger('click')
+    await flushPromises()
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(wrapper.find('[data-review-screen]').exists()).toBe(true)
     wrapper.unmount()
   })
 })

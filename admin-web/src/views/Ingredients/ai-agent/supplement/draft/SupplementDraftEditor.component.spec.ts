@@ -197,6 +197,24 @@ describe('草稿编辑页保存状态', () => {
     )
   })
 
+  it('校验/写入期间锁住整个表单，避免审核结果和草稿对不上', async () => {
+    const wrapper = mountEditor()
+    expect(wrapper.find('.draft-editor__body').attributes('inert')).toBeUndefined()
+
+    await wrapper.setProps({ validating: true })
+    expect(wrapper.find('[data-lock-state="validating"]').exists()).toBe(true)
+    expect(wrapper.find('.draft-editor__body').attributes('inert')).toBeDefined()
+    expect(
+      wrapper.find('.draft-editor__name input').attributes('disabled')
+    ).toBeDefined()
+    expect(wrapper.text()).toContain('正在校验')
+
+    await wrapper.setProps({ validating: false, finalizing: true })
+    expect(wrapper.find('[data-lock-state="finalizing"]').exists()).toBe(true)
+    expect(wrapper.find('.draft-editor__body').attributes('inert')).toBeDefined()
+    expect(wrapper.text()).toContain('正在写入')
+  })
+
   it('AI/校验/写入进行中时禁用保存并离开', async () => {
     const wrapper = mountEditor()
     expect(

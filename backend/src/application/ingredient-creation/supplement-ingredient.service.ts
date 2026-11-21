@@ -145,10 +145,6 @@ export class SupplementIngredientService {
           select: { id: true, name: true, brand: true, productModel: true }
         });
         if (duplicate) {
-          // 把撞上的那条写清楚，否则人只看到"已建过"，不知道该改哪里
-          const spec = [duplicate.brand, duplicate.productModel]
-            .filter(Boolean)
-            .join(' · ');
           this.logger.warn(
             `[supplement-create] 重复建档 incoming=${JSON.stringify({
               name: input.name,
@@ -156,10 +152,7 @@ export class SupplementIngredientService {
               productModel: input.productModel ?? null,
             })} existing=${JSON.stringify(duplicate)}`,
           );
-          throw new ConflictException(
-            `已经有同名同规格的补剂：${duplicate.name}${spec ? `（${spec}）` : ''}。` +
-              '如果是同一款，去「原料库」找到它继续配置；不是的话，改一下名称或产品规格再存',
-          );
+          throw new ConflictException(this.duplicateMessage(duplicate));
         }
 
         const ingredient = await tx.ingredient.create({
@@ -289,12 +282,42 @@ export class SupplementIngredientService {
       });
     } catch (error) {
       if (this.isUniqueViolation(error)) {
+        // 兜底路径（并发或 NULL 比较漏网）：也把撞上的那条查出来写进提示
+        const existing = await this.prisma.ingredient.findFirst({
+          where: {
+            type: IngredientType.SUPPLEMENT,
+            name: input.name,
+            brand: input.brand ?? null,
+            productModel: input.productModel ?? null,
+          },
+          select: { id: true, name: true, brand: true, productModel: true },
+        });
+        this.logger.warn(
+          `[supplement-create] 唯一键冲突 incoming=${JSON.stringify({
+            name: input.name,
+            brand: input.brand ?? null,
+            productModel: input.productModel ?? null,
+          })} existing=${JSON.stringify(existing)}`,
+        );
         throw new ConflictException(
-          '这条补剂已经建过了（同名、同品牌、同规格），不要重复建'
+          existing ? this.duplicateMessage(existing) : '这条补剂已经建过（同名、同品牌、同规格），不要重复建',
         );
       }
       throw error;
     }
+  }
+
+  /** 重复建档的统一提示：写清楚撞上哪一条，人才能判断是不是同一款。 */
+  private duplicateMessage(item: {
+    name: string;
+    brand: string | null;
+    productModel: string | null;
+  }): string {
+    const spec = [item.brand, item.productModel].filter(Boolean).join(' · ');
+    return (
+      `已经有同名同规格的补剂：${item.name}${spec ? `（${spec}）` : ''}。` +
+      '如果是同一款，去「原料库」找到它继续配置；不是的话，改一下名称或产品规格再存'
+    );
   }
 
   /** 营养档案名带上品牌与规格：库对 (name, dataSource, version) 唯一，同名不同品牌是两个产品。 */

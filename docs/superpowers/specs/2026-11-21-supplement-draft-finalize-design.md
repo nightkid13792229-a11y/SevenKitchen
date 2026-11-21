@@ -457,8 +457,8 @@ interface SupplementAiDraft {
 ### 8.2 前置校验
 
 1. 草稿存在、属于当前用户、status=DRAFT。
-2. 重跑 `validate`：阻断项为 0；提醒项都已在 `acknowledgedWarnings`。
-3. 重复建档预检：同名+同品牌+同规格已存在 → 409，带已有 `ingredientId`/名称，不写。
+2. **重复建档预检先做**：同名+同品牌+同规格已存在 → 409，带已有 `ingredientId`/名称，不写。`validate` 里的 `DUPLICATE_INGREDIENT` 阻断项只给审核页展示，不能把它变成 400。
+3. 重跑 `validate`：除重复项外的阻断项为 0；提醒项都已在 `acknowledgedWarnings`。
 4. 计算派生值：每粒值、单位成本、营养档案、默认目标、组优先级。
 5. 校验组、标签、DIY、采购、上架依赖。
 
@@ -550,9 +550,9 @@ interface SupplementAiDraft {
 
 逐项对比草稿与库：
 
-- 原料：name/brand/productModel/purchaseChannel/baseUnit/unitDisplayLabel/physicalForm/purchaseUnit/purchaseToBaseRatio/currentPricePerPurchaseUnit/productionLossRate/diyEnabled/procurementEnabled/shelfLifeMonths/storageCondition/isOilBased/supplementRetailEnabled/equivalenceGroupId/equivalencePriority
-- properties：add_timing、label_category、label_names、label_name_source、tags、serving_units_per_dose、display_unit、no_sale_reason、purchase_link、image_url
-- 营养档案：status VERIFIED、category SUPPLEMENT、nutritionData 每个营养素值、defaultSupplementTargets、主映射、yieldRate
+- 原料：name/brand/productModel/purchaseChannel/baseUnit/unitDisplayLabel/physicalForm/purchaseUnit/purchaseToBaseRatio/currentPricePerPurchaseUnit/diyEnabled/procurementEnabled/shelfLifeMonths/openedShelfLifeDays/storageCondition/isOilBased/supplementRetailEnabled/equivalenceGroupId/equivalencePriority
+- properties：add_timing、production_loss_rate、label_category、label_names、label_name_source、tags、serving_units_per_dose、display_unit、no_sale_reason、purchase_link、image_url
+- 营养档案：status VERIFIED、category SUPPLEMENT、defaultSupplementTargets、主映射、yieldRate；每个营养素值要**同时**核验 `nutrition_food.nutrition_data`（配方设计器读的）和 `ingredient.nutrition_profile`（浓度/等价组读的），任一处缺失或写错都算失败
 - 证据：productUrl/frontImageUrl/labelImageUrl/labelText/servingUnitsPerDose/conversionSnapshot
 - 标签关联：标签名集合
 - 等价组：groupId/priority/组状态

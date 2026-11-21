@@ -83,6 +83,66 @@
         </template>
       </p>
 
+      <div v-if="selectedGroup" class="draft-equivalence__members" data-equivalence-members>
+        <div class="draft-equivalence__members-head">
+          <h5 class="draft-equivalence__members-title">成员与当前排序</h5>
+          <el-button
+            text
+            size="small"
+            :loading="groupDetailLoading"
+            data-action="equivalence-refresh-members"
+            @click="loadGroupDetail(equivalence.groupId ?? '')"
+          >
+            刷新成员
+          </el-button>
+        </div>
+
+        <p v-if="groupDetailLoading" class="draft-section__empty">正在加载成员…</p>
+        <p v-else-if="groupDetailError" class="draft-field__warn">
+          {{ groupDetailError }}
+        </p>
+        <p v-else-if="membersSorted.length === 0" class="draft-section__empty">
+          组里还没有成员。
+        </p>
+        <el-table v-else :data="membersSorted" size="small" border>
+          <el-table-column label="顺序" width="64" align="center">
+            <template #default="{ row }">{{ row.equivalencePriority }}</template>
+          </el-table-column>
+          <el-table-column label="原料" min-width="220">
+            <template #default="{ row }">
+              <span class="draft-equivalence__member-name">{{ row.name }}</span>
+              <span v-if="row.brand" class="draft-equivalence__member-meta">
+                {{ row.brand }}
+              </span>
+              <span v-if="row.productModel" class="draft-equivalence__member-meta">
+                {{ row.productModel }}
+              </span>
+            </template>
+          </el-table-column>
+          <el-table-column label="浓度" width="120">
+            <template #default="{ row }">
+              <template v-if="row.concentration">
+                {{ row.concentration.value }} {{ row.concentration.unit }}
+              </template>
+              <el-tag v-else size="small" type="warning" effect="plain">
+                {{ concentrationStatusLabel(row.concentrationStatus) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="用途" width="150">
+            <template #default="{ row }">
+              <el-tag v-if="row.supplementRetailEnabled" size="small" effect="plain">上架</el-tag>
+              <el-tag v-if="row.diyEnabled" size="small" type="success" effect="plain">DIY</el-tag>
+              <el-tag v-if="row.procurementEnabled" size="small" type="info" effect="plain">采购</el-tag>
+            </template>
+          </el-table-column>
+        </el-table>
+        <p class="draft-field__hint">
+          新补剂写入时按你填的「组内优先级」排队：0 最前，数字越小越前。
+          先看上面的现有顺序，再决定填最前、中间还是最后。
+        </p>
+      </div>
+
       <div
         v-if="selectedGroup && selectedGroup.status === 'APPROVED'"
         class="draft-section__row"
@@ -128,6 +188,10 @@
         </el-button>
       </div>
 
+      <p class="draft-field__hint" style="margin-top: 0">
+        推荐只是候选，不会自动改草稿；点「采用这个组」才写进草稿。
+      </p>
+
       <p v-if="recommendError" class="draft-field__warn">
         {{ recommendError }}
       </p>
@@ -168,14 +232,47 @@
               </template>
             </p>
           </div>
-          <el-button
-            size="small"
-            :disabled="equivalence.groupId === candidate.groupId"
-            data-action="equivalence-use-candidate"
-            @click="useCandidate(candidate.groupId)"
+          <div class="draft-equivalence__candidate-actions">
+            <el-button
+              size="small"
+              data-action="equivalence-preview-candidate"
+              @click="toggleCandidateMembers(candidate.groupId)"
+            >
+              {{ previewGroupId === candidate.groupId ? '收起成员' : '查看成员' }}
+            </el-button>
+            <el-button
+              size="small"
+              type="primary"
+              :disabled="equivalence.groupId === candidate.groupId"
+              data-action="equivalence-use-candidate"
+              @click="useCandidate(candidate.groupId)"
+            >
+              {{ equivalence.groupId === candidate.groupId ? '已采用' : '采用这个组' }}
+            </el-button>
+          </div>
+
+          <div
+            v-if="previewGroupId === candidate.groupId"
+            class="draft-equivalence__preview"
           >
-            {{ equivalence.groupId === candidate.groupId ? '已选' : '用这个组' }}
-          </el-button>
+            <p v-if="previewLoading" class="draft-section__empty">正在加载成员…</p>
+            <p v-else-if="previewError" class="draft-field__warn">{{ previewError }}</p>
+            <p v-else-if="previewMembers.length === 0" class="draft-section__empty">
+              组里还没有成员。
+            </p>
+            <ol v-else class="draft-equivalence__preview-list">
+              <li v-for="member in previewMembers" :key="member.id">
+                <b>{{ member.equivalencePriority }}</b>
+                · {{ member.name }}
+                <span v-if="member.productModel" class="draft-equivalence__member-meta">
+                  {{ member.productModel }}
+                </span>
+                <span class="draft-equivalence__member-meta">
+                  {{ concentrationStatusLabel(member.concentrationStatus) }}
+                </span>
+              </li>
+            </ol>
+          </div>
         </div>
       </div>
     </div>
@@ -190,9 +287,10 @@
  * `recommendGroups(draftId)`（没有 ingredientId）。推荐只是建议，点「用这个组」
  * 才写草稿并标人改；「暂不归组」用 `__SKIP__` 明确表态。
  */
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import {
   supplementEquivalenceApi,
+  type EquivalenceGroupDetail,
   type EquivalenceGroupStatus,
   type EquivalenceGroupSummary
 } from '@/api/supplementEquivalence'
@@ -205,6 +303,10 @@ import {
 import { getApiErrorMessage } from '@/utils/apiError'
 import { GROUP_SKIPPED } from '../../launchConfigState'
 import { isManualDraftPath } from '../supplementDraftState'
+import {
+  concentrationStatusLabel,
+  sortGroupMembers
+} from '../equivalenceView'
 import AiFieldTag from './AiFieldTag.vue'
 import { aiFieldTag, aiMissingReason } from './aiFieldMeta'
 
@@ -235,8 +337,24 @@ const recommendations = ref<SupplementDraftGroupRecommendations | null>(null)
 const recommending = ref(false)
 const recommendError = ref('')
 
+const groupDetail = ref<EquivalenceGroupDetail | null>(null)
+const groupDetailLoading = ref(false)
+const groupDetailError = ref('')
+
+const previewGroupId = ref('')
+const previewDetail = ref<EquivalenceGroupDetail | null>(null)
+const previewLoading = ref(false)
+const previewError = ref('')
+
 const selectedGroup = computed(
   () => groups.value.find((group) => group.id === equivalence.value.groupId) ?? null
+)
+
+const membersSorted = computed(() =>
+  sortGroupMembers(groupDetail.value?.members ?? [])
+)
+const previewMembers = computed(() =>
+  sortGroupMembers(previewDetail.value?.members ?? [])
 )
 
 function statusLabel(status: string): string {
@@ -283,6 +401,44 @@ async function loadRecommendations(): Promise<void> {
   }
 }
 
+async function loadGroupDetail(groupId: string): Promise<void> {
+  if (!groupId || groupId === GROUP_SKIPPED) {
+    groupDetail.value = null
+    groupDetailError.value = ''
+    return
+  }
+  groupDetailLoading.value = true
+  groupDetailError.value = ''
+  try {
+    groupDetail.value = await supplementEquivalenceApi.getGroup(groupId)
+  } catch (err) {
+    groupDetail.value = null
+    groupDetailError.value = getApiErrorMessage(err, '加载组成员失败')
+  } finally {
+    groupDetailLoading.value = false
+  }
+}
+
+async function toggleCandidateMembers(groupId: string): Promise<void> {
+  if (previewGroupId.value === groupId) {
+    previewGroupId.value = ''
+    previewDetail.value = null
+    previewError.value = ''
+    return
+  }
+  previewGroupId.value = groupId
+  previewDetail.value = null
+  previewError.value = ''
+  previewLoading.value = true
+  try {
+    previewDetail.value = await supplementEquivalenceApi.getGroup(groupId)
+  } catch (err) {
+    previewError.value = getApiErrorMessage(err, '加载组成员失败')
+  } finally {
+    previewLoading.value = false
+  }
+}
+
 function updateGroup(value: string): void {
   props.markManual?.('equivalence.groupId')
   equivalence.value.groupId = value
@@ -302,6 +458,14 @@ function updateReapprove(value: boolean): void {
   equivalence.value.reapproveGroup = value
 }
 
+watch(
+  () => equivalence.value.groupId,
+  (groupId) => {
+    void loadGroupDetail(groupId ?? '')
+  },
+  { immediate: true }
+)
+
 onMounted(() => {
   void loadGroups()
 })
@@ -316,6 +480,7 @@ onMounted(() => {
 
 .draft-equivalence__candidate {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -327,6 +492,7 @@ onMounted(() => {
 
 .draft-equivalence__candidate-main {
   min-width: 0;
+  flex: 1 1 320px;
 }
 
 .draft-equivalence__candidate-title {
@@ -350,6 +516,62 @@ onMounted(() => {
 .draft-equivalence__candidate-meta {
   margin: 0;
   font-size: 11.5px;
+  color: #98a1ad;
+}
+
+.draft-equivalence__candidate-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.draft-equivalence__preview {
+  flex-basis: 100%;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #dfe4ea;
+}
+
+.draft-equivalence__preview-list {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12.5px;
+  line-height: 1.9;
+  color: #5b6470;
+}
+
+.draft-equivalence__members {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #eceff3;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.draft-equivalence__members-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.draft-equivalence__members-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #38414d;
+}
+
+.draft-equivalence__member-name {
+  margin-right: 6px;
+  font-weight: 600;
+}
+
+.draft-equivalence__member-meta {
+  margin-right: 6px;
+  font-size: 12px;
   color: #98a1ad;
 }
 </style>

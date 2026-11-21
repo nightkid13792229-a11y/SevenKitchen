@@ -45,11 +45,19 @@
         >
           {{ saveStateText }}
         </el-tag>
-        <span class="draft-editor__completeness">
+        <button
+          type="button"
+          class="draft-editor__completeness"
+          data-action="open-completeness"
+          @click="completenessOpen = true"
+        >
           必填 {{ draft.completeness.filledRequired }}/{{
             draft.completeness.totalRequired
           }}
-        </span>
+          <template v-if="missingRequiredRows.length > 0">
+            · 还差 {{ missingRequiredRows.length }} 项
+          </template>
+        </button>
 
         <el-tooltip :content="aiHint" placement="bottom">
           <span class="draft-editor__ai-anchor">
@@ -104,6 +112,13 @@
             缺{{ missingBySection[item.key] }}
           </span>
           <span
+            v-if="requiredMissingBySection[item.key]"
+            class="draft-editor__nav-badge draft-editor__nav-badge--required"
+            :title="`还差 ${requiredMissingBySection[item.key]} 项必填`"
+          >
+            必填缺{{ requiredMissingBySection[item.key] }}
+          </span>
+          <span
             v-if="manualBySection[item.key]"
             class="draft-editor__nav-badge draft-editor__nav-badge--manual"
             :title="`${manualBySection[item.key]} 项人改，AI 不会覆盖`"
@@ -127,6 +142,12 @@
             class="draft-editor__section-badge draft-editor__section-badge--manual"
           >
             人改 {{ activeManualCount }} 项
+          </span>
+          <span
+            v-if="activeRequiredMissing.length > 0"
+            class="draft-editor__section-badge draft-editor__section-badge--required"
+          >
+            还差：{{ activeRequiredMissing.map((item) => item.label).join('、') }}
           </span>
         </div>
 
@@ -224,13 +245,19 @@
     </div>
 
     <footer class="draft-editor__footer">
-      <span
+      <button
+        type="button"
         class="draft-editor__footer-status"
         :title="saveState === 'failed' ? saveError : undefined"
+        data-action="open-completeness-footer"
+        @click="completenessOpen = true"
       >
         {{ saveStateText }} · 必填
         {{ draft.completeness.filledRequired }}/{{ draft.completeness.totalRequired }}
-      </span>
+        <template v-if="missingRequiredRows.length > 0">
+          · 还差 {{ missingRequiredRows.length }} 项
+        </template>
+      </button>
       <div class="draft-editor__footer-actions">
         <el-button
           type="primary"
@@ -252,6 +279,49 @@
         </el-button>
       </div>
     </footer>
+
+    <el-dialog
+      v-model="completenessOpen"
+      title="必填项"
+      width="560px"
+      append-to-body
+    >
+      <p class="draft-completeness__summary">
+        当前开关下必填 {{ draft.completeness.totalRequired }} 项，已填
+        {{ draft.completeness.filledRequired }} 项。
+      </p>
+
+      <div v-if="missingRequiredRows.length > 0">
+        <p class="draft-completeness__missing-title">
+          还差 {{ missingRequiredRows.length }} 项：
+        </p>
+        <ul class="draft-completeness__list">
+          <li
+            v-for="item in missingRequiredRows"
+            :key="item.key"
+            class="draft-completeness__item"
+          >
+            <span>{{ item.label }}</span>
+            <el-button
+              text
+              type="primary"
+              size="small"
+              :data-action="`completeness-go-${item.key}`"
+              @click="goToRequired(item.section)"
+            >
+              去补
+            </el-button>
+          </li>
+        </ul>
+      </div>
+      <p v-else class="draft-completeness__done">
+        当前开关下的必填项已经填完。
+      </p>
+
+      <p class="draft-completeness__hint">
+        必填项会随「上架 / DIY」开关变化；这里只列当前需要、但还没填的。
+      </p>
+    </el-dialog>
   </section>
 
   <section v-else class="draft-editor draft-editor--loading">
@@ -271,7 +341,7 @@
  * 名称与区块内容都直接改父级传进来的 draft 对象——父级的 composable 有
  * deep watcher 做自动保存，所以这里不需要「每个字段一个保存事件」。
  */
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import type {
   SupplementDraftAiSnapshot,
   SupplementDraftView
@@ -284,6 +354,10 @@ import DiySection from './sections/DiySection.vue'
 import ProcurementSection from './sections/ProcurementSection.vue'
 import EquivalenceSection from './sections/EquivalenceSection.vue'
 import EvidenceSection from './sections/EvidenceSection.vue'
+import {
+  requiredMissingRows,
+  type DraftSectionKey
+} from './requiredFields'
 
 const props = defineProps<{
   draft: SupplementDraftView | null
@@ -317,15 +391,7 @@ function markManual(path: string): void {
   props.markManual?.(path)
 }
 
-type SectionKey =
-  | 'basic'
-  | 'nutrition'
-  | 'label'
-  | 'retail'
-  | 'diy'
-  | 'procurement'
-  | 'equivalence'
-  | 'evidence'
+type SectionKey = DraftSectionKey
 
 interface SectionDef {
   key: SectionKey
@@ -345,6 +411,32 @@ const sections: SectionDef[] = [
 ]
 
 const activeSection = ref<SectionKey>('basic')
+const completenessOpen = ref(false)
+
+const missingRequiredRows = computed(() =>
+  requiredMissingRows(props.draft?.completeness.missing ?? [])
+)
+
+const requiredMissingBySection = computed<Record<SectionKey, number>>(() => {
+  const counts: Record<SectionKey, number> = {
+    basic: 0,
+    nutrition: 0,
+    label: 0,
+    retail: 0,
+    diy: 0,
+    procurement: 0,
+    equivalence: 0,
+    evidence: 0
+  }
+  for (const item of missingRequiredRows.value) {
+    counts[item.section] += 1
+  }
+  return counts
+})
+
+const activeRequiredMissing = computed(() =>
+  missingRequiredRows.value.filter((item) => item.section === activeSection.value)
+)
 
 const activeSectionLabel = computed(
   () => sections.find((item) => item.key === activeSection.value)?.label ?? ''
@@ -396,6 +488,16 @@ const lockDescription = computed(() => {
 })
 
 /** 点路径 → 编辑页区块；只认 payload 里的业务区块。 */
+function goToRequired(section: DraftSectionKey): void {
+  activeSection.value = section
+  completenessOpen.value = false
+  void nextTick(() => {
+    document
+      .querySelector('.draft-editor__content')
+      ?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  })
+}
+
 function sectionOfPath(path: string): SectionKey | null {
   // 添加时机虽然存在 basic 里，但编辑入口在「标签与合规」，角标跟着入口走。
   if (path === 'basic.addTiming') return 'label'
@@ -575,6 +677,11 @@ const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
 }
 
 .draft-editor__completeness {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
   font-size: 12px;
   color: #6b7482;
   font-variant-numeric: tabular-nums;
@@ -754,6 +861,59 @@ const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
   color: #cf1322;
 }
 
+.draft-editor__section-badge--required {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.draft-editor__nav-badge--required {
+  background: #fef3f2;
+  color: #b42318;
+}
+
+.draft-completeness__summary {
+  margin: 0 0 12px;
+  color: #38414d;
+}
+
+.draft-completeness__missing-title {
+  margin: 0 0 8px;
+  color: #b42318;
+  font-weight: 600;
+}
+
+.draft-completeness__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #eceff3;
+  border-radius: 8px;
+}
+
+.draft-completeness__item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.draft-completeness__item:last-child {
+  border-bottom: 0;
+}
+
+.draft-completeness__done {
+  margin: 0;
+  color: #067647;
+}
+
+.draft-completeness__hint {
+  margin: 14px 0 0;
+  color: #98a1ad;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
 .draft-editor__section-badge--manual {
   background: #fff4e5;
   color: #c46a00;
@@ -796,6 +956,11 @@ const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
 }
 
 .draft-editor__footer-status {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
   font-size: 12px;
   color: #8a93a0;
   font-variant-numeric: tabular-nums;

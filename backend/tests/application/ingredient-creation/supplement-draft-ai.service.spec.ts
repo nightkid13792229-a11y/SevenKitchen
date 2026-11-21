@@ -2,8 +2,8 @@ import { BadRequestException, ConflictException, Logger } from '@nestjs/common';
 import {
   SupplementDraftAiService,
   type SupplementDraftAiFillInput,
+  type SupplementDraftAiSnapshot,
 } from '../../../src/application/ingredient-creation/supplement-draft-ai.service';
-import { type SupplementAiSnapshot } from '../../../src/application/ingredient-creation/supplement-draft-ai.schema';
 import {
   SupplementDraftReviewService,
   type SupplementDraftGroupRecommendations,
@@ -413,8 +413,8 @@ describe('SupplementDraftAiService', () => {
     return normalizeSupplementDraftPayload(lastUpdateInput().payload);
   }
 
-  function lastSnapshot(): SupplementAiSnapshot {
-    return lastUpdateInput().aiSnapshot as SupplementAiSnapshot;
+  function lastSnapshot(): SupplementDraftAiSnapshot {
+    return lastUpdateInput().aiSnapshot as SupplementDraftAiSnapshot;
   }
 
   it('正面图/标签图缺一张就拒绝，且不读图、不写草稿', async () => {
@@ -578,6 +578,10 @@ describe('SupplementDraftAiService', () => {
     expect(snapshot.status).toBe('PARTIAL');
     expect(snapshot.fields).toEqual({});
     expect(snapshot.decisions.recommendCreate.value).toBe(true);
+    // 空决定的采购默认也必须是 false，和“保留 current”一致
+    expect(payload.procurement.enabled).toBe(false);
+    expect(snapshot.decisions.procurement.enabled).toBe(false);
+    expect(snapshot.proposedDecisions.procurement.enabled).toBe(false);
     expect(
       snapshot.warnings.some(
         (warning) => warning.code === 'AI_DRAFT_UNAVAILABLE',
@@ -603,7 +607,7 @@ describe('SupplementDraftAiService', () => {
     const result = await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
 
     const input = lastUpdateInput();
-    const snapshot = input.aiSnapshot as SupplementAiSnapshot;
+    const snapshot = input.aiSnapshot as SupplementDraftAiSnapshot;
     expect(snapshot.decisions.recommendCreate).toEqual({
       value: false,
       reason: '不建议建档，信息不足',
@@ -876,6 +880,55 @@ describe('SupplementDraftAiService', () => {
     expect(snapshot.decisions.procurement.enabled).toBe(true);
     expect(snapshot.decisions.diy.enabled).toBe(true);
     expect(snapshot.decisions.noSaleReason).toBe('UNDECIDED');
+  });
+
+  it('aiSnapshot 保留 AI 原始提议，和生效值分开记录', async () => {
+    currentDraft = draftView(makePayload({ retailEnabled: true }));
+    intake.read.mockResolvedValue(
+      makeIntake({ analysis: null, suggestedName: null }),
+    );
+    // AI 没给 retail 的有效理由：解析器原始提议是 false，但生效值应保留 true
+    vision.analyze.mockResolvedValue({
+      text: JSON.stringify({
+        fields: {},
+        decisions: { recommendCreate: { value: true, reason: '信息够' } },
+      }),
+      model: 'mock-model',
+    });
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    expect(lastPayload().retail.enabled).toBe(true);
+    const snapshot = lastSnapshot();
+    expect(snapshot.proposedDecisions.retail).toEqual({
+      enabled: false,
+      reason: '',
+    });
+    expect(snapshot.decisions.retail.enabled).toBe(true);
+    expect(snapshot.proposedDecisions.retail.enabled).not.toBe(
+      snapshot.decisions.retail.enabled,
+    );
+  });
+
+  it('空草稿 + AI 省略 procurement：payload 与生效决定都是 false', async () => {
+    currentDraft = draftView(makePayload());
+    intake.read.mockResolvedValue(
+      makeIntake({ analysis: null, suggestedName: null }),
+    );
+    vision.analyze.mockResolvedValue({
+      text: JSON.stringify({
+        fields: {},
+        decisions: { recommendCreate: { value: true, reason: '信息够' } },
+      }),
+      model: 'mock-model',
+    });
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    expect(lastPayload().procurement.enabled).toBe(false);
+    const snapshot = lastSnapshot();
+    expect(snapshot.decisions.procurement.enabled).toBe(false);
+    expect(snapshot.proposedDecisions.procurement.enabled).toBe(false);
   });
 
   it('AI 明确给 false + 理由时才关掉开关，快照同步', async () => {

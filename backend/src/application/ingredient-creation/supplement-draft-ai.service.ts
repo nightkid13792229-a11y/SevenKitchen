@@ -179,6 +179,17 @@ export interface SupplementDraftAiMergeResult {
   missing: SupplementAiMissingItem[];
 }
 
+/**
+ * 落 `aiSnapshot` 的完整记录。
+ *
+ * `decisions` 是**生效后**的值（人改/事实保留后），`proposedDecisions` 是
+ * 解析器给出的**原始提议**（含 reasons，未被合并或推荐兜底修改），用于事后
+ * 审计“AI 当初想怎么判、最后实际怎么落”。
+ */
+export type SupplementDraftAiSnapshot = SupplementAiSnapshot & {
+  proposedDecisions: SupplementAiDecisions;
+};
+
 @Injectable()
 export class SupplementDraftAiService {
   private readonly logger = new Logger(SupplementDraftAiService.name);
@@ -368,12 +379,16 @@ export class SupplementDraftAiService {
       });
     }
 
-    const aiSnapshot: SupplementAiSnapshot = {
+    const aiSnapshot: SupplementDraftAiSnapshot = {
       status: aiDraft ? 'OK' : 'PARTIAL',
       fields: aiDraft?.fields ?? {},
       // 快照里的决定项写「实际生效后的值」：不要出现 snapshot 说关、
       // payload 却是开（人改过/AI 没真正表态都会被保留）。
       decisions: buildEffectiveDecisions(aiDraft, merged.payload),
+      // 额外保留 AI 原始提议（含 reason），供审计对照生效值；不能和 decisions 混用。
+      proposedDecisions: aiDraft
+        ? structuredClone(aiDraft.decisions)
+        : createEmptyAiDecisions(),
       // AI 自己报的缺项 + 系统补的缺项（如没有等价组候选）都要留在快照里。
       missing: [...(aiDraft?.missing ?? []), ...merged.missing],
       warnings,
@@ -946,7 +961,7 @@ function createEmptyAiDecisions(): SupplementAiDecisions {
     retail: { enabled: false, reason: '' },
     noSaleReason: null,
     diy: { enabled: false, linkUrl: '', imageUrl: '', reason: '' },
-    procurement: { enabled: true, reason: '' },
+    procurement: { enabled: false, reason: '' },
     equivalence: { groupId: null, reason: '' },
     labelNames: [],
     defaultTargetFields: [],

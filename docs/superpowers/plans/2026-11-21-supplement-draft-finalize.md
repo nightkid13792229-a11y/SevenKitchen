@@ -519,7 +519,7 @@ Expected: FAIL — function/service missing.
   - Retail shelfLifeMonths present but not a positive integer → `SHELF_LIFE_INVALID` blocker (the catalog issue only checks missing, not invalid).
   - DIY on + no link/platform → `DIY_LINK_REQUIRED` blocker; platform not in TAOBAO/JD/PINDUODUO/IHERB/OTHER → `DIY_PLATFORM_INVALID` blocker.
   - `storageCondition` >200 chars → `STORAGE_CONDITION_TOO_LONG` blocker; `purchaseUnit` >50 chars → `PURCHASE_UNIT_TOO_LONG` blocker (finalize bypasses the old DTO).
-  - Group: not found or inactive/disabled → blocker; not APPROVED or memberCount <= 1 → warning; `__SKIP__` → warning.
+  - Group: not chosen (`groupId === null`) → `GROUP_NOT_CHOSEN` blocker; not found or inactive/disabled → blocker; not APPROVED or memberCount <= 1 → warning; `__SKIP__` → warning.
   - Config shop/equivalence off → warnings.
   - Evidence: if either front or label image is missing → `EVIDENCE_MISSING` warning (AI drafting requires both, but manual entry may not).
 - `buildContext`:

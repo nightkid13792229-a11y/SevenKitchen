@@ -35,7 +35,12 @@
     </header>
 
     <el-card
-      v-if="!state.draftId && draftOptions.length > 0 && !draftLoading"
+      v-if="
+        !state.draftId &&
+        draftOptions.length > 0 &&
+        !draftLoading &&
+        !(supplementDraftFlowEnabled && line === 'SUPPLEMENT')
+      "
       class="draft-resume-card"
       shadow="never"
     >
@@ -60,6 +65,13 @@
           继续
         </el-button>
         <el-button @click="discardSelectedDraft">放弃</el-button>
+        <el-button
+          :loading="draftClearing"
+          :disabled="draftClearing"
+          @click="discardAllOldDrafts"
+        >
+          清空全部
+        </el-button>
       </div>
     </el-card>
 
@@ -1440,6 +1452,7 @@ import {
   shouldBlockRunForPendingPlan
 } from './reviewLock'
 import {
+  discardDraftsSequentially,
   formatDraftUpdatedAt,
   pickLatestDraft,
   readDraftIdFromQuery,
@@ -1739,6 +1752,7 @@ const draftError = ref('')
 const draftOptions = ref<IngredientCreationDraftSummary[]>([])
 const selectedResumeId = ref('')
 const draftOptionsLoading = ref(false)
+const draftClearing = ref(false)
 const draftCommitted = computed(() => draft.value?.step === 'COMMIT')
 const activeTab = ref<'ingredient' | 'profiles'>('ingredient')
 /** 营养档案筛子：全局一个模式，切换生 / 熟档案时计数跟着当前组走。 */
@@ -2659,6 +2673,46 @@ async function discardSelectedDraft() {
     ElMessage.success('已放弃这份草稿')
   } catch (error) {
     ElMessage.error(getApiErrorMessage(error, '放弃失败，请稍后重试'))
+  }
+}
+
+/** 清空旧建档流程留下的未完成草稿：逐份删，失败的不隐藏。 */
+async function discardAllOldDrafts() {
+  if (draftClearing.value || draftOptions.value.length === 0) return
+  const ids = draftOptions.value.map((item) => item.draftId)
+
+  try {
+    await ElMessageBox.confirm(
+      `清空这 ${ids.length} 份旧建档草稿吗？未写入的内容会一起删除，不能恢复。`,
+      '清空旧草稿',
+      { type: 'warning', confirmButtonText: '清空', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+
+  draftClearing.value = true
+  try {
+    const result = await discardDraftsSequentially(ids, (id) =>
+      ingredientCreationApi.discardDraft(id)
+    )
+    const removed = new Set(result.removed)
+    draftOptions.value = draftOptions.value.filter(
+      (item) => !removed.has(item.draftId)
+    )
+    const latest = pickLatestDraft(draftOptions.value)
+    selectedResumeId.value =
+      latest?.draftId ?? draftOptions.value[0]?.draftId ?? ''
+
+    if (result.failed.length > 0) {
+      ElMessage.warning(
+        `已清理 ${result.removed.length} 份，还有 ${result.failed.length} 份失败，请重试`
+      )
+    } else {
+      ElMessage.success(`已清理 ${result.removed.length} 份旧草稿`)
+    }
+  } finally {
+    draftClearing.value = false
   }
 }
 

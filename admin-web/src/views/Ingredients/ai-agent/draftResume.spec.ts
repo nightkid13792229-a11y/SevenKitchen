@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  discardDraftsSequentially,
   formatDraftUpdatedAt,
   pickLatestDraft,
   readDraftIdFromQuery,
@@ -74,5 +75,31 @@ describe('readPendingPlan', () => {
       readPendingPlan({ searchPlan: { status: 'APPROVED' } }),
     ).toBeNull()
     expect(readPendingPlan({})).toBeNull()
+  })
+})
+
+
+describe('discardDraftsSequentially', () => {
+  it('逐份删除，单份失败不影响后面的草稿', async () => {
+    const calls: string[] = []
+    const result = await discardDraftsSequentially(['a', 'b', 'c'], async (id) => {
+      calls.push(id)
+      if (id === 'b') throw new Error('boom')
+    })
+
+    expect(calls).toEqual(['a', 'b', 'c'])
+    expect(result.removed).toEqual(['a', 'c'])
+    expect(result.failed.map((item) => item.id)).toEqual(['b'])
+  })
+
+  it('空列表一个请求也不发', async () => {
+    const calls: string[] = []
+    const result = await discardDraftsSequentially([], async (id) => {
+      calls.push(id)
+    })
+
+    expect(calls).toEqual([])
+    expect(result.removed).toEqual([])
+    expect(result.failed).toEqual([])
   })
 })

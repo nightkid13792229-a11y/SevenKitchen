@@ -61,3 +61,29 @@ export function readPendingPlan(payload: unknown): SearchPlan | null {
   if (!isRecord(plan) || plan.status !== 'PENDING') return null
   return plan as unknown as SearchPlan
 }
+
+
+/** 逐份放弃旧草稿：单份失败不拦后面的，返回成功/失败清单。 */
+export interface DraftDiscardResult {
+  removed: string[]
+  failed: Array<{ id: string; error: unknown }>
+}
+
+export async function discardDraftsSequentially(
+  ids: readonly string[],
+  discard: (id: string) => Promise<unknown>,
+): Promise<DraftDiscardResult> {
+  const removed: string[] = []
+  const failed: Array<{ id: string; error: unknown }> = []
+
+  for (const id of ids) {
+    try {
+      await discard(id)
+      removed.push(id)
+    } catch (error) {
+      failed.push({ id, error })
+    }
+  }
+
+  return { removed, failed }
+}

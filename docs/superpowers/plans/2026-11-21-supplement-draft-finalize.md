@@ -1077,6 +1077,7 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿列表与建档编辑
 - Create: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/sections/EvidenceSection.vue`
 - Create: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.vue`
 - Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftEditor.vue` (replace the placeholder sections with the 6 new components + imports)
+- Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue` (capture before/after around runAi and apply selected diff paths)
 - Test: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.component.spec.ts`
 
 **Interfaces:**
@@ -1120,6 +1121,8 @@ bash scripts/session.sh commit -m "feat(supplement): 上架/DIY/采购/等价组
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/sections/EquivalenceSection.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/sections/EvidenceSection.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.vue \
+  admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftEditor.vue \
+  admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.component.spec.ts
 ```
 
@@ -1130,7 +1133,7 @@ bash scripts/session.sh commit -m "feat(supplement): 上架/DIY/采购/等价组
 **Files:**
 - Create: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftReview.vue`
 - Create: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftVerification.vue`
-- Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue` (replace the review/verification placeholder branches with the real pages)
+- Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue` (replace the review/verification placeholder branches with the real pages; destructure `finalizing`/`verification` from the composable)
 - Test: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftReview.component.spec.ts`
 
 **Interfaces:**
@@ -1169,6 +1172,7 @@ Expected: PASS.
 bash scripts/session.sh commit -m "feat(supplement): 最终审核与核验结果页" \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftReview.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftVerification.vue \
+  admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftReview.component.spec.ts
 ```
 

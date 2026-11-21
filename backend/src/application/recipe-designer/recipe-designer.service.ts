@@ -67,6 +67,7 @@ import {
   type LaunchReadinessAssessmentSnapshot,
 } from '../../domain/recipe-designer/launch-readiness';
 import { assertRecipeNameLength } from '../../domain/recipe-designer/series-name';
+import { convertNutrientValue } from '../../domain/recipe-designer/unit-conversion';
 import {
   buildSeriesReleaseReadiness,
   type SeriesReleaseReadiness,
@@ -7545,8 +7546,32 @@ export class RecipeDesignerService {
           `目标覆盖的营养素 ${override.nutrientKey} 不在当前评估标准里`,
         );
       }
-      const minValue = override.minValue;
-      const maxValue = override.maxValue;
+      const desiredBasis =
+        override.basis === 'DM' ? 'PER_100G_DRY_MATTER' : 'PER_1000_KCAL_ME';
+      const base =
+        candidates.find((target) => target.expressionBasis === desiredBasis) ??
+        candidates[0];
+      const targetUnit = String(base.unit ?? '').trim();
+      const fromUnit = String(override.unit ?? targetUnit).trim();
+      const toTargetUnit = (value: number | null): number | null => {
+        if (value === null) return null;
+        if (
+          !fromUnit ||
+          !targetUnit ||
+          fromUnit.toLowerCase() === targetUnit.toLowerCase()
+        ) {
+          return value;
+        }
+        const converted = convertNutrientValue(value, fromUnit, targetUnit);
+        if (converted === null) {
+          throw new BadRequestException(
+            `目标覆盖 ${override.nutrientKey} 的单位 ${fromUnit} 无法换算为评估标准单位 ${targetUnit}`,
+          );
+        }
+        return converted;
+      };
+      const minValue = toTargetUnit(override.minValue);
+      const maxValue = toTargetUnit(override.maxValue);
       if (
         (minValue !== null && !Number.isFinite(minValue)) ||
         (maxValue !== null && !Number.isFinite(maxValue))
@@ -7560,15 +7585,10 @@ export class RecipeDesignerService {
           `目标覆盖 ${override.nutrientKey} 的下限不能大于上限`,
         );
       }
-      const desiredBasis =
-        override.basis === 'DM' ? 'PER_100G_DRY_MATTER' : 'PER_1000_KCAL_ME';
-      const base =
-        candidates.find((target) => target.expressionBasis === desiredBasis) ??
-        candidates[0];
       result.push({
         ...base,
         expressionBasis: desiredBasis,
-        unit: 'g',
+        unit: targetUnit,
         minValue,
         maxValue,
       });

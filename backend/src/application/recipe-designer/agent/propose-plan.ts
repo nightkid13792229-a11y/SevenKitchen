@@ -21,6 +21,11 @@ export interface AgentPlanConstraint {
   max: number | null;
   /** PERCENT_DM / PER_1000_KCAL / PER_MJ / G_PER_DAY / OTHER */
   unit: string;
+  /**
+   * 约束值的计量单位（g / mg / ug / IU）。
+   * 不填时按评估目标自己的单位解释；填了且与目标单位不同，评估前换算。
+   */
+  nutrientUnit?: string;
   /** 人读的依据说明，如 FEDIAF 2025 Table III-3a */
   basis: string;
   /** 来源文件/机构，如 FEDIAF 2025 / SACN5 */
@@ -116,6 +121,11 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
               basis: {
                 type: 'string',
                 description: '如 FEDIAF 2025 Table III-3a',
+              },
+              nutrientUnit: {
+                type: 'string',
+                description:
+                  '该营养素在评估标准中的计量单位，如 g / mg / ug / IU；不填按目标单位',
               },
               source: { type: 'string', description: '如 FEDIAF 2025 / SACN5' },
               citationId: { type: 'string' },
@@ -364,6 +374,9 @@ function normalizeConstraint(
     min,
     max,
     unit,
+    ...(readOptionalText(input.nutrientUnit, 20)
+      ? { nutrientUnit: readOptionalText(input.nutrientUnit, 20)! }
+      : {}),
     basis,
     source,
     ...(readOptionalText(input.citationId, 200)

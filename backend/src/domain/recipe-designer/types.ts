@@ -48,6 +48,11 @@ export interface AssessmentTargetOverride {
   basis: 'DM' | 'PER_1000_KCAL';
   minValue: number | null;
   maxValue: number | null;
+  /**
+   * 约束值的计量单位（g / mg / ug / IU）。
+   * 缺省 = 评估目标自己的单位；给出且与目标单位不同时，评估前换算。
+   */
+  unit?: string;
   /** 必须来自本次会话的检索结果 */
   citationId: string;
 }

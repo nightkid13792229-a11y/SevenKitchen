@@ -2,6 +2,7 @@ import type {
   AssessmentTargetOverride,
   FediafAssessmentTarget,
 } from '../../../domain/recipe-designer/types';
+import { convertNutrientValue } from '../../../domain/recipe-designer/unit-conversion';
 import type { AgentNutritionPlan } from './propose-plan';
 
 const KEY_ALIASES: Record<string, string[]> = {
@@ -80,17 +81,44 @@ export function buildPlanTargetOverrides(
       continue;
     }
 
+    /**
+     * 只覆盖方案明确写到的方向；缺失的一侧沿用基线的值。
+     *
+     * 方案值先按表达基准换算（PER_MJ → 每 1000kcal），再按营养素单位换算到
+     * 目标单位；基线那一侧本来就是目标单位，不能再换算。两侧混用不同单位时，
+     * 用一个 `unit` 字段统一解释会算错，所以这里直接换算成目标单位。
+     */
+    const targetUnit = base.unit;
+    const planUnit = constraint.nutrientUnit?.trim() || targetUnit;
+    const toTargetUnit = (value: number): number | null => {
+      const converted = convertNutrientValue(
+        value * factor,
+        planUnit,
+        targetUnit,
+      );
+      return converted === null ? null : round(converted);
+    };
+    const minValue =
+      constraint.min === null ? base.minValue : toTargetUnit(constraint.min);
+    const maxValue =
+      constraint.max === null ? base.maxValue : toTargetUnit(constraint.max);
+    if (
+      (constraint.min !== null && minValue === null) ||
+      (constraint.max !== null && maxValue === null)
+    ) {
+      unsupported.push({
+        key: constraint.key,
+        reason: `单位 ${planUnit} 不能换算为评估标准单位 ${targetUnit}`,
+      });
+      continue;
+    }
+
     overrides.push({
       nutrientKey: base.nutrientKey,
       basis,
-      minValue:
-        constraint.min === null
-          ? base.minValue
-          : round(constraint.min * factor),
-      maxValue:
-        constraint.max === null
-          ? base.maxValue
-          : round(constraint.max * factor),
+      minValue,
+      maxValue,
+      unit: targetUnit,
       citationId: constraint.citationId ?? 'plan',
     });
   }

@@ -7,13 +7,14 @@ function target(
   minValue: number | null,
   maxValue: number | null,
   expressionBasis: 'PER_100G_DRY_MATTER' | 'PER_1000_KCAL_ME',
+  unit = 'g',
 ): FediafAssessmentTarget {
   return {
     nutrientKey,
     label: nutrientKey,
     category: 'MACRO',
     expressionBasis,
-    unit: 'g',
+    unit,
     minValue,
     maxValue,
     fieldPaths: [],
@@ -91,5 +92,75 @@ describe('plan target overrides', () => {
 
     expect(result.overrides).toHaveLength(0);
     expect(result.unsupported[0]?.key).toBe('fat');
+  });
+
+  it('keeps a mg target in mg and does not convert the baseline side', () => {
+    const result = buildPlanTargetOverrides(
+      plan([
+        {
+          key: 'zinc',
+          label: '锌',
+          min: 15,
+          max: null,
+          unit: 'PER_1000_KCAL',
+          nutrientUnit: 'mg',
+          basis: '',
+          source: 'plan',
+          hard: true,
+        },
+      ]),
+      [target('zinc', 10, 40, 'PER_1000_KCAL_ME', 'mg')],
+    );
+
+    expect(result.overrides[0]).toMatchObject({
+      nutrientKey: 'zinc',
+      unit: 'mg',
+      minValue: 15,
+      maxValue: 40,
+    });
+  });
+
+  it('converts a g plan value into a mg target', () => {
+    const result = buildPlanTargetOverrides(
+      plan([
+        {
+          key: 'zinc',
+          label: '锌',
+          min: 0.015,
+          max: null,
+          unit: 'PER_1000_KCAL',
+          nutrientUnit: 'g',
+          basis: '',
+          source: 'plan',
+          hard: true,
+        },
+      ]),
+      [target('zinc', 10, 40, 'PER_1000_KCAL_ME', 'mg')],
+    );
+
+    expect(result.overrides[0]?.minValue).toBeCloseTo(15, 8);
+    expect(result.overrides[0]?.unit).toBe('mg');
+  });
+
+  it('reports a non-convertible unit instead of silently using the raw value', () => {
+    const result = buildPlanTargetOverrides(
+      plan([
+        {
+          key: 'vitaminD',
+          label: '维生素 D',
+          min: 10,
+          max: null,
+          unit: 'PER_1000_KCAL',
+          nutrientUnit: 'mg',
+          basis: '',
+          source: 'plan',
+          hard: true,
+        },
+      ]),
+      [target('vitaminD', 500, 800, 'PER_1000_KCAL_ME', 'IU')],
+    );
+
+    expect(result.overrides).toHaveLength(0);
+    expect(result.unsupported[0]?.reason).toContain('不能换算');
   });
 });

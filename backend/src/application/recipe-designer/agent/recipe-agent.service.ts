@@ -66,6 +66,11 @@ import {
 import { matchSelectionToLibrary } from './selection-match';
 import { assessmentGapSignature } from './assessment-progress';
 import { loadSkillsForPhase } from './skill-loader';
+import {
+  buildSessionStateMessages,
+  planRevisionUpdate,
+  selectionSubmissionUpdate,
+} from './session-state';
 import { fail, type RecipeAgentActor, type ToolOutcome } from './agent-types';
 import {
   buildKnowledgeImageMessage,
@@ -310,29 +315,41 @@ export class RecipeAgentService implements OnModuleInit {
       });
       return { phase: current };
     }
+
     if (stage === 'PLAN') {
-      if (current !== 'PLAN') {
-        throw new BadRequestException('当前不在方案确认阶段');
-      }
       if (!session.plan) {
         throw new BadRequestException('还没有提交营养方案');
       }
+      if (current !== 'PLAN' && current !== 'SELECT' && current !== 'DESIGN') {
+        throw new BadRequestException('当前不在方案确认阶段');
+      }
+      // 已确认过就不要再起一轮，避免重复点按钮产生重复运行。
+      if (session.planConfirmedAt && current !== 'PLAN') {
+        return { phase: current };
+      }
+      const nextPhase: AgentPhase = current === 'PLAN' ? 'SELECT' : current;
       await this.prisma.recipeDesignAgentSession.update({
         where: { id: session.id },
         data: {
-          phase: 'SELECT',
           planConfirmedAt: new Date(),
+          phase: nextPhase,
           status: 'WAITING_USER',
         },
       });
-      await this.start({
+      await this.startOrQueue({
         draftId,
         actor,
         silent: true,
         message:
-          '方案已确认。请进入选材阶段：只列食材，不列补剂；基于已确认方案和忌口自由选食材，不要查原料库；库外食材系统会自动标 MISSING；用 propose_selection 提交。',
+          nextPhase === 'SELECT'
+            ? '方案已确认。请进入选材阶段：只列食材，不列补剂；基于已确认方案和忌口自由选食材，不要查原料库；库外食材系统会自动标 MISSING；用 propose_selection 提交。'
+            : '方案已确认。请核对现有选材和配方：按新方案检查已有清单与配方，必要时用 edit_recipe 调整；不要重造方案。',
       });
-      return { phase: 'SELECT' };
+      return { phase: nextPhase };
+    }
+
+    if (current === 'DESIGN' && session.selectionConfirmedAt) {
+      return { phase: 'DESIGN' };
     }
     if (current !== 'SELECT') {
       throw new BadRequestException('当前不在选材确认阶段');
@@ -348,7 +365,7 @@ export class RecipeAgentService implements OnModuleInit {
         status: 'WAITING_USER',
       },
     });
-    await this.start({
+    await this.startOrQueue({
       draftId,
       actor,
       silent: true,
@@ -356,6 +373,33 @@ export class RecipeAgentService implements OnModuleInit {
         '选材已确认。请进入配方编辑阶段：读取当前草稿，按已确认方案与选材编辑配方，并调用评估验证；不要改动已确认的方案约束。',
     });
     return { phase: 'DESIGN' };
+  }
+
+  /**
+   * 阶段确认后的自动续跑。
+   *
+   * 极少数情况下草稿还有一次 run 没释放 active（状态已写成等待用户、但 finally
+   * 还没执行）。这里不把 409 抛给前端，而是登记 pendingStageStart，等 active
+   * 释放后由 launch.finally 起跑。
+   */
+  private async startOrQueue(input: {
+    draftId: string;
+    actor: RecipeAgentActor;
+    message: string;
+    silent?: boolean;
+  }): Promise<void> {
+    try {
+      await this.start({ ...input, silent: input.silent ?? true });
+    } catch (error) {
+      if (error instanceof ConflictException) {
+        this.pendingStageStart.set(input.draftId, {
+          actor: input.actor,
+          message: input.message,
+        });
+        return;
+      }
+      throw error;
+    }
   }
 
   /** 人工停止。 */
@@ -446,8 +490,14 @@ export class RecipeAgentService implements OnModuleInit {
       await this.appendMessage(
         sessionId,
         'ASSISTANT',
-        '已回到选材阶段；请重新确认食材清单。',
+        '已回到选材阶段；正在重新生成食材清单，请稍候确认。',
       );
+      // 当前 run 还占着 active；登记续跑，等 finally 释放后自动进入选材。
+      this.pendingStageStart.set(draftId, {
+        actor,
+        message:
+          '已按用户要求回到选材阶段。请按已确认方案重新列食材，用 propose_selection 提交；不要列补剂。',
+      });
       await this.markWaiting(sessionId);
       return;
     }
@@ -767,36 +817,32 @@ export class RecipeAgentService implements OnModuleInit {
           await this.appendMessage(
             sessionId,
             'ASSISTANT',
-            '已回到选材阶段；请重新确认食材清单。',
+            '已回到选材阶段；正在重新生成食材清单，请稍候确认。',
           );
+          // 当前 run 还占着 active；登记续跑，等 finally 释放后自动进入选材。
+          this.pendingStageStart.set(draftId, {
+            actor,
+            message:
+              '已按用户要求回到选材阶段。请按已确认方案重新列食材，用 propose_selection 提交；不要列补剂。',
+          });
           await this.markWaiting(sessionId);
           return;
         }
 
-        // 用户明确要求修改已确认方案：用户的话最高，立即更新方案。
+        // 用户明确要求修改已确认方案：写回新方案，但不自行确认、不清空选材。
         if (call.function.name === 'revise_plan' && outcome.ok) {
           currentPlan = outcome.data as AgentNutritionPlan;
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
-            data: {
-              plan: outcome.data as never,
-              planConfirmedAt: new Date(),
-              selection: Prisma.DbNull,
-              selectionConfirmedAt: null,
-              phase: phase === 'DESIGN' ? 'SELECT' : phase,
-              status: phase === 'DESIGN' ? 'WAITING_USER' : 'RUNNING',
-              ...(phase === 'DESIGN' ? { endedAt: new Date() } : {}),
-            },
+            data: planRevisionUpdate(currentPlan),
           });
-          if (phase === 'DESIGN') {
-            await this.appendMessage(
-              sessionId,
-              'ASSISTANT',
-              '方案已按你的要求更新；原有选材/配方需要重新核对，已回到选材阶段。',
-            );
-            await this.markWaiting(sessionId);
-            return;
-          }
+          await this.appendMessage(
+            sessionId,
+            'ASSISTANT',
+            '方案已按你的要求更新；请点“重新确认方案”，确认后继续核对现有选材/配方。',
+          );
+          await this.markWaiting(sessionId);
+          return;
         }
 
         // 方案/选材提交：落库 + 暂停等用户确认。
@@ -813,26 +859,11 @@ export class RecipeAgentService implements OnModuleInit {
         }
         if (call.function.name === 'propose_selection' && outcome.ok) {
           const selection = outcome.data as AgentSelection;
-          const confirmed = selection.confirmed === true;
-          const { confirmed: _confirmed, ...persisted } = selection;
+          // 阶段推进只认人工 confirmSelection；模型传的 confirmed 只作为提示，不改变阶段。
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
-            data: {
-              selection: persisted as never,
-              phase: confirmed ? 'DESIGN' : 'SELECT',
-              selectionConfirmedAt: confirmed ? new Date() : null,
-              status: 'WAITING_USER',
-              endedAt: new Date(),
-            },
+            data: selectionSubmissionUpdate(selection),
           });
-          if (confirmed) {
-            // 当前 run 还占着 active；先登记，等 finally 释放后再启动设计。
-            this.pendingStageStart.set(draftId, {
-              actor,
-              message:
-                '选材已确认。请进入配方编辑阶段：读取当前草稿，按已确认方案与选材编辑配方，并调用评估验证；不要改动已确认的方案约束。',
-            });
-          }
           return;
         }
 
@@ -1160,7 +1191,7 @@ export class RecipeAgentService implements OnModuleInit {
     if (skill) {
       messages.push({ role: 'system', content: skill });
     }
-    const confirmed = await this.prisma.recipeDesignAgentSession.findUnique({
+    const sessionState = await this.prisma.recipeDesignAgentSession.findUnique({
       where: { id: sessionId },
       select: {
         plan: true,
@@ -1169,18 +1200,14 @@ export class RecipeAgentService implements OnModuleInit {
         selectionConfirmedAt: true,
       },
     });
-    if (confirmed?.plan && confirmed.planConfirmedAt) {
-      messages.push({
-        role: 'system',
-        content: `已确认营养方案（JSON）：\n${JSON.stringify(confirmed.plan)}`,
-      });
-    }
-    if (confirmed?.selection && confirmed.selectionConfirmedAt) {
-      messages.push({
-        role: 'system',
-        content: `已确认选材（JSON）：\n${JSON.stringify(confirmed.selection)}`,
-      });
-    }
+    messages.push(
+      ...buildSessionStateMessages({
+        plan: (sessionState?.plan as unknown as AgentNutritionPlan) ?? null,
+        planConfirmedAt: sessionState?.planConfirmedAt ?? null,
+        selection: (sessionState?.selection as unknown as AgentSelection) ?? null,
+        selectionConfirmedAt: sessionState?.selectionConfirmedAt ?? null,
+      }),
+    );
     for (const row of historyRows) {
       messages.push({
         role: row.role === 'USER' ? 'user' : 'assistant',

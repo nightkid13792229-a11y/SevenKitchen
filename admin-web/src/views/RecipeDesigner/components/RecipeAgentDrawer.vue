@@ -93,7 +93,7 @@
             </div>
           </div>
           <div
-            v-if="session.phase === 'PLAN' && !session.planConfirmedAt"
+            v-if="!session.planConfirmedAt"
             class="agent-plan__actions"
           >
             <el-button
@@ -101,7 +101,11 @@
               type="primary"
               :loading="deciding"
               @click="decidePlan('APPROVE')"
-              >确认方案，进入选材</el-button
+              >{{
+                session.phase === "PLAN"
+                  ? "确认方案，进入选材"
+                  : "重新确认方案"
+              }}</el-button
             >
             <el-button
               size="small"
@@ -114,7 +118,9 @@
             {{
               session.planConfirmedAt
                 ? "方案已确认，正在进入选材阶段…"
-                : "确认后进入选材阶段；有问题请直接回复要改的地方。"
+                : session.phase === "PLAN"
+                  ? "确认后进入选材阶段；有问题请直接回复要改的地方。"
+                  : "方案已修订，待重新确认；确认后继续核对现有选材/配方。"
             }}
           </div>
         </div>
@@ -205,7 +211,7 @@
           <div class="agent-plan__hint">
             {{
               session.selectionConfirmedAt
-                ? "选材已确认，正在进入配方编辑阶段…"
+                ? "选材已确认；可在对话里继续调整配方。"
                 : "确认后进入配方编辑阶段。"
             }}
           </div>

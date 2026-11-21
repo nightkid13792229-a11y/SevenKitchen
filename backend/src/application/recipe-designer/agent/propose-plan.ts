@@ -78,7 +78,7 @@ const PROPOSE_PLAN_DESCRIPTION =
   '提交营养方案与约束，等用户确认。方案内容、格式与约束取舍按 recipe-plan Skill 执行；提交后本次运行暂停。';
 
 const PROPOSE_SELECTION_DESCRIPTION =
-  '提交食材候选，等用户确认。选材规则按 recipe-selection Skill 执行；confirmed=true 表示用户已最终确认这份清单。';
+  '提交食材候选，等用户确认。选材规则按 recipe-selection Skill 执行；confirmed=true 只表示用户口头确认，仍需用户在界面上点“确认选材”才会进入配方编辑。';
 
 export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
   type: 'function',
@@ -157,7 +157,8 @@ export const REVISE_PLAN_TOOL: DeepSeekToolDefinition = {
     name: 'revise_plan',
     description:
       '用户明确要求修改已确认的营养方案时使用。用户的话是最高优先级，不要以“方案已锁定”拒绝。' +
-      '传入修改后的完整方案；调用后方案立即更新，原选材会被清空，需要重新核对。' +
+      '传入修改后的完整方案；调用后方案更新并暂停，等用户点“重新确认方案”。' +
+      '原选材/配方会保留，确认后继续核对；不要自行清空或重造。' +
       '如果修改涉及硬约束/医学风险，先用一句话说明风险，但仍按用户要求更新。',
   },
 };
@@ -167,7 +168,8 @@ export const REOPEN_SELECTION_TOOL: DeepSeekToolDefinition = {
   function: {
     name: 'reopen_selection',
     description:
-      '用户明确要求重新选材/修改已确认选材时使用。方案不变，清空当前选材并回到选材阶段，等用户重新确认清单。',
+      '用户明确要求重新选材/修改已确认选材时使用。方案不变，清空当前选材并回到选材阶段；' +
+      '系统会自动重新生成清单，等用户确认。',
     parameters: {
       type: 'object',
       properties: {},
@@ -201,7 +203,8 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
         },
         confirmed: {
           type: 'boolean',
-          description: '用户已最终确认这份清单',
+          description:
+            '用户口头确认时设为 true；仅作记录，阶段推进仍以人工点“确认选材”为准',
         },
         skippedCategories: {
           type: 'array',

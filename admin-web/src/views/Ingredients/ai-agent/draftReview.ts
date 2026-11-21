@@ -301,6 +301,10 @@ export interface ProfileFieldRow {
   statusType: 'success' | 'primary' | 'warning' | 'info'
   sourceRecordId: string | null
   sourceLabel: string
+  /** 来源原值（2026-11-21）：有值时显示「来源 25 g → 档案 45 g」。 */
+  sourceValue?: number | null
+  sourceUnit?: string | null
+  sourceDisplay?: string
   formula: string | null
 }
 
@@ -324,6 +328,20 @@ export interface ProfileGroup {
 const PREPARATION_STATE_LABELS: Readonly<Record<PreparationState, string>> = {
   RAW: '生',
   COOKED: '熟'
+}
+
+function formatSourceDisplay(
+  sourceValue: number | null,
+  sourceUnit: string | null,
+  finalValue: number | null,
+  finalUnit: string
+): string {
+  if (sourceValue === null) return ''
+  const source = `${sourceValue}${sourceUnit ?? ''}`
+  if (finalValue !== null && sourceValue !== finalValue) {
+    return `来源 ${source} → 档案 ${finalValue}${finalUnit}`
+  }
+  return `来源 ${source}`
 }
 
 function shortId(value: string): string {
@@ -423,6 +441,14 @@ export function toProfileRows(
           sourceLabel: formatSourceLabel(
             entry?.sourceRecordId ?? null,
             sourceNames
+          ),
+          sourceValue: entry?.sourceValue ?? null,
+          sourceUnit: entry?.sourceUnit ?? null,
+          sourceDisplay: formatSourceDisplay(
+            entry?.sourceValue ?? null,
+            entry?.sourceUnit ?? null,
+            value,
+            field.unit
           ),
           formula: entry?.formula ?? null
         }

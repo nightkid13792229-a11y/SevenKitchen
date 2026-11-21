@@ -218,6 +218,49 @@ describe('审核页 · 原料卡映射', () => {
 })
 
 describe('审核页 · 营养档案映射', () => {
+  it('有来源值时显示「来源 → 档案」对照；没有来源不显示', () => {
+    const withSource = toProfileRows(
+      {
+        profiles: [
+          {
+            ...rawProfile,
+            entries: [
+              entry('macros.crudeProtein', 45, { sourceValue: 25 }),
+            ],
+          },
+        ],
+      },
+      SOURCE_NAMES
+    )
+    const row = withSource[0]?.rows.find(
+      (item) => item.fieldPath === 'macros.crudeProtein'
+    )
+    expect(row?.sourceDisplay).toContain('25')
+    expect(row?.sourceDisplay).toContain('45')
+
+    const withoutSource = toProfileRows(
+      {
+        profiles: [
+          {
+            ...rawProfile,
+            entries: [
+              entry('macros.crudeProtein', 45, {
+                sourceValue: null,
+                sourceUnit: null
+              }),
+            ],
+          },
+        ],
+      },
+      SOURCE_NAMES
+    )
+    expect(
+      withoutSource[0]?.rows.find(
+        (item) => item.fieldPath === 'macros.crudeProtein'
+      )?.sourceDisplay
+    ).toBe('')
+  })
+
   it('按先生后熟分组，保留草稿里的真实下标', () => {
     const groups = toProfileRows(payload, SOURCE_NAMES)
 

@@ -989,6 +989,12 @@
                       >
                         {{ row.sourceLabel }}
                       </span>
+                      <span
+                        v-if="row.sourceDisplay"
+                        class="profile-row__evidence"
+                      >
+                        {{ row.sourceDisplay }}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -3709,6 +3715,12 @@ function goBackToList() {
 
 .review-ack {
   margin-right: 12px;
+}
+
+.profile-row__evidence {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .ai-agent-page {

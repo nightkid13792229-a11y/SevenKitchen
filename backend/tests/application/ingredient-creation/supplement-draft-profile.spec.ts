@@ -4,6 +4,7 @@ import {
   type SupplementDraftPayload,
 } from '../../../src/application/ingredient-creation/supplement-draft.types';
 import { buildSupplementProfile } from '../../../src/application/ingredient-creation/supplement-draft-profile';
+import { readProfileFieldAmount } from '../../../src/domain/recipe-designer/nutrition-profile-reader';
 
 /** meta 里 amountUnitLabel / servingUnitLabel 没在 NutritionMeta 声明，测试单独取。 */
 function metaExtras(profile: ReturnType<typeof buildSupplementProfile>) {
@@ -15,7 +16,7 @@ function metaExtras(profile: ReturnType<typeof buildSupplementProfile>) {
 }
 
 describe('buildSupplementProfile', () => {
-  it('PCS：每份 2 粒，EPA 650 → 每粒 325，基准 PER_1_PCS', () => {
+  it('PCS：每份 2 粒，EPA 650 → 每粒 325，基准 PER_SERVING', () => {
     const payload = normalizeSupplementDraftPayload({
       basic: {
         baseUnit: 'PCS',
@@ -27,11 +28,31 @@ describe('buildSupplementProfile', () => {
 
     const profile = buildSupplementProfile(payload);
 
-    expect(profile.meta.rawBasisType).toBe('PER_1_PCS');
+    expect(profile.meta.rawBasisType).toBe('PER_SERVING');
     expect(profile.fattyAcids.epa).toBe(325);
     expect(metaExtras(profile).amountUnitLabel).toBe('粒');
     expect(metaExtras(profile).servingUnitLabel).toBe('粒');
     expect(metaExtras(profile).sourceType).toBe('SUPPLEMENT_LABEL');
+  });
+
+  it('PCS 档案能被配方设计器读到：3 粒 × 325 = 975', () => {
+    const payload = normalizeSupplementDraftPayload({
+      basic: {
+        baseUnit: 'PCS',
+        unitDisplayLabel: '粒',
+        servingUnitsPerDose: 2,
+      },
+      nutrition: { servingNutrients: { 'fattyAcids.epa': 650 } },
+    });
+
+    const profile = buildSupplementProfile(payload);
+
+    // PER_1_PCS 不在受支持的 raw basis 里，读路径会返回 missing；
+    // 用 PER_SERVING + servingUnitLabel 才能按「粒」直接乘用量。
+    expect(readProfileFieldAmount(profile, 'fattyAcids.epa', 3)).toEqual({
+      amount: 975,
+      missing: false,
+    });
   });
 
   it('粉剂：每份 0.9 g，牛磺酸 0.875 → 每克约 0.972222，基准 PER_1_G', () => {

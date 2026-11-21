@@ -3,8 +3,11 @@
  *
  * 草稿里存的是「标签每份含量」，正式档案要的是「每 1 个基准单位含量」：
  *
- * - 基准口径按基准单位走：PCS → `PER_1_PCS`，G → `PER_1_G`，ML → `PER_1_ML`；
- *   不能统一成 `PER_SERVING`，否则 0.9 g / 2.5 ml 这类小数份量会被读成「一份」。
+ * - 基准口径按基准单位走：PCS → `PER_SERVING`（按 1 个单位记，单位标签写粒/片/胶囊），
+ *   G → `PER_1_G`，ML → `PER_1_ML`。
+ *   PCS 不用 `PER_1_PCS`：领域 raw basis（`isRawBasisType`、配方设计器读路径）不认它，
+ *   会当成缺失；`SupplementDosageService.normalizeBasis` 本来就把 `PER_1_PCS`
+ *   映射成 `PER_SERVING`，所以两边口径一致。
  * - 每单位值 = 每份含量 ÷ 每份量，只在服务端算；客户端不送、服务端也不信。
  * - 只写后端营养字段目录里认识的字段；目录外字段、非法数值（负/NaN/Infinity）
  *   直接跳过，由 `validateSupplementDraftBasics` 报阻断，不在写入阶段抛错。
@@ -23,12 +26,18 @@ import type {
 /**
  * 基准单位 → 档案口径。
  *
- * `PER_1_PCS` 还没写进 `NutritionRawBasisType`（类型在领域层，Task 4 不改），
- * 所以下面给 meta 赋值的整体走与 `SupplementIngredientService.buildProfile`
- * 相同的 `as unknown as NutritionProfileV2['meta']` 转换。
+ * PCS 用 `PER_SERVING` 而不是 `PER_1_PCS`：后者不在 `NutritionRawBasisType` 里，
+ * `nutrition-profile-reader.getStrictRawBasisType` 会判为不支持，配方设计器读到
+ * 的就是「缺失」；而 `SupplementDosageService.normalizeBasis` 又会把 `PER_1_PCS`
+ * 当成 `PER_SERVING`，两边口径本就一致。`servingUnitLabel` 写粒/片/胶囊，
+ * 读路径据此按「1 个单位 = 1 个 PCS」直接乘用量。
+ *
+ * 下面给 meta 赋值整体走与 `SupplementIngredientService.buildProfile` 相同的
+ * `as unknown as NutritionProfileV2['meta']` 转换（amountUnitLabel /
+ * servingUnitLabel 没在 NutritionMeta 里声明）。
  */
 const RAW_BASIS_BY_BASE_UNIT: Record<SupplementBaseUnit, string> = {
-  PCS: 'PER_1_PCS',
+  PCS: 'PER_SERVING',
   G: 'PER_1_G',
   ML: 'PER_1_ML',
 };

@@ -1078,6 +1078,8 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿列表与建档编辑
 - Create: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.vue`
 - Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftEditor.vue` (replace the placeholder sections with the 6 new components + imports)
 - Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue` (capture before/after around runAi and apply selected diff paths)
+- Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/useSupplementDraft.ts` (markManual/manualFields, reload for 409, save-and-leave dirty check)
+- Modify: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/sections/BasicSection.vue` and `NutritionSection.vue` (mark manual paths on human input only)
 - Test: `admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.component.spec.ts`
 
 **Interfaces:**
@@ -1127,6 +1129,9 @@ bash scripts/session.sh commit -m "feat(supplement): 上架/DIY/采购/等价组
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftEditor.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/SupplementDraftFlow.vue \
+  admin-web/src/views/Ingredients/ai-agent/supplement/draft/useSupplementDraft.ts \
+  admin-web/src/views/Ingredients/ai-agent/supplement/draft/sections/BasicSection.vue \
+  admin-web/src/views/Ingredients/ai-agent/supplement/draft/sections/NutritionSection.vue \
   admin-web/src/views/Ingredients/ai-agent/supplement/draft/DraftAiDiffDialog.component.spec.ts
 ```
 

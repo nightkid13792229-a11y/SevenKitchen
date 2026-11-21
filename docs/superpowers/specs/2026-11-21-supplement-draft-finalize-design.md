@@ -587,7 +587,7 @@ interface SupplementWriteVerification {
     target: string
   }>
   features: Array<{
-    code: 'RETAIL' | 'RECIPE' | 'DIY' | 'PROCUREMENT' | 'EQUIVALENCE' | 'PACKAGING' | 'DUPLICATE'
+    code: 'RETAIL' | 'RECIPE' | 'DIY' | 'PROCUREMENT' | 'EQUIVALENCE' | 'PACKAGING' | 'DUPLICATE' | 'DIRECT_FIELDS_MISSING'
     label: string
     ok: boolean
     detail: string

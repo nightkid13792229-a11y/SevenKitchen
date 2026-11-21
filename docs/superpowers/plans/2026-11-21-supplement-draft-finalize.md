@@ -875,7 +875,7 @@ Expected: FAIL — service missing.
 - Use `PrismaService`, `SupplementDosageService`, `SupplementCatalogService` (or `supplementShopApi` equivalent query), `SupplementEquivalenceGroup` query.
 - `verifyFeatures` queries by ingredient id; builds `VerificationFeature[]` with `ok`, `detail`, `action` (path strings for the UI).
 - `getVerification` loads a FINALIZED draft owned by the user and returns its stored `verification` (or null).
-- `reverify` loads a FINALIZED draft owned by the user, re-runs features, calls `draftService.saveVerification(draftId, userId, verification)`, returns it. If the stored report is missing (`fields` unavailable), **do not claim `ok=true`**: return `ok=false` plus a `DIRECT_FIELDS_MISSING` ERROR feature (“缺少写入时字段核验记录，不能判定全部成功”); add a test.
+- `reverify` loads a FINALIZED draft owned by the user, re-runs features, calls `draftService.saveVerification(draftId, userId, verification)`, returns it. Treat **empty direct-field evidence as missing** (`!stored || stored.fields.length === 0`), not only `!stored`; every such call must return `ok=false` plus `DIRECT_FIELDS_MISSING` ERROR (“缺少写入时字段核验记录，不能判定全部成功”), and a second reverify must not flip to ok=true. Add a two-call test.
 - Fix-entry action paths must be real admin-web routes: RECIPE → `/ingredients?tab=nutrition`, EQUIVALENCE → `/supplement-shop/equivalence-groups`, PACKAGING → `/supplement-shop/packaging`; assert them in tests.
 - DIY on + physicalForm LIQUID → DIY feature `ok:false` severity WARN (liquid not supported for DIY packing), in addition to the link check. Use the group's `nutrientKey` for the equivalence concentration check, not the draft's default targets.
 - Update `finalize` to call `verifyFeatures` after commit; `verification.ok` is false only when a `severity='ERROR'` feature fails (or a direct field mismatches). A packaging `WARN` is shown but does not fail the report; the write is already committed, so do not throw.
@@ -963,7 +963,7 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿/审核/写入接口"
 **Interfaces:**
 - Produces:
   - API client `supplementDraftsApi` with list/create/get/update/discard/aiFill/validate/finalize/reverify/recommendGroups.
-  - Types mirroring backend: `SupplementDraftPayload`, `SupplementDraftView`, `SupplementDraftSummary`, `SupplementDraftReview`, `SupplementWriteVerification`.
+  - Types mirroring backend: `SupplementDraftPayload`, `SupplementDraftView`, `SupplementDraftSummary`, `SupplementDraftReview`, `SupplementWriteVerification` (feature code union includes `DIRECT_FIELDS_MISSING`).
   - `useSupplementDraft(draftId)` returns `{ draft, loading, saving, aiRunning, validating, error, load, save, runAi, validate, finalize, discard }`.
   - Pure helpers: `hasBlocker(review)`, `canFinalize(review, acknowledged)`, `diffDraft(before, after)`, `fieldMapRows`.
 

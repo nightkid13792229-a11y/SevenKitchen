@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { SupplementLabelVisionService } from './supplement-label-vision.service';
 import {
-  extractServingUnits,
+  extractServingSize,
   parseSupplementLabel,
 } from '../../domain/ingredient/supplement-label-parser';
 import {
@@ -150,7 +150,15 @@ export class SupplementLabelIntakeService {
     const frontFields = extractFrontFields(frontText);
 
     const parsed = parseSupplementLabel(labelText);
-    const servingUnitsPerDose = extractServingUnits(labelText);
+    const frontFieldsForServing = extractFrontFields(frontText);
+    const servingSize = extractServingSize(labelText);
+    // 剂型决定「每份」按什么记：胶囊看个数，粉看克，液体看毫升
+    const servingUnitsPerDose =
+      frontFieldsForServing.physicalForm === 'POWDER'
+        ? servingSize.grams
+        : frontFieldsForServing.physicalForm === 'LIQUID'
+          ? servingSize.milliliters
+          : servingSize.count;
     const suggestedName = parsed.nutrients[0]
       ? nutrientChineseLabel(parsed.nutrients[0].fieldPath)
       : null;
@@ -226,6 +234,14 @@ export class SupplementLabelIntakeService {
     const notes: string[] = [];
     if (!analysis) {
       notes.push('模型没给出结构化判断（可能超时），下面按原文能读到的先填');
+    }
+    if (
+      servingUnitsPerDose === null &&
+      (frontFieldsForServing.physicalForm === 'POWDER' || frontFieldsForServing.physicalForm === 'LIQUID')
+    ) {
+      notes.push(
+        `标签上没写「每份多少${frontFieldsForServing.physicalForm === 'POWDER' ? '克' : '毫升'}」，每份量请手填（别用 1）`,
+      );
     }
     if (!packSpec) {
       notes.push('正面图里没读出「一瓶多少粒/多少克」，产品规格留空');

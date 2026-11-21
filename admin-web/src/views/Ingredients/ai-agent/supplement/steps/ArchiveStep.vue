@@ -171,15 +171,18 @@
             </em>
           </label>
           <label class="field">
-            <span>每份几粒</span>
+            <span>每份多少{{ draft.unitDisplayLabel }}</span>
             <el-input-number
               v-model="draft.servingUnitsPerDose"
-              :min="1"
-              :precision="0"
+              :min="0.01"
+              :precision="2"
               controls-position="right"
               data-anchor="servingUnitsPerDose"
               style="width: 100%"
             />
+            <em class="field__hint">
+              标签上「Serving Size」是几{{ draft.unitDisplayLabel }}；粉剂填克数（如 3），不是 1
+            </em>
           </label>
         </div>
       </div>

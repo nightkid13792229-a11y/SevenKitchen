@@ -153,6 +153,54 @@ const FACTS_HEADER = /supplement\s*facts|营养成分表|營養成分表/i
  */
 const COUNT_NOUN = /capsule|soft\s*gel|tablet|chew|scoop|teaspoon|tablespoon|drop|gummy|粒|片|胶囊|勺/i;
 
+/**
+ * 标签上的「一份有多大」。
+ *
+ * 胶囊/片剂看**个数**（Serving Size 1 Capsule → 1）；
+ * 粉剂/液体看**重量或体积**（Serving Size 1 Level Scoop (3 g) → 3 g）。
+ * 粉剂按"1"记会把「每份 3 克」当成「每份 1 克」，整份营养都放大三倍。
+ */
+export interface ServingSize {
+  /** 一份几个（胶囊/片/勺） */
+  count: number | null;
+  /** 一份多少克（粉剂常用） */
+  grams: number | null;
+  /** 一份多少毫升（液体常用） */
+  milliliters: number | null;
+}
+
+export function extractServingSize(text: string): ServingSize {
+  const source = String(text ?? '');
+  const line = source.match(/serving\s*size[^\n]*/i)?.[0] ?? '';
+  const zhLine = source.match(/每份[^\n]*/)?.[0] ?? '';
+  const scope = `${line} ${zhLine}`;
+
+  const grams =
+    scope.match(/\(\s*([\d.]+)\s*g(?:rams?)?\s*\)/i)?.[1] ??
+    scope.match(/([\d.]+)\s*g(?:rams?)?\b/i)?.[1] ??
+    scope.match(/([\d.]+)\s*克/)?.[1];
+  const milliliters =
+    scope.match(/\(\s*([\d.]+)\s*(?:ml|毫升)\s*\)/i)?.[1] ??
+    scope.match(/([\d.]+)\s*(?:ml|毫升)\b/i)?.[1];
+
+  const countMatch = source.match(
+    /serving\s*size\s*:?\s*\**\s*(\d+(?:\.\d+)?)\s*([A-Za-z\u4e00-\u9fa5\s]*)/i,
+  );
+  let count: number | null = null;
+  if (countMatch && !countMatch[1].includes('.') && COUNT_NOUN.test(countMatch[2] ?? '')) {
+    const value = Number(countMatch[1]);
+    count = Number.isInteger(value) && value > 0 ? value : null;
+  }
+
+  const toNumber = (raw: string | undefined): number | null => {
+    if (!raw) return null;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0 ? value : null;
+  };
+
+  return { count, grams: toNumber(grams), milliliters: toNumber(milliliters) };
+}
+
 export function extractServingUnits(text: string): number | null {
   const match = text.match(
     /serving\s*size\s*:?\s*\**\s*(\d+(?:\.\d+)?)\s*([A-Za-z\u4e00-\u9fa5\s]*)/i

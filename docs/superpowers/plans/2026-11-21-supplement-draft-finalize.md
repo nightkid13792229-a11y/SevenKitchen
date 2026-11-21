@@ -351,14 +351,16 @@ bash scripts/session.sh commit -m "refactor(supplement): 抽出上架体检纯�
 
 - [ ] **Step 1: Write failing profile tests**
 
+Import `readProfileFieldAmount` from `../../../src/domain/recipe-designer/nutrition-profile-reader` for the reader regression case.
+
 ```ts
-it('PCS: per-unit values and PER_1_PCS basis', () => {
+it('PCS: per-unit values and PER_SERVING basis', () => {
   const payload = normalizeSupplementDraftPayload({
     basic: { baseUnit: 'PCS', servingUnitsPerDose: 2 },
     nutrition: { servingNutrients: { 'fattyAcids.epa': 650 } },
   });
   const profile = buildSupplementProfile(payload);
-  expect(profile.meta.rawBasisType).toBe('PER_1_PCS');
+  expect(profile.meta.rawBasisType).toBe('PER_SERVING');
   expect((profile.fattyAcids as any).epa).toBe(325);
 });
 
@@ -370,6 +372,18 @@ it('powder: 0.9 g stays 0.9 and uses PER_1_G', () => {
   const profile = buildSupplementProfile(payload);
   expect(profile.meta.rawBasisType).toBe('PER_1_G');
   expect((profile.aminoAcids as any).taurine).toBeCloseTo(0.972222, 5);
+});
+
+it('reader can read the PCS profile (PER_1_PCS is not a supported raw basis)', () => {
+  const payload = normalizeSupplementDraftPayload({
+    basic: { baseUnit: 'PCS', unitDisplayLabel: '粒', servingUnitsPerDose: 2 },
+    nutrition: { servingNutrients: { 'fattyAcids.epa': 650 } },
+  });
+  const profile = buildSupplementProfile(payload);
+  expect(readProfileFieldAmount(profile, 'fattyAcids.epa', 3)).toEqual({
+    amount: 975,
+    missing: false,
+  });
 });
 ```
 
@@ -390,7 +404,7 @@ Expected: FAIL — modules missing.
 
 - [ ] **Step 4: Implement the profile builder and basic validation**
 
-- `buildSupplementProfile`: start from `createEmptyNutritionProfile()`, set `rawBasisType` by `baseUnit` (`PER_1_PCS` / `PER_1_G` / `PER_1_ML`), set `amountUnitLabel`/`servingUnitLabel`, `sourceType: 'SUPPLEMENT_LABEL'`, and write per-unit values (`serving / servingUnitsPerDose`). Invalid serving/values are skipped; validation blocks them.
+- `buildSupplementProfile`: start from `createEmptyNutritionProfile()`, set `rawBasisType` by `baseUnit` (`PER_SERVING` for PCS / `PER_1_G` / `PER_1_ML`), set `amountUnitLabel`/`servingUnitLabel`, `sourceType: 'SUPPLEMENT_LABEL'`, and write per-unit values (`serving / servingUnitsPerDose`). Invalid serving/values are skipped; validation blocks them.
 - Basic validation includes the name form-word warning, brand/model/channel length checks, and `openedShelfLifeDays` (if present, must be a positive integer; otherwise optional).
 - Basic validation uses `supplementNutrientGroups` from the backend field catalog (`nutrition-field-catalog`) to validate field paths; it must not import frontend constants.
 - `isSupplementUnitOneToOne` for display/base; `Number.isInteger` for PCS.
@@ -689,7 +703,7 @@ Expected: FAIL — new expectations not met.
 
 - Extract the transaction body into `createInTransaction(tx, input)`; keep duplicate check, orphan reuse, ingredient/nutrition/mapping/evidence/tags writes.
 - `create()` calls `this.prisma.$transaction((tx) => this.createInTransaction(tx, input))` and keeps the unique-violation catch.
-- `buildProfile` uses `PER_1_PCS` / `PER_1_G` / `PER_1_ML` by base unit; still writes per-unit values.
+- `buildProfile` uses `PER_SERVING` for PCS / `PER_1_G` / `PER_1_ML` by base unit; still writes per-unit values.
 - Ignore `input.perUnitNutrients` entirely; remove it from `derivePerUnitNutrients` or leave the parameter unused. Update the input JSDoc.
 - Set optional launch fields on the ingredient create: `shelfLifeMonths`, `openedShelfLifeDays`, `storageCondition`, `isOilBased`, `supplementRetailEnabled`; add `purchase_link`, `image_url`, `no_sale_reason` to `properties` when provided.
 - Keep old callers working (optional fields).

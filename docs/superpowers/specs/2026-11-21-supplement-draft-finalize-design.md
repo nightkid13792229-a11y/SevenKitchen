@@ -470,11 +470,11 @@ interface SupplementAiDraft {
    - `type=SUPPLEMENT`
    - 基本字段：name/brand/productModel/purchaseChannel/baseUnit/unitDisplayLabel/physicalForm/purchaseUnit/purchaseToBaseRatio/currentPricePerPurchaseUnit/diyEnabled/procurementEnabled/shelfLifeMonths/storageCondition/isOilBased/supplementRetailEnabled/equivalenceGroupId/equivalencePriority
    - `nutritionProfile`：由服务端按每份值折算后的完整档案
-     - **基准口径按 baseUnit 写，不要统一写 `PER_SERVING`**：
-       - PCS → `PER_1_PCS`
+     - **基准口径按 baseUnit 写**：
+       - PCS → `PER_SERVING`（按 1 个单位记，`servingUnitLabel` 写粒/片/胶囊；`PER_1_PCS` 不是领域支持的 raw basis，recipe-designer 读路径会当成缺失）
        - G → `PER_1_G`
        - ML → `PER_1_ML`
-     - 现有 `buildProfile` 统一写 `PER_SERVING`；粉/液体在补剂浓度解析里会因为没有 `servingWeightG` 被判定 `MISSING_SERVING_WEIGHT`，等价组/用量都可能用不了。这次一并修正。
+     - 现有 `buildProfile` 统一写 `PER_SERVING`；粉/液体在补剂浓度解析里会因为没有 `servingWeightG` 被判定 `MISSING_SERVING_WEIGHT`，等价组/用量都可能用不了。这次 G/ML 改为 `PER_1_G`/`PER_1_ML`，PCS 保留 `PER_SERVING`（按 1 个单位记）。
    - `properties`：
      - `category_type: 'OTHER'`
      - `openedShelfLifeDays` 有值就写（可选）
@@ -703,7 +703,7 @@ interface SupplementWriteVerification {
 |---|---|---|---|---|
 | 每份含量 | 是 | 至少 1 项 >0 | `ingredient.nutrition_profile` + `nutrition_food.nutrition_data` | 字段在目录；≥0；服务端折每粒 |
 | 每份多少 | 是 | 是 | `ingredient.properties.serving_units_per_dose` + `supplement_label_evidence.serving_units_per_dose` | **证据表当前是 Int，必须改成 Float/Decimal**，否则粉 0.9 g / 液 2.5 ml 写不进去 |
-| 基准口径 | 服务端 | 是 | `ingredient.nutrition_profile.meta.rawBasisType` | PCS→PER_1_PCS、G→PER_1_G、ML→PER_1_ML；不要统一 PER_SERVING |
+| 基准口径 | 服务端 | 是 | `ingredient.nutrition_profile.meta.rawBasisType` | PCS→PER_SERVING（按 1 个单位记）、G→PER_1_G、ML→PER_1_ML；不要统一 PER_SERVING |
 | 每粒值 | 否（服务端算） | — | 同上 | 每份 ÷ 每份量；不接收客户端值 |
 | 默认目标营养素 | 是 | 是 | `nutrition_food.default_supplement_targets` | ≥1；来自有值营养素 |
 | 标签原文 | 是 | 否 | `supplement_label_evidence.label_text` | 证据留档 |

@@ -4533,6 +4533,43 @@ model SupplementNutritionDraft {
   @@map("supplement_nutrition_draft")
 }
 
+/// 补剂草稿式建档（2026-11-21）：AI 先起草、人审核，最后一次性写入正式库。
+/// 草稿阶段必须“零正式原料记录”，所以不复用 ingredient 表，也不复用食材线的
+/// ingredient_creation_draft（type/step 语义不同）。
+enum SupplementCreationDraftStatus {
+  DRAFT
+  FINALIZED
+  DISCARDED
+}
+
+model SupplementCreationDraft {
+  id                       String                        @id @default(uuid())
+  createdBy                String                        @map("created_by")
+  status                   SupplementCreationDraftStatus @default(DRAFT)
+  /// 草稿结构版本，便于以后迁移
+  schemaVersion            Int                           @default(1) @map("schema_version")
+  /// 列表显示名：AI 起的名字 / 原料名 / 未命名补剂
+  name                     String                        @default("") @db.VarChar(200)
+  /// 整张草稿：字段 + 决策 + 人改记录 + 已确认的提醒
+  payload                  Json
+  /// 最近一次 AI 起草的原始结果：值、来源、置信度、理由、缺失项
+  aiSnapshot               Json?                         @map("ai_snapshot")
+  /// 人改过的字段路径；AI 重跑时这些不被静默覆盖
+  manualFields             String[]                      @default([]) @map("manual_fields")
+  /// 写入后核验报告
+  verification             Json?
+  finalizedIngredientId    String?                       @map("finalized_ingredient_id")
+  finalizedNutritionFoodId String?                       @map("finalized_nutrition_food_id")
+  finalizedEvidenceId      String?                       @map("finalized_evidence_id")
+  finalizedAt              DateTime?                     @map("finalized_at")
+  createdAt                DateTime                      @default(now()) @map("created_at")
+  updatedAt                DateTime                      @updatedAt @map("updated_at")
+
+  @@index([createdBy, status, updatedAt])
+  @@index([status, updatedAt])
+  @@map("supplement_creation_draft")
+}
+
 /// 补剂商品标签证据（2026-11-07）
 ///
 /// 建档时就要留下来：商品会下架、改规格、换包装，事后要能翻出"当时那瓶"。
@@ -4545,8 +4582,8 @@ model SupplementLabelEvidence {
   nutritionFoodId     String?  @map("nutrition_food_id")
   productUrl          String?  @map("product_url") @db.VarChar(500)
   productName         String?  @map("product_name") @db.VarChar(200)
-  /// 标签上「Serving Size」后面那个数：每份几粒
-  servingUnitsPerDose Int      @map("serving_units_per_dose")
+  /// 标签上「Serving Size」后面那个数：每份几粒 / 几克 / 几毫升（粉、液体有小数）
+  servingUnitsPerDose Float    @map("serving_units_per_dose")
   labelImageUrl       String?  @map("label_image_url") @db.VarChar(500)
   /// 商品正面图（2026-11-20 起留档）：品牌/规格/剂型从这儿抄
   frontImageUrl       String?  @map("front_image_url") @db.VarChar(500)

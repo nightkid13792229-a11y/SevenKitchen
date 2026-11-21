@@ -312,19 +312,16 @@ export class SupplementIngredientService {
       derived[key] = servingValue / input.servingUnitsPerDose;
     }
 
-    // 模型给了每单位含量就采用它（容差 1% 内视为一致）；没给才用上面折出来的
+    /**
+     * 模型给了「每 1 个基准单位」的含量就直接用，服务端不再除一遍、也不再比对。
+     *
+     * 之前这里拿 `每份 ÷ 份量` 去校验模型的数，差一点就报错——那等于代码在
+     * 替模型重算一次，还把自己的算法当成标准。模型没给（老客户端）时才折。
+     */
     for (const [key, claimed] of Object.entries(input.perUnitNutrients ?? {})) {
-      const expected = derived[key];
-      if (expected === undefined) {
-        continue;
+      if (Number.isFinite(claimed) && claimed > 0) {
+        derived[key] = claimed;
       }
-      const tolerance = Math.max(1e-4, expected * 0.01);
-      if (Math.abs(claimed - expected) > tolerance) {
-        throw new BadRequestException(
-          `每份折算值对不上：${key} 应为 ${Math.round(expected * 1000) / 1000}，收到 ${claimed}`
-        );
-      }
-      derived[key] = claimed;
     }
 
     return derived;

@@ -210,6 +210,14 @@ export class CreateSupplementIngredientDto {
   @Min(0.001)
   servingUnitsPerDose!: number;
 
+  @ApiPropertyOptional({
+    description:
+      '模型算好的「每 1 个基准单位」含量（键是规范字段路径）。给了就直接用；不给服务端按每份÷份量折',
+  })
+  @IsOptional()
+  @IsObject()
+  perUnitNutrients?: Record<string, number>;
+
   @ApiProperty({
     description: '标签每份的含量，键是规范字段路径；折算由服务端做',
     example: { 'fattyAcids.epa': 650 }
@@ -259,6 +267,7 @@ export function toCreateSupplementInput(
     tagNames: dto.tagNames ?? [],
     servingUnitsPerDose: dto.servingUnitsPerDose,
     servingNutrients: nutrientValues,
+    perUnitNutrients: dto.perUnitNutrients,
     evidence: {
       productUrl: dto.evidence?.productUrl ?? null,
       productName: dto.evidence?.productName ?? null,

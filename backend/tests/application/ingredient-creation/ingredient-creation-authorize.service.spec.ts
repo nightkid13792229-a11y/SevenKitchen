@@ -106,6 +106,7 @@ const authorizeInput: AuthorizeInput = {
   draftId: 'draft-1',
   userId: 'admin-1',
   primaryProfileIndex: 0,
+  reportAcknowledged: true,
 };
 
 async function rejectionOf(
@@ -213,6 +214,15 @@ describe('IngredientCreationAuthorizeService', () => {
     await expect(service.authorize(authorizeInput)).rejects.toThrow(
       LINE_NOT_OPEN_MESSAGE,
     );
+    expect(prisma.ingredientCheckRun.findFirst).not.toHaveBeenCalled();
+    expect(commitService.commit).not.toHaveBeenCalled();
+  });
+
+  it('没有勾选“已核对两页报告” → 400，且不查报告、不提交', async () => {
+    await expect(
+      service.authorize({ ...authorizeInput, reportAcknowledged: false }),
+    ).rejects.toThrow('核对');
+
     expect(prisma.ingredientCheckRun.findFirst).not.toHaveBeenCalled();
     expect(commitService.commit).not.toHaveBeenCalled();
   });
@@ -359,6 +369,7 @@ describe('IngredientCreationAuthorizeService', () => {
       ingredient: DRAFT_INGREDIENT,
       profiles: DRAFT_PROFILES,
       primaryProfileIndex: 0,
+      reportAcknowledgedAt: expect.any(String),
     });
     const { authorizedAt, ...submitted } = result;
     expect(submitted).toEqual({
@@ -388,6 +399,7 @@ describe('IngredientCreationAuthorizeService', () => {
       ingredient: DRAFT_INGREDIENT,
       profiles: DRAFT_PROFILES,
       primaryProfileIndex: 0,
+      reportAcknowledgedAt: expect.any(String),
     });
   });
 

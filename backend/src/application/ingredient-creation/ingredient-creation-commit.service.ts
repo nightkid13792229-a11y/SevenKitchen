@@ -64,6 +64,11 @@ export interface CommitIngredientCreationInput {
    * 一进食谱按 0 元算。放在同一次提交里，库里就不会出现「有原料没价」的中间态。
    */
   procurementSku: CommitProcurementSkuInput;
+  /**
+   * 授权人勾选「已核对两页报告」的时间（2026-11-21）。
+   * 只用于审计；不传时保持旧调用方兼容。
+   */
+  reportAcknowledgedAt?: string;
 }
 
 export interface CommitIngredientCreationResult {
@@ -153,6 +158,7 @@ interface AuditChanges {
     mode: 'AUTHORIZE_WRITES_VERIFIED';
     verifiedAt: string;
     verifiedBy: string;
+    reportAcknowledgedAt: string | null;
   };
 }
 
@@ -397,7 +403,11 @@ function readIngredientManualFields(
 function buildAuditChanges(
   draft: IngredientCreationDraft,
   profiles: ProfileDraft[],
-  confirmation: { verifiedAt: string; verifiedBy: string },
+  confirmation: {
+    verifiedAt: string;
+    verifiedBy: string;
+    reportAcknowledgedAt: string | null;
+  },
 ): AuditChanges {
   const fields: AuditFieldChange[] = [];
 
@@ -482,6 +492,7 @@ function buildAuditChanges(
       mode: 'AUTHORIZE_WRITES_VERIFIED',
       verifiedAt: confirmation.verifiedAt,
       verifiedBy: confirmation.verifiedBy,
+      reportAcknowledgedAt: confirmation.reportAcknowledgedAt,
     },
   };
 }
@@ -608,6 +619,7 @@ export class IngredientCreationCommitService {
     const changes = buildAuditChanges(draft, input.profiles, {
       verifiedAt: verifiedAt.toISOString(),
       verifiedBy: input.userId,
+      reportAcknowledgedAt: input.reportAcknowledgedAt ?? null,
     });
     const primaryNutritionData =
       preparedProfiles[primaryProfileIndex].nutritionData;

@@ -1,12 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
+  Length,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -38,10 +40,17 @@ export class AuthorizeProcurementSkuDto {
   @IsPositive()
   netContentPerPack!: number;
 
-  @ApiProperty({ description: '这一件多少钱', example: 39.9 })
+  @ApiProperty({ description: '整箱/整袋价（一个采购单位多少钱）', example: 39.9 })
   @IsNumber()
   @IsPositive()
   currentPurchasePrice!: number;
+
+  /** 规格原文（2026-11-21）：订单截图匹配用，不再只靠商品名。 */
+  @ApiPropertyOptional({ description: '规格原文', example: '24×330ml' })
+  @IsOptional()
+  @IsString()
+  @Length(1, 100)
+  productModel?: string;
 
   /**
    * 在哪买的（2026-11-08）：只认后台维护的渠道字典；
@@ -73,6 +82,14 @@ export class AuthorizeIngredientCreationDto {
   @IsInt()
   @Min(0)
   primaryProfileIndex!: number;
+
+  /**
+   * 人已勾选「我已核对两页报告与采购价」（2026-11-21）。
+   * 自动核验可以算授权依据，但必须有人在授权前明确确认看过报告。
+   */
+  @ApiProperty({ description: '已勾选核对两页报告与采购价', example: true })
+  @IsBoolean()
+  reportAcknowledged!: boolean;
 
   @ApiProperty({
     description: '建档同时新增的采购商品（含价格与换算）',

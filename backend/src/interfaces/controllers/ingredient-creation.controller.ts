@@ -99,6 +99,7 @@ import {
   type UpdateDraftPayloadDto,
 } from '../dto/ingredient-creation';
 import { AdminGuard } from '../guards/role.guard';
+import { sanitizeVerifyExceptions } from '../../domain/ingredient-creation/verify-exceptions';
 
 /** 服务层兜底之外的显式防线：payload 回传整份快照时也不得覆盖 AI 提案历史。 */
 function stripProposalHistory(
@@ -406,12 +407,23 @@ export class IngredientCreationController {
   async updateDraft(
     @Param('id') id: string,
     @Body() dto: UpdateDraftDto,
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<IngredientCreationDraft>> {
-    const draft = await this.draftService.patch(
-      id,
-      dto.step,
-      stripProposalHistory(dto.payload),
-    );
+    // 例外的审批人/时间只能由服务端盖章，浏览器带来的值一律忽略。
+    const payload = stripProposalHistory(dto.payload);
+    if (payload.verify !== undefined) {
+      const sanitized = sanitizeVerifyExceptions(
+        payload.verify,
+        user.userId,
+        new Date().toISOString(),
+      );
+      if (!sanitized.ok) {
+        throw new BadRequestException(sanitized.error);
+      }
+      payload.verify = { exceptions: sanitized.exceptions };
+    }
+
+    const draft = await this.draftService.patch(id, dto.step, payload);
 
     return new ApiResponseDto(0, 'Success', draft);
   }
@@ -616,6 +628,7 @@ export class IngredientCreationController {
       draftId: id,
       userId: user.userId,
       primaryProfileIndex: dto.primaryProfileIndex,
+      reportAcknowledged: dto.reportAcknowledged,
       procurementSku: dto.procurementSku,
     });
 
@@ -640,6 +653,7 @@ export class IngredientCreationController {
       draftId: id,
       userId: user.userId,
       primaryProfileIndex: dto.primaryProfileIndex,
+      reportAcknowledged: dto.reportAcknowledged,
       procurementSku: dto.procurementSku,
     });
 

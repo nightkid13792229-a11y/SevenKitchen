@@ -81,6 +81,7 @@ const evidenceEntry = {
 };
 
 const commitBody = {
+  reportAcknowledged: true,
   ingredient: {
     name: '鸡肝',
     type: 'FOOD',
@@ -703,6 +704,7 @@ describe('IngredientCreationController', () => {
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
+        reportAcknowledged: true,
       });
       expect(response.body.data).toEqual({
         ingredientId: 'ing-1',
@@ -741,6 +743,7 @@ describe('IngredientCreationController', () => {
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
+        reportAcknowledged: true,
       });
       expect(input).not.toHaveProperty('ingredient');
       expect(input).not.toHaveProperty('profiles');
@@ -807,13 +810,14 @@ describe('IngredientCreationController', () => {
       });
 
       await authorizedPost('/drafts/draft-1/commit')
-        .send({ primaryProfileIndex: 0 })
+        .send({ primaryProfileIndex: 0, reportAcknowledged: true })
         .expect(201);
 
       expect(authorizeService.authorize).toHaveBeenCalledWith({
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
+        reportAcknowledged: true,
       });
     });
 
@@ -841,6 +845,7 @@ describe('IngredientCreationController', () => {
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
+        reportAcknowledged: true,
       });
       expect(response.body.data).toEqual({
         ingredientId: 'ing-1',
@@ -859,13 +864,14 @@ describe('IngredientCreationController', () => {
       });
 
       await authorizedPost('/drafts/draft-1/authorize')
-        .send({ primaryProfileIndex: 0 })
+        .send({ primaryProfileIndex: 0, reportAcknowledged: true })
         .expect(201);
 
       expect(authorizeService.authorize).toHaveBeenCalledWith({
         draftId: 'draft-1',
         userId: 'admin-1',
         primaryProfileIndex: 0,
+        reportAcknowledged: true,
       });
     });
 
@@ -910,9 +916,63 @@ describe('IngredientCreationController', () => {
           { kind: 'MERGE', createdAt: '2026-10-22T00:00:00.000Z' },
         ],
       },
-    } as never);
+    } as never, { userId: 'admin-1' } as never);
 
     const payload = draftService.patch.mock.calls[0][2];
     expect(payload).not.toHaveProperty('proposalHistory');
+  });
+
+  it('登记例外时审批人与时间由服务端盖章，浏览器带来的值不算', async () => {
+    draftService.patch.mockResolvedValue(createDraft());
+
+    await controller.updateDraft(
+      'draft-1',
+      {
+        step: 'CHECK',
+        payload: {
+          verify: {
+            exceptions: [
+              {
+                code: 'EDIBLE_RANGE',
+                reason: '按供应商给的可食部 60% 登记',
+                approvedBy: 'fake-user',
+                approvedAt: '2000-01-01T00:00:00.000Z',
+              },
+            ],
+          },
+        },
+      } as never,
+      { userId: 'admin-1' } as never,
+    );
+
+    const payload = draftService.patch.mock.calls[0][2] as {
+      verify: { exceptions: Array<Record<string, unknown>> };
+    };
+    expect(payload.verify.exceptions[0]).toMatchObject({
+      code: 'EDIBLE_RANGE',
+      reason: '按供应商给的可食部 60% 登记',
+      approvedBy: 'admin-1',
+    });
+    expect(payload.verify.exceptions[0].approvedAt).not.toBe(
+      '2000-01-01T00:00:00.000Z',
+    );
+  });
+
+  it('例外没有理由 → 400，不落库', async () => {
+    draftService.patch.mockClear();
+
+    await expect(
+      controller.updateDraft(
+        'draft-1',
+        {
+          step: 'CHECK',
+          payload: {
+            verify: { exceptions: [{ code: 'EDIBLE_RANGE', reason: '   ' }] },
+          },
+        } as never,
+        { userId: 'admin-1' } as never,
+      ),
+    ).rejects.toThrow('理由');
+    expect(draftService.patch).not.toHaveBeenCalled();
   });
 });

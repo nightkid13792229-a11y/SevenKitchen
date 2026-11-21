@@ -46,6 +46,13 @@ export interface AuthorizeInput {
   userId: string;
   primaryProfileIndex: number;
   /**
+   * 人已经勾选「我已核对两页报告与采购价」（2026-11-21）。
+   *
+   * 自动核验可以算授权依据，但必须有人在授权前明确确认看过报告；这个布尔值
+   * 由页面必选框产生，服务端不提供默认 true。
+   */
+  reportAcknowledged: boolean;
+  /**
    * 建档必须同时带的一条采购商品（2026-11-07 硬门禁）。
    * 成本的初始值只从这里来；不随请求带的话原料就没有价。
    */
@@ -128,8 +135,15 @@ function approvedExceptionCodes(draft: IngredientCreationDraft): Set<string> {
   }
 
   for (const record of exceptions) {
-    if (isRecord(record) && typeof record.code === 'string') {
-      codes.add(record.code);
+    if (
+      isRecord(record) &&
+      typeof record.code === 'string' &&
+      record.code.trim() !== '' &&
+      // 理由为空的历史例外不算数：没有理由的例外等于直接放行。
+      typeof record.reason === 'string' &&
+      record.reason.trim() !== ''
+    ) {
+      codes.add(record.code.trim());
     }
   }
 
@@ -182,6 +196,13 @@ export class IngredientCreationAuthorizeService {
   ) {}
 
   async authorize(input: AuthorizeInput): Promise<AuthorizeResult> {
+    // 先确认人看过报告：这一步不碰库，失败时连草稿都不读。
+    if (input.reportAcknowledged !== true) {
+      throw new BadRequestException(
+        '授权前请先勾选“我已核对两页报告与采购价”',
+      );
+    }
+
     const draft = await this.draftService.get(input.draftId);
     // 本期只放行食材线：补剂草稿连核验报告都不该看，更不该提交。
     if (draft.type !== 'FOOD') {
@@ -201,6 +222,7 @@ export class IngredientCreationAuthorizeService {
 
     this.assertPrimaryProfile(material.profiles, input.primaryProfileIndex);
 
+    const authorizedAt = new Date().toISOString();
     const result = await this.commitService.commit({
       draftId: input.draftId,
       userId: input.userId,
@@ -208,9 +230,10 @@ export class IngredientCreationAuthorizeService {
       profiles: material.profiles,
       primaryProfileIndex: input.primaryProfileIndex,
       procurementSku: input.procurementSku,
+      reportAcknowledgedAt: authorizedAt,
     });
 
-    return { ...result, authorizedAt: new Date().toISOString() };
+    return { ...result, authorizedAt };
   }
 
   /**

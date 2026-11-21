@@ -649,7 +649,7 @@ Expected: FAIL — service missing.
 - Merge precedence: `manualFields` (never overwrite) > parser/link deterministic facts (nutrients, serving, price, brand, model, image) > `intake.analysis` first-pass facts > decision-call result > missing.
   - AI fills decisions and fields without facts.
   - Skip any path in `manualFields`.
-- Save via `draftService.update(draftId, userId, { aiSnapshot: { status, fields, decisions, missing, warnings, reasons } })`; set draft name to `basic.name` if non-empty.
+- Save via `draftService.update(draftId, userId, { name: basic.name || current.name, payload: mergedPayload, aiSnapshot: { status, fields, decisions, missing, warnings, reasons } })`. **`update` replaces `payload`; it does not merge**, so pass the full merged payload (current payload + facts + AI fields) or the AI-filled fields will never reach the draft. Do not send `manualFields` (preserve the server-side list).
 - In-memory `Set<string>` guard: if `draftId` is already running, throw 409.
 
 - [ ] **Step 4: Run tests**

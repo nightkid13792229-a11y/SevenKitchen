@@ -349,8 +349,9 @@
                   @update:model-value="(value: number | undefined) => setServing(field.fieldPath, value)"
                 />
                 <em class="split__calc">
-                  ÷ {{ draft.servingUnitsPerDose ?? '?' }} =
+                  每 1 {{ draft.unitDisplayLabel }} =
                   {{ perUnitPreview(field.fieldPath) }} {{ field.unit }}
+                  （模型按每份 {{ draft.servingUnitsPerDose ?? '?' }} {{ draft.unitDisplayLabel }} 折算）
                 </em>
               </div>
             </label>
@@ -730,6 +731,14 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
       merged[item.fieldPath] = item.value
     }
     draft.servingNutrients = merged
+  }
+  // 每 1 个基准单位的含量也是模型算好的，直接采用（不再本地除一遍）
+  if ((analysis.perUnitNutrients ?? []).length > 0) {
+    const perUnit: Record<string, number> = { ...draft.perUnitOverrides }
+    for (const item of analysis.perUnitNutrients) {
+      perUnit[item.fieldPath] = item.value
+    }
+    draft.perUnitOverrides = perUnit
   }
   if ((analysis.defaultTargetFields ?? []).length > 0) {
     draft.defaultTargetFields = analysis.defaultTargetFields

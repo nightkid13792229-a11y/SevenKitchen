@@ -25,11 +25,6 @@ import {
   type AnalysisOutcome,
 } from '../../domain/ingredient/supplement-label-analysis';
 import { listSupplementTargetFields } from '../../domain/ingredient/nutrition-field-catalog';
-import {
-  buildPackSpec,
-  extractPriceCny,
-  inferLabelCategory,
-} from '../../domain/ingredient/supplement-archive-derive';
 
 /**
  * 两张图 → 档案初稿。
@@ -81,65 +76,6 @@ export interface LabelIntakeResult {
   /** 模型对档案的判断（名称/基准单位/渠道/价格/标签类型…），已过代码校验 */
   analysis: (AnalysisOutcome['result'] & { dropped: AnalysisOutcome['dropped'] }) | null;
 }
-
-const COUNT_IN_TEXT =
-  /(\d[\d,]*)\s*(tablets?|capsules?|soft\s*gels?|veg(?:gie)?\s*caps?|vegcaps?|lozenges?|片|粒|胶囊|kg|g|ml|毫升|克|oz|盎司|lb|磅)/i;
-
-/** 非克单位换算成克（粉剂按克记账）。 */
-const TO_GRAMS: Record<string, number> = {
-  kg: 1000,
-  g: 1,
-  克: 1,
-  oz: 28.3495,
-  盎司: 28.3495,
-  lb: 453.592,
-  磅: 453.592
-};
-
-/**
- * 「180 CAPSULES」→ 180；「500 g」→ 500。
- * 粉按克、液体按毫升时，换算倍数就是这瓶多少克/多少毫升。
- */
-export function parseCountFromTitle(productModel: string | null): number | null {
-  const text = String(productModel ?? '');
-  // 同一条里既有「8 盎司」又有「227 克」时，优先取克数（厂商标的整数更准）
-  const gramsFirst = text.match(/(\d[\d,]*)\s*克/);
-  if (gramsFirst) {
-    const grams = Number(gramsFirst[1].replace(/,/g, ''));
-    if (Number.isFinite(grams) && grams > 0) {
-      return grams;
-    }
-  }
-  const match = text.match(COUNT_IN_TEXT);
-  if (!match) {
-    return null;
-  }
-  const unit = match[2].toLowerCase();
-  const raw = Number(match[1].replace(/,/g, ''));
-  const factor = TO_GRAMS[unit] ?? 1;
-  const value = Math.round(raw * factor * 100) / 100;
-  return Number.isFinite(value) && value > 0 ? value : null;
-}
-
-/** 模型没给判断、但规则能补出标签类型时用的空壳 */
-const EMPTY_ANALYSIS: AnalysisOutcome['result'] = {
-  name: null,
-  brand: null,
-  productModel: null,
-  priceCny: null,
-  purchaseChannel: null,
-  baseUnit: null,
-  unitDisplayLabel: null,
-  physicalForm: null,
-  perBottleUnits: null,
-  servingUnitsPerDose: null,
-  nutrients: [],
-  labelCategory: null,
-  labelNames: [],
-  tagNames: [],
-  addTiming: null,
-  defaultTargetFields: [],
-};
 
 @Injectable()
 export class SupplementLabelIntakeService {
@@ -214,32 +150,12 @@ export class SupplementLabelIntakeService {
       allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
     });
 
-    // 规格只做**字符串拼装**，数字全用模型读出来的
-    const nutrientForSpec = analysis?.result.nutrients[0]
-      ? {
-          label: nutrientChineseLabel(analysis.result.nutrients[0].fieldPath),
-          amount: analysis.result.nutrients[0].value,
-          unit: analysis.result.nutrients[0].unit,
-        }
-      : null;
-    const unitLabel =
-      analysis?.result.unitDisplayLabel ??
-      (frontFields.physicalForm === 'POWDER' ? 'g' : frontFields.physicalForm === 'LIQUID' ? 'ml' : '粒');
-    const packSpec = buildPackSpec({
-      perBottleUnits: analysis?.result.perBottleUnits ?? null,
-      unitLabel,
-      servingUnits: analysis?.result.servingUnitsPerDose ?? null,
-      nutrients: nutrientForSpec ? [nutrientForSpec] : [],
-    });
+    // 产品规格直接采用模型写的「一句话」，代码不再拼接
+    const packSpec = analysis?.result.productModel ?? null;
 
-    const detectedPriceCny =
-      analysis?.result.priceCny ?? extractPriceCny(`${frontText}\n${labelText}`);
-
-    const labelCategory = inferLabelCategory({
-      modelSaid: analysis?.result.labelCategory ?? null,
-      additiveMatched: catalogMatches.length > 0,
-      materialMatched: analysis?.result.labelCategory === 'FEED_MATERIAL',
-    });
+    // 价格与标签类型都用模型的判断；模型没给就留空，由人补（代码不再兜底猜）
+    const detectedPriceCny = analysis?.result.priceCny ?? null;
+    const labelCategory = analysis?.result.labelCategory ?? null;
 
     const notes: string[] = [];
     const FIELD_LABELS: Record<string, string> = {
@@ -283,7 +199,7 @@ export class SupplementLabelIntakeService {
       nutrients: parsed.nutrients,
       unrecognized: parsed.unrecognized,
       suggestedName,
-      perBottleUnits: parseCountFromTitle(frontFields.productModel),
+      perBottleUnits: analysis?.result.perBottleUnits ?? null,
       saltNameZh: detectSaltNameZh(labelText),
       catalog: {
         query: suggestedName ?? '',
@@ -302,9 +218,7 @@ export class SupplementLabelIntakeService {
       // 拍平：前端只关心"结论 + 被挡下来的原因"
       analysis: analysis
         ? { ...analysis.result, labelCategory, dropped: analysis.dropped }
-        : labelCategory
-          ? { ...EMPTY_ANALYSIS, labelCategory, dropped: [] }
-          : null,
+        : null,
     };
   }
 

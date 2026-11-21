@@ -43,6 +43,8 @@ export interface AnalysisResult {
   /** 每份多少个基准单位（标签 Serving Size 换算到基准单位） */
   servingUnitsPerDose: number | null;
   nutrients: { fieldPath: string; value: number; unit: string }[];
+  /** 每 1 个基准单位的含量（每粒 / 每克 / 每毫升） */
+  perUnitNutrients: { fieldPath: string; value: number; unit: string }[];
   labelCategory: 'FEED_ADDITIVE' | 'FEED_MATERIAL' | null;
   labelNames: string[];
   tagNames: string[];
@@ -192,6 +194,39 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
     }
   }
 
+  // 每 1 个基准单位的含量：模型自己算，代码只核对除得回去
+  const perUnitRaw = Array.isArray(source.perUnitNutrients) ? source.perUnitNutrients : [];
+  const perUnitNutrients: AnalysisResult['perUnitNutrients'] = [];
+  for (const item of perUnitRaw) {
+    const entry = (item ?? {}) as Record<string, unknown>;
+    const fieldPath = String(entry.fieldPath ?? '');
+    const value = toNumber(entry.value);
+    if (!ctx.allowedFields.some((field) => field.fieldPath === fieldPath)) {
+      continue;
+    }
+    if (value === null || value <= 0) {
+      continue;
+    }
+    perUnitNutrients.push({ fieldPath, value, unit: String(entry.unit ?? '') });
+  }
+  const servingForCheck = toNumber(source.servingUnitsPerDose);
+  if (servingForCheck && servingForCheck > 0) {
+    for (const perUnit of perUnitNutrients) {
+      const perServing = nutrients.find((row) => row.fieldPath === perUnit.fieldPath);
+      if (!perServing) {
+        continue;
+      }
+      const expected = perServing.value / servingForCheck;
+      if (Math.abs(expected - perUnit.value) > Math.max(1e-4, expected * 0.01)) {
+        notes.push({
+          field: 'perUnitNutrients',
+          reason: `每单位含量与「每份 × 份量」对不上（应为 ${Math.round(expected * 1000) / 1000}${perUnit.unit}），请核对`,
+          value: `${perUnit.fieldPath}=${perUnit.value}`,
+        });
+      }
+    }
+  }
+
   // 默认目标营养素：只认自己列出来的营养素，模型不能凭空加
   const ownFieldPaths = new Set(nutrients.map((item) => item.fieldPath));
   const targetRaw = Array.isArray(source.defaultTargetFields) ? source.defaultTargetFields : [];
@@ -264,6 +299,7 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       })(),
       servingUnitsPerDose: servingUnits && servingUnits > 0 ? servingUnits : null,
       nutrients,
+      perUnitNutrients,
       labelCategory,
       labelNames,
       tagNames,
@@ -331,13 +367,22 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     `8. tagNames：从这些里选 ${ctx.allowedTags.join('、')}。`,
     `9. addTiming：从这些里选 ${ctx.allowedAddTimings.join('、')}。`,
     '',
-    '10. nutrients：按下面的字段和**它自己的单位**给值。',
+    '10. **productModel**：产品规格写成**一句人读得懂的话**，不要照抄页面标题。格式：',
+    '    - 胶囊/片剂、每份 1 粒：「180粒/瓶，18mg铁/粒」；',
+    '    - 胶囊/片剂、每份 N 粒：「180粒/瓶，每份2粒含18mg铁」；',
+    '    - 粉/液体：「227g/瓶，每份0.9g含0.875g牛磺酸」。',
+    '',
+    '11. nutrients：按下面的字段和**它自己的单位**给值。',
     '    标签单位不同要先换算（Taurine 875 mg 而字段单位是 g → 0.875）。',
     '    只填标签上明确写了含量的项：',
     fieldLines,
     '',
-    '11. defaultTargetFields：这条补剂主要补哪几个营养素（fieldPath 数组），只能从 nutrients 里选。',
-    '12. 任何一项不确定就写 null，不要编。',
+    '12. **perUnitNutrients**：把每份含量换算成**每 1 个基准单位**（每粒 / 每克 / 每毫升）。',
+    '    算法：每份含量 ÷ servingUnitsPerDose（每份 0.9 g 含 0.875 g → 每 1 g 含 0.972 g）。',
+    '    字段和单位与 nutrients 一样。',
+    '',
+    '13. defaultTargetFields：这条补剂主要补哪几个营养素（fieldPath 数组），只能从 nutrients 里选。',
+    '14. 任何一项不确定就写 null，不要编。',
     '',
     'JSON 结构：',
     '{"name":string|null,"brand":string|null,"productModel":string|null,"priceCny":number|null,',
@@ -345,6 +390,7 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     ' "physicalForm":"CAPSULE"|"TABLET"|"POWDER"|"LIQUID"|null,',
     ' "perBottleUnits":number|null,"servingUnitsPerDose":number|null,',
     ' "nutrients":[{"fieldPath":string,"value":number,"unit":string}],',
+    ' "perUnitNutrients":[{"fieldPath":string,"value":number,"unit":string}],',
     ' "labelCategory":"FEED_ADDITIVE"|"FEED_MATERIAL"|null,"labelNames":string[],"tagNames":string[],',
     ' "addTiming":string|null,"defaultTargetFields":string[]}'
   ].join('\n');

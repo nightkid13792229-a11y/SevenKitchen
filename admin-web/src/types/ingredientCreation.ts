@@ -740,6 +740,8 @@ export interface SupplementAnalysisDto {
   perBottleUnits: number | null
   servingUnitsPerDose: number | null
   nutrients: { fieldPath: string; value: number; unit: string }[]
+  /** 每 1 个基准单位的含量（模型算好） */
+  perUnitNutrients: { fieldPath: string; value: number; unit: string }[]
   labelCategory: 'FEED_ADDITIVE' | 'FEED_MATERIAL' | null
   labelNames: string[]
   tagNames: string[]

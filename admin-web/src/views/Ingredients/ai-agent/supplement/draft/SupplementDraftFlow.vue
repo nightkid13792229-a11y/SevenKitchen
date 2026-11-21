@@ -16,7 +16,7 @@
     <!-- 编辑 -->
     <template v-else-if="view === 'editor'">
       <el-alert
-        v-if="saveError"
+        v-if="saveError && !conflict"
         :title="saveError"
         type="error"
         :closable="false"
@@ -40,11 +40,14 @@
         :finalizing="finalizing"
         :dirty="dirty"
         :save-error="saveError"
+        :conflict="conflict"
+        :mark-manual="markManual"
         @save="handleSaveAndLeave"
         @run-ai="handleRunAi"
         @review="handleReview"
         @back="handleBack"
         @discard="handleEditorDiscard"
+        @reload="handleReload"
       />
     </template>
 
@@ -102,6 +105,16 @@
         <el-button type="primary" @click="returnToList">返回草稿列表</el-button>
       </div>
     </el-card>
+
+    <!-- AI 重填 diff：必须选一次「采用所选 / 保留我的」 -->
+    <DraftAiDiffDialog
+      v-if="aiDiff"
+      :model-value="true"
+      :before="aiDiff.before"
+      :after="aiDiff.after"
+      :manual-fields="aiDiff.manualFields"
+      @apply="handleAiDiffApply"
+    />
   </div>
 </template>
 
@@ -129,6 +142,12 @@ import {
 } from '@/utils/apiError'
 import SupplementDraftList from './SupplementDraftList.vue'
 import SupplementDraftEditor from './SupplementDraftEditor.vue'
+import DraftAiDiffDialog from './DraftAiDiffDialog.vue'
+import {
+  applyDraftAiSelection,
+  cloneDraftPayload,
+  diffDraft
+} from './supplementDraftState'
 import { useSupplementDraft } from './useSupplementDraft'
 
 type FlowView = 'list' | 'editor' | 'review' | 'verification'
@@ -144,13 +163,18 @@ const creating = ref(false)
 const {
   draft,
   review,
+  loading,
   dirty,
   saving,
   saveError,
+  conflict,
   aiRunning,
   validating,
   finalizing,
   error,
+  manualFields,
+  markManual,
+  hasUnsavedWork,
   load,
   save,
   runAi,
@@ -159,6 +183,15 @@ const {
   discard,
   reset
 } = useSupplementDraft(selectedDraftId)
+
+interface AiDiffState {
+  before: ReturnType<typeof cloneDraftPayload>
+  after: ReturnType<typeof cloneDraftPayload>
+  manualFields: string[]
+}
+
+/** 等人工确认的 AI diff；非空时弹窗必须选一次才能继续。 */
+const aiDiff = ref<AiDiffState | null>(null)
 
 /* ------------------------------------------------------------------ */
 /* 列表                                                                */
@@ -197,6 +230,7 @@ async function handleContinue(id: string): Promise<void> {
 
 async function openDraft(id: string): Promise<void> {
   // 先清掉上一张草稿的上下文并作废它的在飞请求，避免加载期间还显示/写入旧草稿。
+  aiDiff.value = null
   reset()
   selectedDraftId.value = id
   view.value = 'editor'
@@ -269,22 +303,120 @@ async function handleSaveAndLeave(): Promise<void> {
     return
   }
   const saved = await save()
-  if (saved) {
-    await returnToList()
+  if (!saved) {
+    // 刚好撞上自动保存：不硬走，提示等它完成；失败原因由 saveError 显示。
+    if (saving.value) {
+      ElMessage.warning('正在保存，请稍候再试')
+    }
     return
   }
-  // 刚好撞上自动保存：不硬走，提示等它完成；失败原因由 saveError 显示。
-  if (saving.value) {
-    ElMessage.warning('正在保存，请稍候再试')
+  if (hasUnsavedWork()) {
+    ElMessage.warning(
+      '保存期间又有改动，已经留在编辑页；等保存状态变成「已保存」再离开'
+    )
+    return
   }
+  await returnToList()
 }
 
+/**
+ * AI 起草/重填：先记下旧载荷，回来后只把「真正的变化」放进 diff 弹窗。
+ *
+ * 服务端已经按 manualFields 跳过人改字段；这里再做一层：diff 行里人改的
+ * 字段默认不采用，弹窗必须明确选「采用所选 / 保留我的」才收尾。
+ */
 async function handleRunAi(): Promise<void> {
   const idAtStart = selectedDraftId.value
+  const current = draft.value
+  if (!current) return
+  const before = cloneDraftPayload(current.payload)
   const updated = await runAi()
   if (!updated) return
   if (selectedDraftId.value !== idAtStart) return
-  ElMessage.success('AI 起草完成，请按区块逐项核对')
+  const rows = diffDraft(before, updated.payload, manualFields.value)
+  if (rows.length === 0) {
+    ElMessage.success('AI 起草完成，没有需要你确认的字段变化')
+    return
+  }
+  aiDiff.value = {
+    before,
+    after: cloneDraftPayload(updated.payload),
+    manualFields: [...manualFields.value]
+  }
+}
+
+/** diff 弹窗的收尾：采用勾选路径，其余回退到原值并标人改，然后保存。 */
+async function handleAiDiffApply(applyPaths: string[]): Promise<void> {
+  const pending = aiDiff.value
+  const target = draft.value
+  if (!pending || !target) {
+    aiDiff.value = null
+    return
+  }
+  const { payload, manualPaths } = applyDraftAiSelection(
+    pending.before,
+    pending.after,
+    pending.manualFields,
+    applyPaths
+  )
+  aiDiff.value = null
+  error.value = null
+  target.payload = payload
+  for (const path of manualPaths) {
+    markManual(path)
+  }
+  if (!hasUnsavedWork()) {
+    ElMessage.success(
+      applyPaths.length === 0
+        ? '已全部保留你的原值'
+        : '已采用勾选的 AI 结果'
+    )
+    return
+  }
+  const saved = await save()
+  if (!saved) {
+    ElMessage.error(saveError.value || '保存失败，修改还在编辑页')
+    return
+  }
+  if (hasUnsavedWork()) {
+    ElMessage.warning('保存期间又有改动，请等保存完成后再离开编辑页')
+    return
+  }
+  ElMessage.success(
+    manualPaths.length > 0
+      ? `AI 起草完成，已保留 ${manualPaths.length} 处你的修改`
+      : '已采用 AI 起草结果'
+  )
+}
+
+/** 409 后的「重新加载草稿」：人确认后才丢弃本地内容，不需要刷新浏览器。 */
+async function handleReload(): Promise<void> {
+  if (!selectedDraftId.value || loading.value) return
+  try {
+    await ElMessageBox.confirm(
+      '重新加载会用服务端最新内容覆盖你本地还没保存的修改。确定重新加载吗？',
+      '重新加载草稿',
+      {
+        confirmButtonText: '重新加载',
+        cancelButtonText: '取消',
+        type: 'warning'
+      }
+    )
+  } catch (err) {
+    if (!isUserCancel(err)) {
+      ElMessage.error(getApiErrorMessage(err, '重新加载草稿失败'))
+    }
+    return
+  }
+  const loaded = await load()
+  if (!loaded) {
+    if (selectedDraftId.value && !loading.value && !error.value) {
+      // 服务端已没有这张草稿（被放弃/删除）时退回列表。
+      await returnToList()
+    }
+    return
+  }
+  ElMessage.success('已重新加载服务端草稿')
 }
 
 /**
@@ -298,12 +430,18 @@ async function handleBack(): Promise<void> {
     ElMessage.warning(busy)
     return
   }
-  if (dirty.value) {
+  if (hasUnsavedWork()) {
     const saved = await save()
     if (!saved) {
       if (saving.value) {
         ElMessage.warning('正在保存，请稍候再试')
       }
+      return
+    }
+    if (hasUnsavedWork()) {
+      ElMessage.warning(
+        '保存期间又有改动，已经留在编辑页；等保存状态变成「已保存」再离开'
+      )
       return
     }
   }
@@ -362,6 +500,7 @@ async function handleFinalize(): Promise<void> {
 async function returnToList(): Promise<void> {
   view.value = 'list'
   selectedDraftId.value = null
+  aiDiff.value = null
   reset()
   await refreshList()
 }

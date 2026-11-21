@@ -6,6 +6,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>原料名称</span>
+            <span v-if="isManual('basic.name')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.name']"
               class="draft-field__source"
@@ -15,9 +16,10 @@
             </span>
           </span>
           <el-input
-            v-model="basic.name"
+            :model-value="basic.name"
             placeholder="只写物质名，如「铜」"
             maxlength="200"
+            @update:model-value="(value: string) => update('name', value)"
           />
           <em
             v-if="!basic.name.trim() && missingReason('basic.name')"
@@ -34,6 +36,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>品牌</span>
+            <span v-if="isManual('basic.brand')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.brand']"
               class="draft-field__source"
@@ -42,7 +45,12 @@
               {{ aiTags['basic.brand']?.text }}
             </span>
           </span>
-          <el-input v-model="basic.brand" placeholder="如 Swanson" maxlength="100" />
+          <el-input
+            :model-value="basic.brand"
+            placeholder="如 Swanson"
+            maxlength="100"
+            @update:model-value="(value: string) => update('brand', value)"
+          />
           <em
             v-if="!basic.brand.trim() && missingReason('basic.brand')"
             class="draft-field__missing"
@@ -55,6 +63,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>产品规格</span>
+            <span v-if="isManual('basic.productModel')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.productModel']"
               class="draft-field__source"
@@ -64,9 +73,10 @@
             </span>
           </span>
           <el-input
-            v-model="basic.productModel"
+            :model-value="basic.productModel"
             placeholder="如 120 粒/瓶"
             maxlength="100"
+            @update:model-value="(value: string) => update('productModel', value)"
           />
           <em
             v-if="!basic.productModel.trim() && missingReason('basic.productModel')"
@@ -80,6 +90,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>采购渠道</span>
+            <span v-if="isManual('basic.purchaseChannel')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.purchaseChannel']"
               class="draft-field__source"
@@ -89,9 +100,10 @@
             </span>
           </span>
           <el-input
-            v-model="basic.purchaseChannel"
+            :model-value="basic.purchaseChannel"
             placeholder="如 iHerb"
             maxlength="200"
+            @update:model-value="(value: string) => update('purchaseChannel', value)"
           />
           <em
             v-if="!basic.purchaseChannel.trim() && missingReason('basic.purchaseChannel')"
@@ -110,6 +122,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>基准单位</span>
+            <span v-if="isManual('basic.baseUnit')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.baseUnit']"
               class="draft-field__source"
@@ -118,7 +131,11 @@
               {{ aiTags['basic.baseUnit']?.text }}
             </span>
           </span>
-          <el-select v-model="basic.baseUnit" style="width: 100%">
+          <el-select
+            :model-value="basic.baseUnit"
+            style="width: 100%"
+            @update:model-value="(value: string) => update('baseUnit', value as SupplementBaseUnit)"
+          >
             <el-option
               v-for="option in baseUnitOptions"
               :key="option.value"
@@ -134,6 +151,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>展示单位</span>
+            <span v-if="isManual('basic.unitDisplayLabel')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.unitDisplayLabel']"
               class="draft-field__source"
@@ -143,9 +161,10 @@
             </span>
           </span>
           <el-select
-            v-model="basic.unitDisplayLabel"
+            :model-value="basic.unitDisplayLabel"
             placeholder="请选择"
             style="width: 100%"
+            @update:model-value="(value: string) => update('unitDisplayLabel', value)"
           >
             <el-option
               v-for="unit in displayUnitOptions"
@@ -162,6 +181,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>物理形态</span>
+            <span v-if="isManual('basic.physicalForm')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.physicalForm']"
               class="draft-field__source"
@@ -171,9 +191,10 @@
             </span>
           </span>
           <el-select
-            v-model="basic.physicalForm"
+            :model-value="basic.physicalForm"
             placeholder="请选择"
             style="width: 100%"
+            @update:model-value="(value: string) => update('physicalForm', value as SupplementPhysicalForm)"
           >
             <el-option
               v-for="option in physicalFormOptions"
@@ -187,6 +208,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>每份多少{{ unitLabel }}</span>
+            <span v-if="isManual('basic.servingUnitsPerDose')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.servingUnitsPerDose']"
               class="draft-field__source"
@@ -196,12 +218,16 @@
             </span>
           </span>
           <el-input-number
-            v-model="basic.servingUnitsPerDose"
+            :model-value="basic.servingUnitsPerDose ?? undefined"
             :min="servingIsPcs ? 1 : 0.01"
             :precision="servingIsPcs ? 0 : 2"
             :step="servingIsPcs ? 1 : 0.1"
             controls-position="right"
             style="width: 100%"
+            @update:model-value="
+              (value: number | undefined) =>
+                update('servingUnitsPerDose', value ?? null)
+            "
           />
           <em class="draft-field__hint">{{ servingHint }}</em>
           <em
@@ -221,6 +247,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>采购单位</span>
+            <span v-if="isManual('basic.purchaseUnit')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.purchaseUnit']"
               class="draft-field__source"
@@ -230,9 +257,10 @@
             </span>
           </span>
           <el-input
-            v-model="basic.purchaseUnit"
+            :model-value="basic.purchaseUnit"
             placeholder="如 瓶"
             maxlength="50"
+            @update:model-value="(value: string) => update('purchaseUnit', value)"
           />
           <em
             v-if="!basic.purchaseUnit.trim() && missingReason('basic.purchaseUnit')"
@@ -246,6 +274,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>换算倍数</span>
+            <span v-if="isManual('basic.purchaseToBaseRatio')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.purchaseToBaseRatio']"
               class="draft-field__source"
@@ -255,11 +284,15 @@
             </span>
           </span>
           <el-input-number
-            v-model="basic.purchaseToBaseRatio"
+            :model-value="basic.purchaseToBaseRatio ?? undefined"
             :min="0.01"
             :precision="2"
             controls-position="right"
             style="width: 100%"
+            @update:model-value="
+              (value: number | undefined) =>
+                update('purchaseToBaseRatio', value ?? null)
+            "
           />
           <em class="draft-field__hint">
             1 个采购单位 = 多少{{ unitLabel }}
@@ -276,6 +309,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>当前采购价</span>
+            <span v-if="isManual('basic.currentPricePerPurchaseUnit')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.currentPricePerPurchaseUnit']"
               class="draft-field__source"
@@ -285,11 +319,15 @@
             </span>
           </span>
           <el-input-number
-            v-model="basic.currentPricePerPurchaseUnit"
+            :model-value="basic.currentPricePerPurchaseUnit ?? undefined"
             :min="0"
             :precision="2"
             controls-position="right"
             style="width: 100%"
+            @update:model-value="
+              (value: number | undefined) =>
+                update('currentPricePerPurchaseUnit', value ?? null)
+            "
           />
           <em class="draft-field__hint">按采购单位记，人民币</em>
           <em
@@ -304,6 +342,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>生产损耗率</span>
+            <span v-if="isManual('basic.productionLossRate')" class="draft-field__manual" title="你手动改过，AI 不会覆盖">人改</span>
             <span
               v-if="aiTags['basic.productionLossRate']"
               class="draft-field__source"
@@ -313,51 +352,23 @@
             </span>
           </span>
           <el-input-number
-            v-model="basic.productionLossRate"
+            :model-value="basic.productionLossRate"
             :min="1"
             :max="2"
             :step="0.01"
             :precision="2"
             controls-position="right"
             style="width: 100%"
+            @update:model-value="
+              (value: number | undefined) =>
+                update('productionLossRate', value ?? 1.05)
+            "
           />
           <em class="draft-field__hint">默认 1.05（+5%），可按实际损耗覆盖</em>
         </label>
       </div>
     </div>
 
-    <div class="draft-basic__group">
-      <h4 class="draft-basic__title">使用方式</h4>
-      <div class="draft-basic__grid">
-        <label class="draft-field">
-          <span class="draft-field__label">
-            <span>添加时机</span>
-            <span
-              v-if="aiTags['basic.addTiming']"
-              class="draft-field__source"
-              :class="{ 'draft-field__source--low': aiTags['basic.addTiming']?.low }"
-            >
-              {{ aiTags['basic.addTiming']?.text }}
-            </span>
-          </span>
-          <el-select
-            v-model="basic.addTiming"
-            placeholder="请选择"
-            style="width: 100%"
-          >
-            <el-option label="制作中" value="BEFORE_MIXING" />
-            <el-option label="随餐" value="BEFORE_MEAL" />
-          </el-select>
-          <em
-            v-if="!basic.addTiming && missingReason('basic.addTiming')"
-            class="draft-field__missing"
-            :title="missingReason('basic.addTiming')"
-          >
-            AI 没找到，请补
-          </em>
-        </label>
-      </div>
-    </div>
   </section>
 </template>
 
@@ -378,16 +389,37 @@ import type {
 } from '@/api/supplementDrafts'
 import { supplementUsageUnitOptions } from '@/constants/supplementNutrients'
 import { findSupplementFormWord } from '../../supplementFormState'
+import { isManualDraftPath } from '../supplementDraftState'
 
-const props = withDefaults(
-  defineProps<{
-    /** AI 起草快照：有该字段就显示来源徽标，AI 说没找到的项标红 */
-    aiSnapshot?: SupplementDraftAiSnapshot | null
-  }>(),
-  { aiSnapshot: null }
-)
+const props = defineProps<{
+  /** AI 起草快照：有该字段就显示来源徽标，AI 说没找到的项标红 */
+  aiSnapshot?: SupplementDraftAiSnapshot | null
+  /** 人改过的字段路径；用于显示「人改」标记 */
+  manualFields?: string[]
+  /** 只有人的输入事件才调用它（初始加载/AI 回写都不调用） */
+  markManual?: (path: string) => void
+}>()
 
 const basic = defineModel<SupplementDraftBasic>({ required: true })
+
+/** 人改过？父路径命中子路径也算，与后端 manualFields 口径一致。 */
+function isManual(path: string): boolean {
+  return isManualDraftPath(path, props.manualFields ?? [])
+}
+
+/**
+ * 统一的人改入口：先 markManual 再改值。
+ *
+ * 直接用 `v-model` 改值会绕开 manualFields，AI 重填时就会静默覆盖人改内容，
+ * 所以每个输入框都显式走这里。
+ */
+function update<K extends keyof SupplementDraftBasic>(
+  key: K,
+  value: SupplementDraftBasic[K]
+): void {
+  props.markManual?.(`basic.${String(key)}`)
+  basic.value[key] = value
+}
 
 /** 基准单位选项；值仍是后端枚举，展示只给中文。 */
 const baseUnitOptions: Array<{ value: SupplementBaseUnit; label: string }> = [
@@ -545,6 +577,16 @@ function missingReason(path: string): string {
 .draft-field__source--low {
   background: #fff4e5;
   color: #c46a00;
+}
+
+.draft-field__manual {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #c46a00;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
 }
 
 .draft-field__hint {

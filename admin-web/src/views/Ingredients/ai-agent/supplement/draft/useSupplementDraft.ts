@@ -32,7 +32,14 @@ import {
   type SupplementWriteVerification
 } from '@/api/supplementDrafts'
 import { getApiErrorMessage } from '@/utils/apiError'
-import { canFinalize, hasBlocker } from './supplementDraftState'
+import {
+  canFinalize,
+  hasBlocker,
+  isManualDraftPath,
+  mergeManualFields,
+  readDraftPath,
+  writeDraftPath
+} from './supplementDraftState'
 
 /** 自动保存防抖：人停手 800ms 后才发 PATCH。 */
 const AUTOSAVE_DEBOUNCE_MS = 800
@@ -71,8 +78,17 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   const error = ref<string | null>(null)
   /** 保存失败的中文原因；保存成功后清空。 */
   const saveError = ref('')
+  /** 上一次保存是 409 乐观锁冲突：编辑页据此显示「重新加载草稿」。 */
+  const conflict = ref(false)
   /** 有没有还没存到服务端的修改。 */
   const dirty = ref(false)
+  /**
+   * 人工改过的字段路径（点路径）。它是「AI 不覆盖」的合同：
+   * 每次 PATCH 都带上，AI 重填后以服务端回传为准。
+   */
+  const manualFields = ref<string[]>([])
+  /** 保存/AI/校验进行中人又改了：等动作结束再补一次自动保存。 */
+  const pendingAutosave = ref(false)
 
   /**
    * 请求代次：`reset()` / `load()` 递增。请求回来时代次不同就丢弃结果。
@@ -83,8 +99,6 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   let lastKnownSignature = ''
   /** 最近一次 validate 针对的内容签名；内容变了就说明审核结果已过期。 */
   let validatedSignature = ''
-  /** 保存/AI/校验进行中人又改了：等动作结束再补一次自动保存。 */
-  let pendingAutosave = false
   let disposed = false
 
   /** 开启新一轮请求代次，让所有在飞的旧请求失效。 */
@@ -105,12 +119,29 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     }
   }
 
-  /** 服务端返回的是权威内容：整体替换，并把签名记成已同步。 */
-  function applyServerDraft(next: SupplementDraftView): void {
-    draft.value = next
-    lastKnownSignature = signatureOf(next)
+  /**
+   * 服务端返回的是权威内容：整体替换，并把签名记成已同步。
+   *
+   * `preserveLocalManual` 只给 AI 回写用：AI 请求期间如果人又改了字段
+   * （`manualFields` 里有服务端还不知道的路径），合并进来而不是被旧列表冲掉。
+   */
+  function applyServerDraft(
+    next: SupplementDraftView,
+    options: { preserveLocalManual?: boolean } = {}
+  ): void {
+    const merged = options.preserveLocalManual
+      ? mergeManualFields(next.manualFields, manualFields.value)
+      : mergeManualFields(next.manualFields)
+    const normalized =
+      merged.length === next.manualFields.length
+        ? next
+        : { ...next, manualFields: merged }
+    draft.value = normalized
+    manualFields.value = merged
+    lastKnownSignature = signatureOf(normalized)
     dirty.value = false
     saveError.value = ''
+    conflict.value = false
   }
 
   /**
@@ -137,15 +168,48 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
 
   /** 动作结束后把「进行中攒下的修改」补存一次。 */
   function drainPendingAutosave(): void {
-    if (!pendingAutosave) return
-    pendingAutosave = false
+    if (!pendingAutosave.value) return
+    pendingAutosave.value = false
     if (!draft.value || disposed) return
     if (signatureOf(draft.value) === lastKnownSignature) return
     if (saving.value || loading.value || aiRunning.value || validating.value || finalizing.value) {
-      pendingAutosave = true
+      pendingAutosave.value = true
       return
     }
     scheduleAutosave()
+  }
+
+  /**
+   * 记一条人改路径。
+   *
+   * 只有**人的输入事件**能调它：初始加载、AI 回写都不允许调用。
+   * 同时把 `draft.manualFields` 对齐，让深 watcher 立刻把草稿标成未保存。
+   */
+  function markManual(path: string): void {
+    const normalized = path.trim()
+    if (!normalized || !draft.value) return
+    // 已有同路径、或已经有父路径覆盖它，就不用重复记。
+    if (isManualDraftPath(normalized, manualFields.value)) return
+    manualFields.value = mergeManualFields(manualFields.value, [normalized])
+    draft.value.manualFields = [...manualFields.value]
+    dirty.value = true
+    if (
+      loading.value ||
+      saving.value ||
+      aiRunning.value ||
+      validating.value ||
+      finalizing.value
+    ) {
+      // AI/保存进行中人又改了：等动作结束补一次保存（并保留人改标记）。
+      pendingAutosave.value = true
+      return
+    }
+    scheduleAutosave()
+  }
+
+  /** 保存时把人改列表并上服务端已有的列表，任何一边都不丢。 */
+  function manualFieldsForSave(): string[] {
+    return mergeManualFields(draft.value?.manualFields, manualFields.value)
   }
 
   function scheduleAutosave(delayMs = AUTOSAVE_DEBOUNCE_MS): void {
@@ -179,7 +243,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
         validating.value ||
         finalizing.value
       ) {
-        pendingAutosave = true
+        pendingAutosave.value = true
         return
       }
       scheduleAutosave()
@@ -210,7 +274,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   function reset(): void {
     nextEpoch()
     clearAutosaveTimer()
-    pendingAutosave = false
+    pendingAutosave.value = false
     draft.value = null
     review.value = null
     verification.value = null
@@ -221,7 +285,9 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     finalizing.value = false
     error.value = null
     saveError.value = ''
+    conflict.value = false
     dirty.value = false
+    manualFields.value = []
     lastKnownSignature = ''
     validatedSignature = ''
   }
@@ -232,11 +298,12 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     // 新一次加载让旧请求全部作废，也把上一张草稿的动作标记清掉。
     const epochAtStart = nextEpoch()
     clearAutosaveTimer()
-    pendingAutosave = false
+    pendingAutosave.value = false
     review.value = null
     validatedSignature = ''
     error.value = null
     saveError.value = ''
+    conflict.value = false
     loading.value = false
     saving.value = false
     aiRunning.value = false
@@ -248,6 +315,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       verification.value = null
       lastKnownSignature = ''
       dirty.value = false
+      manualFields.value = []
       return null
     }
 
@@ -282,13 +350,13 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     const current = draft.value
     if (!current || !draftId.value) return null
     if (loading.value || saving.value || aiRunning.value || validating.value || finalizing.value) {
-      if (saving.value) pendingAutosave = true
+      if (saving.value) pendingAutosave.value = true
       return null
     }
     const idAtStart = current.id
     const epochAtStart = epoch
     clearAutosaveTimer()
-    pendingAutosave = false
+    pendingAutosave.value = false
     const sentSignature = signatureOf(current)
 
     saving.value = true
@@ -297,7 +365,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       const updated = await supplementDraftsApi.update(current.id, {
         name: current.name,
         payload: current.payload,
-        manualFields: current.manualFields,
+        manualFields: manualFieldsForSave(),
         expectedUpdatedAt: current.updatedAt
       })
       if (!isCurrent(epochAtStart, idAtStart)) return null
@@ -307,16 +375,17 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
         // 保存期间人又改了：保留本地新值，只同步服务端时间/完成度。
         mergeServerMeta(updated)
         dirty.value = true
-        pendingAutosave = true
+        pendingAutosave.value = true
       }
       saveError.value = ''
+      conflict.value = false
       return updated
     } catch (err) {
       if (!isCurrent(epochAtStart, idAtStart)) return null
-      saveError.value =
-        statusOf(err) === 409
-          ? '草稿已被更新，请刷新后再试'
-          : getApiErrorMessage(err, '保存草稿失败')
+      conflict.value = statusOf(err) === 409
+      saveError.value = conflict.value
+        ? '草稿已被更新，可以点「重新加载草稿」取回服务端最新内容'
+        : getApiErrorMessage(err, '保存草稿失败')
       dirty.value = true
       return null
     } finally {
@@ -354,9 +423,13 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     const idAtStart = current.id
     const epochAtStart = epoch
     const latestEvidence = current.payload.evidence
+    // AI 期间表单是禁用的；万一还是有人改了（例如快捷键/外部脚本），
+    // 用这两个快照识别人改并把它重新盖回 AI 回包，绝不静默覆盖。
+    const manualAtStart = [...manualFields.value]
+    const signatureAtStart = signatureOf(current)
 
     clearAutosaveTimer()
-    pendingAutosave = false
+    pendingAutosave.value = false
     aiRunning.value = true
     error.value = null
     try {
@@ -367,7 +440,33 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
         selectionNote: latestEvidence.selectionNote
       })
       if (!isCurrent(epochAtStart, idAtStart)) return null
-      applyServerDraft(updated)
+
+      const localBeforeApply = draft.value
+      const addedManual = manualFields.value.filter(
+        (path) => !manualAtStart.includes(path)
+      )
+      const changedDuringAi =
+        localBeforeApply !== null && signatureOf(localBeforeApply) !== signatureAtStart
+      if (localBeforeApply && addedManual.length > 0) {
+        for (const path of addedManual) {
+          const localValue = readDraftPath(localBeforeApply.payload, path)
+          writeDraftPath(
+            updated.payload,
+            path,
+            localValue === undefined
+              ? undefined
+              : (JSON.parse(JSON.stringify(localValue)) as unknown)
+          )
+        }
+        updated.manualFields = mergeManualFields(updated.manualFields, addedManual)
+      }
+      applyServerDraft(updated, {
+        preserveLocalManual: addedManual.length > 0
+      })
+      if (changedDuringAi) {
+        error.value =
+          'AI 起草期间检测到草稿有改动：已保留你的修改，请逐项核对 AI 结果后再保存'
+      }
       verification.value = updated.verification
       review.value = null
       validatedSignature = ''
@@ -480,6 +579,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       lastKnownSignature = signatureOf(draft.value)
       dirty.value = false
       saveError.value = ''
+      conflict.value = false
       return result
     } catch (err) {
       if (!isCurrent(epochAtStart, target.id)) return null
@@ -500,7 +600,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     const idAtStart = current.id
     const epochAtStart = epoch
     clearAutosaveTimer()
-    pendingAutosave = false
+    pendingAutosave.value = false
     error.value = null
     saveError.value = ''
     try {
@@ -509,10 +609,12 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       draft.value = null
       review.value = null
       verification.value = null
+      manualFields.value = []
       lastKnownSignature = ''
       validatedSignature = ''
       dirty.value = false
       saveError.value = ''
+      conflict.value = false
       return discarded
     } catch (err) {
       if (!isCurrent(epochAtStart, idAtStart)) return null
@@ -549,6 +651,11 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     })
   }
 
+  /** 还有没落库的东西：未保存、保存中、或攒着一次补存。 */
+  function hasUnsavedWork(): boolean {
+    return dirty.value || saving.value || pendingAutosave.value
+  }
+
   return {
     draft,
     review,
@@ -561,6 +668,11 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     error,
     saveError,
     dirty,
+    manualFields,
+    conflict,
+    pendingAutosave,
+    markManual,
+    hasUnsavedWork,
     load,
     save,
     runAi,

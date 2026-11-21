@@ -8,6 +8,7 @@ import type {
 } from '@/api/supplementDrafts'
 import {
   ackKeyOf,
+  applyDraftAiSelection,
   canFinalize,
   diffDraft,
   fieldMapRows,
@@ -265,6 +266,53 @@ describe('AI 重填 diff', () => {
       true
     )
     expect(byPath.get('retail.shelfLifeMonths')?.manual).toBe(false)
+  })
+
+  it('按勾选采用 AI 值，其余路径回退到原值并标人改（营养素扁平键也能回退）', () => {
+    const before = basePayload()
+    before.basic.name = '旧名字'
+    before.basic.brand = '旧品牌'
+    before.nutrition.servingNutrients = { 'fattyAcids.epa': 100 }
+
+    const after = basePayload()
+    after.basic.name = 'AI 名字'
+    after.basic.brand = 'AI 品牌'
+    after.nutrition.servingNutrients = { 'fattyAcids.epa': 120 }
+
+    const result = applyDraftAiSelection(
+      before,
+      after,
+      ['basic.brand'],
+      ['basic.name']
+    )
+
+    expect(result.payload.basic.name).toBe('AI 名字')
+    // 人改过的品牌即使 AI 给了新值，也不采用。
+    expect(result.payload.basic.brand).toBe('旧品牌')
+    expect(result.payload.nutrition.servingNutrients['fattyAcids.epa']).toBe(100)
+    expect(result.manualPaths).toEqual(
+      expect.arrayContaining([
+        'basic.brand',
+        'nutrition.servingNutrients.fattyAcids.epa'
+      ])
+    )
+    expect(result.manualPaths).not.toContain('basic.name')
+  })
+
+  it('「保留我的」把全部变化回退成原值', () => {
+    const before = basePayload()
+    before.basic.name = '旧名字'
+    before.retail.shelfLifeMonths = 24
+    const after = basePayload()
+    after.basic.name = 'AI 名字'
+    after.retail.shelfLifeMonths = 36
+
+    const result = applyDraftAiSelection(before, after, [], [])
+
+    expect(result.payload).toEqual(before)
+    expect(result.manualPaths).toEqual(
+      expect.arrayContaining(['basic.name', 'retail.shelfLifeMonths'])
+    )
   })
 
   it('删掉某个营养素也会单独列出来（after 为空）', () => {

@@ -1,5 +1,20 @@
 <template>
   <section v-if="draft" class="draft-editor">
+    <div v-if="conflict" class="draft-editor__conflict" data-conflict>
+      <span class="draft-editor__conflict-text">
+        {{ saveError || '草稿已被更新，需要重新加载服务端内容。' }}
+      </span>
+      <el-button
+        size="small"
+        type="primary"
+        plain
+        data-action="reload"
+        @click="emit('reload')"
+      >
+        重新加载草稿
+      </el-button>
+    </div>
+
     <header class="draft-editor__top">
       <div class="draft-editor__top-main">
         <el-button
@@ -15,6 +30,7 @@
           class="draft-editor__name"
           placeholder="未命名补剂"
           maxlength="200"
+          :disabled="aiRunning || finalizing"
         />
       </div>
 
@@ -59,7 +75,12 @@
       </div>
     </header>
 
-    <div class="draft-editor__body">
+    <div
+      class="draft-editor__body"
+      :class="{ 'draft-editor__body--locked': aiRunning }"
+      :aria-busy="aiRunning"
+      :inert="aiRunning"
+    >
       <nav class="draft-editor__nav" aria-label="草稿区块">
         <button
           v-for="(item, index) in sections"
@@ -74,16 +95,46 @@
         >
           <span class="draft-editor__nav-no">{{ index + 1 }}</span>
           <span class="draft-editor__nav-label">{{ item.label }}</span>
+          <span
+            v-if="missingBySection[item.key]"
+            class="draft-editor__nav-badge draft-editor__nav-badge--missing"
+            :title="`AI 没找到 ${missingBySection[item.key]} 项`"
+          >
+            缺{{ missingBySection[item.key] }}
+          </span>
+          <span
+            v-if="manualBySection[item.key]"
+            class="draft-editor__nav-badge draft-editor__nav-badge--manual"
+            :title="`${manualBySection[item.key]} 项人改，AI 不会覆盖`"
+          >
+            人改{{ manualBySection[item.key] }}
+          </span>
         </button>
       </nav>
 
       <main class="draft-editor__content">
-        <h3 class="draft-editor__section-title">{{ activeSectionLabel }}</h3>
+        <div class="draft-editor__section-head">
+          <h3 class="draft-editor__section-title">{{ activeSectionLabel }}</h3>
+          <span
+            v-if="activeMissingCount > 0"
+            class="draft-editor__section-badge draft-editor__section-badge--missing"
+          >
+            AI 没找到 {{ activeMissingCount }} 项
+          </span>
+          <span
+            v-if="activeManualCount > 0"
+            class="draft-editor__section-badge draft-editor__section-badge--manual"
+          >
+            人改 {{ activeManualCount }} 项
+          </span>
+        </div>
 
         <BasicSection
           v-if="activeSection === 'basic'"
           v-model="draft.payload.basic"
           :ai-snapshot="aiSnapshot"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
         />
 
         <NutritionSection
@@ -91,18 +142,74 @@
           v-model="draft.payload.nutrition"
           :serving-units-per-dose="draft.payload.basic.servingUnitsPerDose"
           :unit-display-label="draft.payload.basic.unitDisplayLabel"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
         />
 
-        <section v-else class="draft-editor__placeholder">
-          <p class="draft-editor__placeholder-title">
-            「{{ activeSectionLabel }}」的填写项还没接入
-          </p>
-          <p class="draft-editor__placeholder-desc">
-            AI 起草出来的内容已经先保存在草稿里。这个区块的表格会在下一步补齐；
-            现在可以先填「商品与基本信息」和「营养档案」。
-          </p>
-        </section>
+        <LabelSection
+          v-else-if="activeSection === 'label'"
+          v-model="draft.payload.label"
+          v-model:add-timing="draft.payload.basic.addTiming"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
+        />
+
+        <RetailSection
+          v-else-if="activeSection === 'retail'"
+          v-model="draft.payload.retail"
+          :purchase-unit="draft.payload.basic.purchaseUnit"
+          :purchase-to-base-ratio="draft.payload.basic.purchaseToBaseRatio"
+          :current-price-per-purchase-unit="
+            draft.payload.basic.currentPricePerPurchaseUnit
+          "
+          :unit-display-label="draft.payload.basic.unitDisplayLabel"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
+        />
+
+        <DiySection
+          v-else-if="activeSection === 'diy'"
+          v-model="draft.payload.diy"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
+        />
+
+        <ProcurementSection
+          v-else-if="activeSection === 'procurement'"
+          v-model="draft.payload.procurement"
+          :purchase-unit="draft.payload.basic.purchaseUnit"
+          :purchase-to-base-ratio="draft.payload.basic.purchaseToBaseRatio"
+          :current-price-per-purchase-unit="
+            draft.payload.basic.currentPricePerPurchaseUnit
+          "
+          :unit-display-label="draft.payload.basic.unitDisplayLabel"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
+        />
+
+        <EquivalenceSection
+          v-else-if="activeSection === 'equivalence'"
+          v-model="draft.payload.equivalence"
+          :draft-id="draft.id"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
+        />
+
+        <EvidenceSection
+          v-else
+          v-model="draft.payload.evidence"
+          :ai-snapshot="aiSnapshot"
+          :manual-fields="draft.manualFields"
+          :mark-manual="markManual"
+        />
       </main>
+
+      <div v-if="aiRunning" class="draft-editor__lock" data-ai-lock>
+        <p class="draft-editor__lock-title">AI 正在读图起草…</p>
+        <p class="draft-editor__lock-desc">
+          起草期间表单锁定，避免 AI 结果覆盖你正在改的内容。请稍候。
+        </p>
+      </div>
     </div>
 
     <footer class="draft-editor__footer">
@@ -160,6 +267,12 @@ import type {
 } from '@/api/supplementDrafts'
 import BasicSection from './sections/BasicSection.vue'
 import NutritionSection from './sections/NutritionSection.vue'
+import LabelSection from './sections/LabelSection.vue'
+import RetailSection from './sections/RetailSection.vue'
+import DiySection from './sections/DiySection.vue'
+import ProcurementSection from './sections/ProcurementSection.vue'
+import EquivalenceSection from './sections/EquivalenceSection.vue'
+import EvidenceSection from './sections/EvidenceSection.vue'
 
 const props = defineProps<{
   draft: SupplementDraftView | null
@@ -171,6 +284,10 @@ const props = defineProps<{
   dirty: boolean
   /** 保存失败的中文原因；为空表示最近一次保存没有失败 */
   saveError: string
+  /** 上一次保存是 409 冲突：显示「重新加载草稿」入口 */
+  conflict?: boolean
+  /** 人改标记入口（由父级 composable 的 markManual 提供） */
+  markManual?: (path: string) => void
 }>()
 
 const emit = defineEmits<{
@@ -179,7 +296,13 @@ const emit = defineEmits<{
   (event: 'review'): void
   (event: 'back'): void
   (event: 'discard'): void
+  (event: 'reload'): void
 }>()
+
+/** 传给各区块的人改入口；父级没提供时安全地什么都不做。 */
+function markManual(path: string): void {
+  props.markManual?.(path)
+}
 
 type SectionKey =
   | 'basic'
@@ -216,6 +339,68 @@ const activeSectionLabel = computed(
 
 const aiSnapshot = computed<SupplementDraftAiSnapshot | null>(
   () => props.draft?.aiSnapshot ?? null
+)
+
+/** 点路径 → 编辑页区块；只认 payload 里的业务区块。 */
+function sectionOfPath(path: string): SectionKey | null {
+  const key = path.split('.')[0]
+  switch (key) {
+    case 'basic':
+    case 'nutrition':
+    case 'label':
+    case 'retail':
+    case 'diy':
+    case 'procurement':
+    case 'equivalence':
+    case 'evidence':
+      return key
+    default:
+      return null
+  }
+}
+
+function countBySection(paths: readonly string[]): Record<SectionKey, number> {
+  const counts: Record<SectionKey, number> = {
+    basic: 0,
+    nutrition: 0,
+    label: 0,
+    retail: 0,
+    diy: 0,
+    procurement: 0,
+    equivalence: 0,
+    evidence: 0
+  }
+  for (const path of paths) {
+    const key = sectionOfPath(path)
+    if (key) counts[key] += 1
+  }
+  return counts
+}
+
+/** AI 自己说没找到的字段，按区块计数（导航角标）。 */
+const missingBySection = computed<Record<SectionKey, number>>(() => {
+  const missing = props.draft?.aiSnapshot?.missing
+  if (!Array.isArray(missing)) return countBySection([])
+  const paths: string[] = []
+  for (const entry of missing) {
+    if (entry && typeof entry === 'object' && 'fieldPath' in entry) {
+      const path = (entry as { fieldPath?: unknown }).fieldPath
+      if (typeof path === 'string') paths.push(path)
+    }
+  }
+  return countBySection(paths)
+})
+
+/** 人改过的字段，按区块计数（导航角标）。 */
+const manualBySection = computed<Record<SectionKey, number>>(() =>
+  countBySection(props.draft?.manualFields ?? [])
+)
+
+const activeMissingCount = computed(
+  () => missingBySection.value[activeSection.value]
+)
+const activeManualCount = computed(
+  () => manualBySection.value[activeSection.value]
 )
 
 /** 草稿名可改；空名先存着，AI 起草/最终审核前再补。 */
@@ -341,10 +526,62 @@ const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
   display: inline-flex;
 }
 
+.draft-editor__conflict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  border: 1px solid #f3d19e;
+  border-radius: 10px;
+  background: #fdf6ec;
+}
+
+.draft-editor__conflict-text {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #9a5b00;
+}
+
 .draft-editor__body {
   display: flex;
   gap: 16px;
   align-items: flex-start;
+  position: relative;
+}
+
+.draft-editor__body--locked .draft-editor__nav,
+.draft-editor__body--locked .draft-editor__content {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.draft-editor__lock {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  z-index: 3;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(1.5px);
+}
+
+.draft-editor__lock-title {
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #3370ff;
+}
+
+.draft-editor__lock-desc {
+  margin: 0;
+  font-size: 12.5px;
+  color: #5b6470;
 }
 
 .draft-editor__nav {
@@ -405,6 +642,26 @@ const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
 
 .draft-editor__nav-label {
   line-height: 1.4;
+  flex: 1;
+}
+
+.draft-editor__nav-badge {
+  flex: none;
+  padding: 0 5px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  line-height: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.draft-editor__nav-badge--missing {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.draft-editor__nav-badge--manual {
+  background: #fff4e5;
+  color: #c46a00;
 }
 
 .draft-editor__content {
@@ -412,11 +669,36 @@ const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
   min-width: 0;
 }
 
-.draft-editor__section-title {
+.draft-editor__section-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
   margin: 0 0 12px;
+}
+
+.draft-editor__section-title {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: #1f2733;
+}
+
+.draft-editor__section-badge {
+  padding: 0 7px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.draft-editor__section-badge--missing {
+  background: #fff1f0;
+  color: #cf1322;
+}
+
+.draft-editor__section-badge--manual {
+  background: #fff4e5;
+  color: #c46a00;
 }
 
 .draft-editor__placeholder {

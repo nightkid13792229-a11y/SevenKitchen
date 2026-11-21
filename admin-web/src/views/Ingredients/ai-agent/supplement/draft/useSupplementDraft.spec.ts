@@ -198,6 +198,32 @@ describe('草稿保存状态', () => {
     scope.stop()
   })
 
+  it('markManual 记录人改、标脏，并在保存时随 manualFields 发出', async () => {
+    api.get.mockResolvedValueOnce(draftView('draft-a'))
+    const { state, scope } = setup('draft-a')
+    await state.load()
+
+    state.markManual('basic.name')
+    await nextTick()
+
+    expect(state.manualFields.value).toContain('basic.name')
+    expect(state.dirty.value).toBe(true)
+
+    const saved = draftView('draft-a', { manualFields: ['basic.name'] })
+    api.update.mockResolvedValueOnce(saved)
+    await state.save()
+
+    expect(api.update).toHaveBeenCalledWith(
+      'draft-a',
+      expect.objectContaining({
+        manualFields: expect.arrayContaining(['basic.name'])
+      })
+    )
+    expect(state.manualFields.value).toContain('basic.name')
+    expect(state.dirty.value).toBe(false)
+    scope.stop()
+  })
+
   it('reset 清掉未保存与保存失败状态', async () => {
     api.get.mockResolvedValueOnce(draftView('draft-a'))
     const { state, scope } = setup('draft-a')
@@ -214,6 +240,33 @@ describe('草稿保存状态', () => {
     expect(state.dirty.value).toBe(false)
     expect(state.saveError.value).toBe('')
     expect(state.saving.value).toBe(false)
+    scope.stop()
+  })
+
+  it('409 置 conflict，重新加载后以服务端 manualFields 为准', async () => {
+    api.get.mockResolvedValueOnce(draftView('draft-a'))
+    const { state, scope } = setup('draft-a')
+    await state.load()
+
+    state.draft.value!.payload.basic.name = '铜（改）'
+    await nextTick()
+    api.update.mockRejectedValueOnce({ response: { status: 409 } })
+    await state.save()
+
+    expect(state.conflict.value).toBe(true)
+    expect(state.saveError.value).toContain('重新加载草稿')
+
+    api.get.mockResolvedValueOnce(
+      draftView('draft-a', {
+        manualFields: ['basic.brand'],
+        name: '服务端版本'
+      })
+    )
+    await state.load()
+
+    expect(state.conflict.value).toBe(false)
+    expect(state.draft.value?.name).toBe('服务端版本')
+    expect(state.manualFields.value).toEqual(['basic.brand'])
     scope.stop()
   })
 })
@@ -281,6 +334,39 @@ describe('在飞请求的草稿归属', () => {
     expect(state.review.value).toBeNull()
     expect(state.draft.value?.id).toBe('draft-b')
     expect(state.validating.value).toBe(false)
+    scope.stop()
+  })
+
+  it('AI 请求期间的人改不会被回包覆盖，并记进 manualFields', async () => {
+    const draftA = draftView('draft-a')
+    draftA.payload.evidence.frontImageUrl = 'https://example.com/front.png'
+    draftA.payload.evidence.labelImageUrl = 'https://example.com/label.png'
+    api.get.mockResolvedValueOnce(draftA)
+    const { state, scope } = setup('draft-a')
+    await state.load()
+
+    let resolveAi!: (value: SupplementDraftView) => void
+    api.aiFill.mockReturnValueOnce(
+      new Promise<SupplementDraftView>((resolve) => {
+        resolveAi = resolve
+      })
+    )
+    const pending = state.runAi()
+    await nextTick()
+    expect(state.aiRunning.value).toBe(true)
+
+    // 模拟 AI 期间仍有人改（正常 UI 有遮罩，这里验证兜底不被覆盖）。
+    state.markManual('basic.name')
+    state.draft.value!.payload.basic.name = '人改的名字'
+
+    const aiView = draftView('draft-a', { name: 'AI 名字' })
+    aiView.payload.basic.name = 'AI 新名字'
+    resolveAi(aiView)
+    await pending
+
+    expect(state.draft.value?.payload.basic.name).toBe('人改的名字')
+    expect(state.manualFields.value).toContain('basic.name')
+    expect(state.error.value).toContain('AI 起草期间')
     scope.stop()
   })
 

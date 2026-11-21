@@ -1,0 +1,121 @@
+/**
+ * 草稿编辑页各区块共用的字段样式。
+ *
+ * 只放「布局 + 字段标签 / 人改 / 缺失 / 提示」这类通用类名；
+ * 图片卡、推荐列表等区块专有样式留在各自组件里。
+ */
+.draft-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.draft-section__group {
+  padding: 16px;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.draft-section__title {
+  margin: 0 0 14px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #38414d;
+}
+
+.draft-section__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 16px;
+}
+
+.draft-section__row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.draft-section__readonly {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f7f9fb;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: #5b6470;
+}
+
+.draft-section__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.draft-section__empty {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #e3e7ed;
+  border-radius: 10px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: #98a1ad;
+  text-align: center;
+}
+
+.draft-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.draft-field__label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12.5px;
+  color: #5b6470;
+}
+
+.draft-field__source {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #3370ff;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
+}
+
+.draft-field__manual {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #c46a00;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
+}
+
+.draft-field__hint {
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.5;
+  color: #97a0ac;
+}
+
+.draft-field__warn {
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.5;
+  color: #c46a00;
+}
+
+.draft-field__missing {
+  font-size: 11.5px;
+  font-style: normal;
+  line-height: 1.5;
+  color: #d4380d;
+}

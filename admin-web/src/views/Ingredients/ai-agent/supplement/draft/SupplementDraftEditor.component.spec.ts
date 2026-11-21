@@ -91,6 +91,7 @@ interface EditorProps {
   finalizing: boolean
   dirty: boolean
   saveError: string
+  conflict: boolean
 }
 
 function mountEditor(overrides: Partial<EditorProps> = {}) {
@@ -103,6 +104,7 @@ function mountEditor(overrides: Partial<EditorProps> = {}) {
       finalizing: false,
       dirty: false,
       saveError: '',
+      conflict: false,
       ...overrides
     },
     global: { plugins: [ElementPlus] }
@@ -133,6 +135,30 @@ describe('草稿编辑页保存状态', () => {
     await wrapper.setProps({ saveError: '', dirty: false })
     expect(wrapper.find('[data-save-state="saved"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('已保存')
+  })
+
+  it('409 时显示「重新加载草稿」，点击发出 reload', async () => {
+    const wrapper = mountEditor({
+      conflict: true,
+      saveError: '草稿已被更新，可以点「重新加载草稿」取回服务端最新内容'
+    })
+
+    expect(wrapper.find('[data-conflict]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('重新加载草稿')
+
+    await wrapper.find('[data-action="reload"]').trigger('click')
+    expect(wrapper.emitted('reload')).toHaveLength(1)
+  })
+
+  it('AI 起草期间显示遮罩锁定表单', async () => {
+    const wrapper = mountEditor()
+    expect(wrapper.find('[data-ai-lock]').exists()).toBe(false)
+
+    await wrapper.setProps({ aiRunning: true })
+    expect(wrapper.find('[data-ai-lock]').exists()).toBe(true)
+    expect(wrapper.find('.draft-editor__body').classes()).toContain(
+      'draft-editor__body--locked'
+    )
   })
 
   it('AI/校验/写入进行中时禁用保存并离开', async () => {

@@ -14,15 +14,25 @@
 
     <div class="draft-nutrition__group">
       <label class="draft-field">
-        <span class="draft-field__label">默认目标营养素</span>
+        <span class="draft-field__label">
+          <span>默认目标营养素</span>
+          <span
+            v-if="isManual('nutrition.defaultTargetFields')"
+            class="draft-field__manual"
+            title="你手动改过，AI 不会覆盖"
+          >
+            人改
+          </span>
+        </span>
         <el-select
-          v-model="nutrition.defaultTargetFields"
+          :model-value="nutrition.defaultTargetFields"
           multiple
           filterable
           collapse-tags
           collapse-tags-tooltip
           placeholder="设计器里加这条补剂时默认勾选的营养素"
           style="width: 100%"
+          @update:model-value="(value: string[]) => updateTargets(value)"
         >
           <el-option
             v-for="option in targetOptions"
@@ -53,7 +63,14 @@
           class="draft-field"
         >
           <span class="draft-field__label">
-            {{ field.label }}（{{ field.unit }}）
+            <span>{{ field.label }}（{{ field.unit }}）</span>
+            <span
+              v-if="isManual(`nutrition.servingNutrients.${field.fieldPath}`)"
+              class="draft-field__manual"
+              title="你手动改过，AI 不会覆盖"
+            >
+              人改
+            </span>
           </span>
           <el-input-number
             :model-value="nutrition.servingNutrients[field.fieldPath]"
@@ -80,12 +97,22 @@
 
     <div class="draft-nutrition__group">
       <label class="draft-field">
-        <span class="draft-field__label">标签原文</span>
+        <span class="draft-field__label">
+          <span>标签原文</span>
+          <span
+            v-if="isManual('nutrition.labelText')"
+            class="draft-field__manual"
+            title="你手动改过，AI 不会覆盖"
+          >
+            人改
+          </span>
+        </span>
         <el-input
-          v-model="nutrition.labelText"
+          :model-value="nutrition.labelText"
           type="textarea"
           :rows="4"
           placeholder="照标签抄：Serving Size / 每份含量 / 成分表"
+          @update:model-value="(value: string) => updateLabelText(value)"
         />
         <em class="draft-field__hint">
           留档用；写入后能回查这张标签当时怎么写的
@@ -108,15 +135,34 @@
 import { computed, ref, watch } from 'vue'
 import type { SupplementDraftNutrition } from '@/api/supplementDrafts'
 import { supplementNutrientGroups } from '@/constants/supplementNutrients'
+import { isManualDraftPath } from '../supplementDraftState'
 
 const props = defineProps<{
   /** 每份多少（来自「商品与基本信息」）；折算预览除的就是它 */
   servingUnitsPerDose: number | null
   /** 展示单位（粒/片/胶囊/g/ml…），只用于文案 */
   unitDisplayLabel: string
+  /** 人改过的字段路径；用于显示「人改」标记 */
+  manualFields?: string[]
+  /** 只有人的输入事件才调用它（初始加载/AI 回写都不调用） */
+  markManual?: (path: string) => void
 }>()
 
 const nutrition = defineModel<SupplementDraftNutrition>({ required: true })
+
+function isManual(path: string): boolean {
+  return isManualDraftPath(path, props.manualFields ?? [])
+}
+
+function updateTargets(value: string[]): void {
+  props.markManual?.('nutrition.defaultTargetFields')
+  nutrition.value.defaultTargetFields = value
+}
+
+function updateLabelText(value: string): void {
+  props.markManual?.('nutrition.labelText')
+  nutrition.value.labelText = value
+}
 
 const showAll = ref(false)
 
@@ -138,7 +184,7 @@ watch(
       nutrition.value.defaultTargetFields = next
     }
   },
-  { deep: true }
+  { deep: true, immediate: true }
 )
 
 const unitLabel = computed(
@@ -207,6 +253,7 @@ function perUnitPreview(fieldPath: string): string {
 
 /** 清空输入就从对象里删掉键（服务端把「没有这个键」当作没填）。 */
 function setServing(fieldPath: string, value: number | undefined): void {
+  props.markManual?.(`nutrition.servingNutrients.${fieldPath}`)
   if (value === undefined || !Number.isFinite(value)) {
     delete nutrition.value.servingNutrients[fieldPath]
     return
@@ -303,5 +350,15 @@ function setServing(fieldPath: string, value: number | undefined): void {
   font-style: normal;
   line-height: 1.5;
   color: #97a0ac;
+}
+
+.draft-field__manual {
+  padding: 0 6px;
+  border-radius: 8px;
+  background: #fff4e5;
+  color: #c46a00;
+  font-size: 11px;
+  font-style: normal;
+  line-height: 18px;
 }
 </style>

@@ -133,8 +133,33 @@ function isSameValue(left: unknown, right: unknown): boolean {
   return canonicalValue(left) === canonicalValue(right)
 }
 
-/** `manualFields` 里记的是父路径时，其子路径也算人改过。 */
-function isManualPath(path: string, manualFields: readonly string[]): boolean {
+/** 去空白、去重；保持人第一次改的顺序，便于 diff/调试时按操作顺序读。 */
+export function mergeManualFields(
+  ...lists: ReadonlyArray<readonly string[] | null | undefined>
+): string[] {
+  const result: string[] = []
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue
+    for (const field of list) {
+      const normalized = typeof field === 'string' ? field.trim() : ''
+      if (normalized && !result.includes(normalized)) {
+        result.push(normalized)
+      }
+    }
+  }
+  return result
+}
+
+/**
+ * 路径是否属于人改过的字段。
+ *
+ * 与后端 `isManualPath` 同一口径：精确命中，或记的是父路径（如整块
+ * `nutrition.servingNutrients` 被锁）时子路径也算。
+ */
+export function isManualDraftPath(
+  path: string,
+  manualFields: readonly string[]
+): boolean {
   return manualFields.some((field) => {
     const normalized = field.trim()
     return (
@@ -142,6 +167,108 @@ function isManualPath(path: string, manualFields: readonly string[]): boolean {
       (path === normalized || path.startsWith(`${normalized}.`))
     )
   })
+}
+
+/**
+ * 草稿路径读写。
+ *
+ * 营养素是**扁平键**（`servingNutrients['minerals.copper']`），不能按点号
+ * 逐层拆；除此之外 payload 只有「区块.字段」一层，和 diff 的叶子路径一致。
+ * 与后端 `applyAiFieldValue` 保持同一套路径语义。
+ */
+const NUTRIENT_SECTION_PREFIX = 'nutrition.servingNutrients.'
+
+/** JSON 深拷贝：payload 只含可序列化值，避开结构化克隆对响应式代理的限制。 */
+export function cloneDraftPayload(
+  payload: SupplementDraftPayload
+): SupplementDraftPayload {
+  return JSON.parse(JSON.stringify(payload)) as SupplementDraftPayload
+}
+
+/** 读叶子路径的值；读不到返回 undefined。 */
+export function readDraftPath(
+  payload: SupplementDraftPayload,
+  path: string
+): unknown {
+  if (path.startsWith(NUTRIENT_SECTION_PREFIX)) {
+    const fieldPath = path.slice(NUTRIENT_SECTION_PREFIX.length)
+    return fieldPath ? payload.nutrition.servingNutrients[fieldPath] : undefined
+  }
+  const dotIndex = path.indexOf('.')
+  if (dotIndex <= 0) return undefined
+  const section = path.slice(0, dotIndex) as keyof SupplementDraftPayload
+  if (section === 'review') return undefined
+  const key = path.slice(dotIndex + 1)
+  const target = payload[section] as unknown as Record<string, unknown>
+  if (!target || typeof target !== 'object' || !(key in target)) {
+    return undefined
+  }
+  return target[key]
+}
+
+/** 写叶子路径；`undefined` 表示「原来没有这个字段」，直接删键。 */
+export function writeDraftPath(
+  payload: SupplementDraftPayload,
+  path: string,
+  value: unknown
+): void {
+  if (path.startsWith(NUTRIENT_SECTION_PREFIX)) {
+    const fieldPath = path.slice(NUTRIENT_SECTION_PREFIX.length)
+    if (!fieldPath) return
+    if (value === undefined) {
+      delete payload.nutrition.servingNutrients[fieldPath]
+    } else if (typeof value === 'number' && Number.isFinite(value)) {
+      payload.nutrition.servingNutrients[fieldPath] = value
+    }
+    return
+  }
+  const dotIndex = path.indexOf('.')
+  if (dotIndex <= 0) return
+  const section = path.slice(0, dotIndex) as keyof SupplementDraftPayload
+  if (section === 'review') return
+  const key = path.slice(dotIndex + 1)
+  const target = payload[section] as unknown as Record<string, unknown>
+  if (!target || typeof target !== 'object') return
+  if (value === undefined) {
+    delete target[key]
+  } else {
+    target[key] = value
+  }
+}
+
+/** AI diff 的选择结果：采用哪些路径，以及要回退并标记人改的路径。 */
+export interface SupplementDraftAiApplyResult {
+  /** 已按选择合并后的新载荷（以 AI 版本为底，未采用的路径回退成原值）。 */
+  payload: SupplementDraftPayload
+  /** 被回退的路径；调用方要逐条 `markManual`，防止 AI 下次再改。 */
+  manualPaths: string[]
+}
+
+/**
+ * 把「AI diff 弹窗的选择」落到载荷上。
+ *
+ * - `applyPaths` 里的非人改路径采用 AI 新值；
+ * - 其余变化路径（含全部人改路径）一律回退成 `before` 的原值，并记进
+ *   `manualPaths`——这就是「保留我的」。
+ * - 人改路径即使被勾选也不会采用，避免绕过 `manualFields` 保护。
+ */
+export function applyDraftAiSelection(
+  before: SupplementDraftPayload,
+  after: SupplementDraftPayload,
+  manualFields: readonly string[],
+  applyPaths: readonly string[]
+): SupplementDraftAiApplyResult {
+  const selected = new Set(applyPaths)
+  const payload = cloneDraftPayload(after)
+  const manualPaths: string[] = []
+  for (const row of diffDraft(before, after, manualFields)) {
+    if (selected.has(row.path) && !row.manual) continue
+    writeDraftPath(payload, row.path, readDraftPath(before, row.path))
+    if (!manualPaths.includes(row.path)) {
+      manualPaths.push(row.path)
+    }
+  }
+  return { payload, manualPaths }
 }
 
 /**
@@ -174,7 +301,7 @@ export function diffDraft(
         path,
         before: beforeValue,
         after: afterValue,
-        manual: isManualPath(path, manualFields)
+        manual: isManualDraftPath(path, manualFields)
       })
     }
   }

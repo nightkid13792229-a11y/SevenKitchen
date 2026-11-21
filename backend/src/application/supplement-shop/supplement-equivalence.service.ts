@@ -456,9 +456,33 @@ export class SupplementEquivalenceService {
    */
   private async assertProductionLimit(
     groupId: string,
-    incoming: Array<{ id: string; name?: string; procurementEnabled?: boolean | null }> = [],
+    incoming: Array<{
+      id: string;
+      name?: string;
+      procurementEnabled?: boolean | null;
+    }> = [],
   ): Promise<void> {
-    const existing = await this.prisma.ingredient.findMany({
+    return this.assertProductionLimitInTransaction(
+      this.prisma,
+      groupId,
+      incoming,
+    );
+  }
+
+  /**
+   * 事务版生产门禁：finalize 在自己的事务里归组时用，读到的必须是同一事务的视图，
+   * 否则并发两个写入可能同时通过「最多 2 个开生产」。
+   */
+  private async assertProductionLimitInTransaction(
+    tx: Prisma.TransactionClient,
+    groupId: string,
+    incoming: Array<{
+      id: string;
+      name?: string;
+      procurementEnabled?: boolean | null;
+    }> = [],
+  ): Promise<void> {
+    const existing = await tx.ingredient.findMany({
       where: { equivalenceGroupId: groupId, procurementEnabled: true },
       select: { id: true, name: true },
     });
@@ -665,7 +689,16 @@ export class SupplementEquivalenceService {
     groupId: string,
     count: number,
   ): Promise<number[]> {
-    const existing = await this.prisma.ingredient.findMany({
+    return this.nextPrioritiesInTransaction(this.prisma, groupId, count);
+  }
+
+  /** 事务版「排到队尾」：与 `nextPriorities` 同一口径，finalize 在事务内用。 */
+  private async nextPrioritiesInTransaction(
+    tx: Prisma.TransactionClient,
+    groupId: string,
+    count: number,
+  ): Promise<number[]> {
+    const existing = await tx.ingredient.findMany({
       where: { equivalenceGroupId: groupId },
       select: { equivalencePriority: true },
     });
@@ -836,7 +869,29 @@ export class SupplementEquivalenceService {
     groupId: string,
     operator: EquivalenceOperator,
   ): Promise<{ moved: number; skipped: number }> {
-    const group = await this.prisma.supplementEquivalenceGroup.findUnique({
+    return this.prisma.$transaction((tx) =>
+      this.assignInTransaction(tx, ingredientIds, groupId, operator),
+    );
+  }
+
+  /**
+   * 事务内的归组（补剂草稿最终写入复用）。
+   *
+   * `assign` 只是包一层 `$transaction` 的旧入口；finalize 必须直接调这个，
+   * 否则会在自己的事务里再开一层，原料/组/草稿不在同一个原子操作里。
+   *
+   * `options.reapprove`：加完成员后按 `buildApprovalErrors` 复查整个组，干净就把组
+   * 改回 APPROVED（写 `reviewedBy`/`reviewedAt`）并记 `STATUS_CHANGE`；不干净就抛 400，
+   * 由调用方回滚整个事务（spec §8.3「本次一并审核通过」）。
+   */
+  async assignInTransaction(
+    tx: Prisma.TransactionClient,
+    ingredientIds: string[],
+    groupId: string,
+    operator: EquivalenceOperator,
+    options: { reapprove?: boolean } = {},
+  ): Promise<{ moved: number; skipped: number }> {
+    const group = await tx.supplementEquivalenceGroup.findUnique({
       where: { id: groupId },
       select: { id: true, status: true },
     });
@@ -851,7 +906,7 @@ export class SupplementEquivalenceService {
       throw new BadRequestException('请选择要归组的原料');
     }
 
-    const ingredients = await this.prisma.ingredient.findMany({
+    const ingredients = await tx.ingredient.findMany({
       where: { id: { in: uniqueIds } },
       select: {
         id: true,
@@ -877,7 +932,7 @@ export class SupplementEquivalenceService {
       (ingredient) => ingredient.equivalenceGroupId !== groupId,
     );
 
-    await this.assertProductionLimit(groupId, toMove as any);
+    await this.assertProductionLimitInTransaction(tx, groupId, toMove as any);
     const skipped = ingredients.length - toMove.length;
     const oldGroupIds = Array.from(
       new Set(
@@ -887,67 +942,116 @@ export class SupplementEquivalenceService {
       ),
     );
 
-    const movePriorities = await this.nextPriorities(groupId, toMove.length);
+    const movePriorities = await this.nextPrioritiesInTransaction(
+      tx,
+      groupId,
+      toMove.length,
+    );
 
-    await this.prisma.$transaction(async (tx) => {
-      for (const [index, ingredient] of toMove.entries()) {
-        await tx.ingredient.update({
-          where: { id: ingredient.id },
-          data: {
-            equivalenceGroupId: groupId,
-            equivalencePriority: movePriorities[index] ?? 0,
-          },
-        });
-      }
-      const groupsToReset = new Set(oldGroupIds);
-      if (group.status === 'APPROVED') {
-        groupsToReset.add(groupId);
-      }
-      if (groupsToReset.size > 0) {
-        await tx.supplementEquivalenceGroup.updateMany({
-          where: {
-            id: { in: Array.from(groupsToReset) },
-            status: 'APPROVED',
-          },
-          data: {
-            status: 'DRAFT',
-            isActive: true,
-            reviewedBy: null,
-            reviewedAt: null,
-            reviewNote: null,
-          },
-        });
-      }
+    for (const [index, ingredient] of toMove.entries()) {
+      await tx.ingredient.update({
+        where: { id: ingredient.id },
+        data: {
+          equivalenceGroupId: groupId,
+          equivalencePriority: movePriorities[index] ?? 0,
+        },
+      });
+    }
+    const groupsToReset = new Set(oldGroupIds);
+    if (group.status === 'APPROVED') {
+      groupsToReset.add(groupId);
+    }
+    if (groupsToReset.size > 0) {
+      await tx.supplementEquivalenceGroup.updateMany({
+        where: {
+          id: { in: Array.from(groupsToReset) },
+          status: 'APPROVED',
+        },
+        data: {
+          status: 'DRAFT',
+          isActive: true,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewNote: null,
+        },
+      });
+    }
+    await tx.supplementEquivalenceGroupAudit.create({
+      data: {
+        groupId,
+        action: 'MEMBER_ADD',
+        changes: {
+          ingredientIds: toMove.map((item) => item.id),
+          names: toMove.map((item) => item.name),
+          movedFromGroupIds: oldGroupIds,
+        } as Prisma.InputJsonValue,
+        operatorId: operator.id,
+        operatorName: operator.name ?? operator.id,
+      },
+    });
+    for (const oldGroupId of oldGroupIds) {
       await tx.supplementEquivalenceGroupAudit.create({
         data: {
-          groupId,
-          action: 'MEMBER_ADD',
+          groupId: oldGroupId,
+          action: 'MEMBER_REMOVE',
           changes: {
-            ingredientIds: toMove.map((item) => item.id),
-            names: toMove.map((item) => item.name),
-            movedFromGroupIds: oldGroupIds,
+            ingredientIds: toMove
+              .filter((item) => item.equivalenceGroupId === oldGroupId)
+              .map((item) => item.id),
+            movedToGroupId: groupId,
           } as Prisma.InputJsonValue,
           operatorId: operator.id,
           operatorName: operator.name ?? operator.id,
         },
       });
-      for (const oldGroupId of oldGroupIds) {
-        await tx.supplementEquivalenceGroupAudit.create({
-          data: {
-            groupId: oldGroupId,
-            action: 'MEMBER_REMOVE',
-            changes: {
-              ingredientIds: toMove
-                .filter((item) => item.equivalenceGroupId === oldGroupId)
-                .map((item) => item.id),
-              movedToGroupId: groupId,
-            } as Prisma.InputJsonValue,
-            operatorId: operator.id,
-            operatorName: operator.name ?? operator.id,
-          },
-        });
+    }
+
+    if (options.reapprove) {
+      // 成员变了，原审核结论失效；一并通过要按「加完成员后的整组」重新判定。
+      const groupToApprove = await tx.supplementEquivalenceGroup.findUnique({
+        where: { id: groupId },
+      });
+      if (!groupToApprove) {
+        throw new NotFoundException('等价组不存在');
       }
-    });
+      const membersToApprove = await tx.ingredient.findMany({
+        where: { equivalenceGroupId: groupId },
+        select: GROUP_MEMBER_SELECT,
+      });
+      const approvalErrors = buildApprovalErrors({
+        group: groupToApprove,
+        members: membersToApprove,
+        resolve: (member) => this.resolveMember(member, groupToApprove),
+      });
+      if (approvalErrors.length > 0) {
+        // 不能「一并通过」就不通过：调用方（finalize）整体回滚。
+        throw new BadRequestException(approvalErrors.join('；'));
+      }
+
+      await tx.supplementEquivalenceGroup.update({
+        where: { id: groupId },
+        data: {
+          status: 'APPROVED',
+          isActive: true,
+          reviewedBy: operator.name ?? operator.id,
+          reviewedAt: new Date(),
+          reviewNote: null,
+        },
+      });
+      await tx.supplementEquivalenceGroupAudit.create({
+        data: {
+          groupId,
+          action: 'STATUS_CHANGE',
+          changes: {
+            from: group.status === 'APPROVED' ? 'DRAFT' : group.status,
+            to: 'APPROVED',
+            reason: 'MEMBER_ADD_REAPPROVE',
+          } as Prisma.InputJsonValue,
+          operatorId: operator.id,
+          operatorName: operator.name ?? operator.id,
+        },
+      });
+    }
 
     return { moved: toMove.length, skipped };
   }
@@ -996,7 +1100,9 @@ export class SupplementEquivalenceService {
   private normalizeInput(
     input: UpsertEquivalenceGroupInput,
   ): UpsertEquivalenceGroupInput {
-    const code = String(input.code ?? '').trim().toUpperCase();
+    const code = String(input.code ?? '')
+      .trim()
+      .toUpperCase();
     if (!/^[A-Z0-9_]{2,64}$/.test(code)) {
       throw new BadRequestException(
         '组编码只能包含大写字母、数字和下划线（2–64 位）',
@@ -1013,7 +1119,10 @@ export class SupplementEquivalenceService {
       throw new BadRequestException('目标营养素不能为空');
     }
 
-    if (!isCustomEquivalenceKey(nutrientKey) && !findAnyNutritionField(nutrientKey)) {
+    if (
+      !isCustomEquivalenceKey(nutrientKey) &&
+      !findAnyNutritionField(nutrientKey)
+    ) {
       throw new BadRequestException(`营养素 ${nutrientKey} 不在营养字段目录中`);
     }
 
@@ -1024,9 +1133,7 @@ export class SupplementEquivalenceService {
       }
       const expectedKey = `custom:${normalizeCustomNutrientName(label)}`;
       if (expectedKey !== nutrientKey.toLowerCase()) {
-        throw new BadRequestException(
-          `自定义成分的编码应为 ${expectedKey}`,
-        );
+        throw new BadRequestException(`自定义成分的编码应为 ${expectedKey}`);
       }
 
       const customLabel = String(input.nutrientLabel ?? '').trim();

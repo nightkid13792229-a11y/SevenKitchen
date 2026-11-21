@@ -353,11 +353,7 @@ describe('SupplementEquivalenceService', () => {
 
   it('approves only after evidence and healthy members are present', async () => {
     const group = await service.create(groupInput(), operator);
-    await service.addMembers(
-      group.id,
-      ['ing-caco3', 'ing-citrate'],
-      operator,
-    );
+    await service.addMembers(group.id, ['ing-caco3', 'ing-citrate'], operator);
     await service.changeStatus(group.id, 'PENDING_REVIEW', operator);
     const approved = await service.changeStatus(
       group.id,
@@ -486,13 +482,139 @@ describe('SupplementEquivalenceService', () => {
     expect(summary.ungrouped).toBe(3);
     expect(summary.singleton).toBe(1);
   });
+
+  /**
+   * 补剂最终写入（finalize）在自己的事务里归组：不能用 assign()，否则会再开一层事务，
+   * 原料/组/草稿就不在同一个原子操作里。下面钉住事务版的行为。
+   */
+  describe('assignInTransaction', () => {
+    async function approvedGroupWithOneMember() {
+      const group = await service.create(groupInput(), operator);
+      await service.addMembers(group.id, ['ing-caco3'], operator);
+      await service.changeStatus(group.id, 'PENDING_REVIEW', operator);
+      await service.changeStatus(group.id, 'APPROVED', operator);
+      return group;
+    }
+
+    it('在调用方给的事务里归组，不再单开事务', async () => {
+      const group = await service.create(groupInput(), operator);
+      const txSpy = jest.spyOn(store.prisma, '$transaction');
+
+      const result = await service.assignInTransaction(
+        store.prisma,
+        ['ing-caco3'],
+        group.id,
+        operator,
+      );
+
+      expect(result).toEqual({ moved: 1, skipped: 0 });
+      expect(txSpy).not.toHaveBeenCalled();
+      expect(
+        store.ingredients.find((row) => row.id === 'ing-caco3')
+          ?.equivalenceGroupId,
+      ).toBe(group.id);
+      expect(
+        store.audits.some(
+          (row) => row.groupId === group.id && row.action === 'MEMBER_ADD',
+        ),
+      ).toBe(true);
+      txSpy.mockRestore();
+    });
+
+    it('旧 assign 入口包一层事务后复用同一段逻辑', async () => {
+      const group = await service.create(groupInput(), operator);
+      const spy = jest.spyOn(service, 'assignInTransaction');
+
+      const result = await service.assign(['ing-caco3'], group.id, operator);
+
+      expect(result).toEqual({ moved: 1, skipped: 0 });
+      expect(spy).toHaveBeenCalledTimes(1);
+      spy.mockRestore();
+    });
+
+    it('一并审核通过：加完成员复查干净就把组改回 APPROVED 并记审计', async () => {
+      const group = await approvedGroupWithOneMember();
+
+      await service.assignInTransaction(
+        store.prisma,
+        ['ing-citrate'],
+        group.id,
+        operator,
+        { reapprove: true },
+      );
+
+      const updated = store.groups.find((row) => row.id === group.id)!;
+      expect(updated.status).toBe('APPROVED');
+      expect(updated.reviewedBy).toBe('管理员');
+      expect(updated.reviewedAt).toBeTruthy();
+      expect(
+        store.audits.find(
+          (row) =>
+            row.groupId === group.id &&
+            row.action === 'STATUS_CHANGE' &&
+            row.changes?.reason === 'MEMBER_ADD_REAPPROVE',
+        )?.changes,
+      ).toMatchObject({ from: 'DRAFT', to: 'APPROVED' });
+    });
+
+    it('一并审核不通过时抛 400：组留在 DRAFT，不写通过审计', async () => {
+      const group = await approvedGroupWithOneMember();
+
+      await expect(
+        service.assignInTransaction(
+          store.prisma,
+          ['ing-bad'],
+          group.id,
+          operator,
+          { reapprove: true },
+        ),
+      ).rejects.toThrow('没填每份克重');
+
+      expect(store.groups.find((row) => row.id === group.id)?.status).toBe(
+        'DRAFT',
+      );
+      expect(
+        store.audits.some(
+          (row) => row.changes?.reason === 'MEMBER_ADD_REAPPROVE',
+        ),
+      ).toBe(false);
+    });
+
+    it('取消一并通过时组留在 DRAFT，替换暂不生效', async () => {
+      const group = await approvedGroupWithOneMember();
+
+      const result = await service.assignInTransaction(
+        store.prisma,
+        ['ing-citrate'],
+        group.id,
+        operator,
+        { reapprove: false },
+      );
+
+      expect(result).toEqual({ moved: 1, skipped: 0 });
+      expect(store.groups.find((row) => row.id === group.id)?.status).toBe(
+        'DRAFT',
+      );
+      expect(
+        store.audits.some(
+          (row) => row.changes?.reason === 'MEMBER_ADD_REAPPROVE',
+        ),
+      ).toBe(false);
+    });
+  });
 });
 
 describe('equivalence group pure rules', () => {
   it('only allows the documented status transitions', () => {
-    expect(canTransitionEquivalenceStatus('DRAFT', 'PENDING_REVIEW')).toBe(true);
-    expect(canTransitionEquivalenceStatus('PENDING_REVIEW', 'APPROVED')).toBe(true);
-    expect(canTransitionEquivalenceStatus('PENDING_REVIEW', 'DRAFT')).toBe(true);
+    expect(canTransitionEquivalenceStatus('DRAFT', 'PENDING_REVIEW')).toBe(
+      true,
+    );
+    expect(canTransitionEquivalenceStatus('PENDING_REVIEW', 'APPROVED')).toBe(
+      true,
+    );
+    expect(canTransitionEquivalenceStatus('PENDING_REVIEW', 'DRAFT')).toBe(
+      true,
+    );
     expect(canTransitionEquivalenceStatus('APPROVED', 'DISABLED')).toBe(true);
     expect(canTransitionEquivalenceStatus('DISABLED', 'DRAFT')).toBe(true);
     expect(canTransitionEquivalenceStatus('DRAFT', 'APPROVED')).toBe(false);

@@ -228,6 +228,7 @@ function makePayload(
     reapproveGroup?: boolean;
     noSaleReason?: string | null;
     storageCondition?: string;
+    acknowledgedWarnings?: SupplementDraftPayload['review']['acknowledgedWarnings'];
   } = {},
 ): SupplementDraftPayload {
   const payload = emptySupplementDraftPayload();
@@ -252,6 +253,9 @@ function makePayload(
   }
   if (patch.storageCondition !== undefined) {
     payload.retail.storageCondition = patch.storageCondition;
+  }
+  if (patch.acknowledgedWarnings !== undefined) {
+    payload.review.acknowledgedWarnings = patch.acknowledgedWarnings;
   }
   return payload;
 }
@@ -929,6 +933,26 @@ describe('SupplementDraftAiService', () => {
     const snapshot = lastSnapshot();
     expect(snapshot.decisions.procurement.enabled).toBe(false);
     expect(snapshot.proposedDecisions.procurement.enabled).toBe(false);
+  });
+
+  it.each<[string, { text: string; model: string } | null]>([
+    ['AI 正常返回（OK）', aiReply()],
+    ['AI 不可用（PARTIAL）', null],
+  ])('%s：AI 重跑后清空旧提醒确认', async (_label, reply) => {
+    currentDraft = draftView(
+      makePayload({
+        acknowledgedWarnings: [
+          { code: 'STORAGE_CONDITION_MISSING', paramsHash: 'abc123' },
+        ],
+      }),
+    );
+    vision.analyze.mockResolvedValue(reply);
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    const payload = normalizeSupplementDraftPayload(lastUpdateInput().payload);
+    expect(payload.review.acknowledgedWarnings).toEqual([]);
+    expect(lastSnapshot().status).toBe(reply ? 'OK' : 'PARTIAL');
   });
 
   it('AI 明确给 false + 理由时才关掉开关，快照同步', async () => {

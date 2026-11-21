@@ -367,6 +367,13 @@ export class SupplementDraftAiService {
       nameFallback: intake.suggestedName ?? link?.productName ?? null,
     });
 
+    // spec §7.3：AI 重跑后旧的提醒确认全部失效，必须让人重新确认。
+    // merged.payload 已过 normalize，review 结构一定存在（缺了也会补默认）。
+    const mergedPayload: SupplementDraftPayload = {
+      ...merged.payload,
+      review: { acknowledgedWarnings: [] },
+    };
+
     const warnings: SupplementAiWarning[] = [...(aiDraft?.warnings ?? [])];
     if (linkWarning) {
       warnings.push(linkWarning);
@@ -384,7 +391,7 @@ export class SupplementDraftAiService {
       fields: aiDraft?.fields ?? {},
       // 快照里的决定项写「实际生效后的值」：不要出现 snapshot 说关、
       // payload 却是开（人改过/AI 没真正表态都会被保留）。
-      decisions: buildEffectiveDecisions(aiDraft, merged.payload),
+      decisions: buildEffectiveDecisions(aiDraft, mergedPayload),
       // 额外保留 AI 原始提议（含 reason），供审计对照生效值；不能和 decisions 混用。
       proposedDecisions: aiDraft
         ? structuredClone(aiDraft.decisions)
@@ -397,8 +404,8 @@ export class SupplementDraftAiService {
     // update 会整份替换 payload：这里传的是「最新草稿 + 事实 + AI」的完整合并结果。
     // 不回传 manualFields（服务端已有列表），也不写 status/finalized*；带乐观锁。
     const update: UpdateSupplementDraftInput = {
-      name: merged.payload.basic.name.trim() || latest.name,
-      payload: merged.payload,
+      name: mergedPayload.basic.name.trim() || latest.name,
+      payload: mergedPayload,
       aiSnapshot,
       expectedUpdatedAt: latest.updatedAt.toISOString(),
     };

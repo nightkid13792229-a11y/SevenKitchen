@@ -255,8 +255,13 @@ export class SupplementVerificationService {
       ? draft.verification
       : null;
     const fields: VerificationField[] = stored?.fields ?? [];
+    // 上一次核验在缺报告时也会保存 fields=[]，不能把「存过一份空报告」当成
+    // 有直接字段证据；否则第二次重核会把缺证据洗成 ok=true。
+    const hasDirectFields = Boolean(
+      stored && Array.isArray(stored.fields) && stored.fields.length > 0,
+    );
     const features = await this.verifyFeatures(draft, ids);
-    if (!stored) {
+    if (!hasDirectFields) {
       // 没有写入时的直接字段证据，功能全过也不能判「全部成功」。
       features.unshift({
         code: DIRECT_FIELDS_MISSING_CODE,

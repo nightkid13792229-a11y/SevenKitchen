@@ -1002,6 +1002,60 @@ describe('SupplementVerificationService', () => {
       );
     });
 
+    it('连续两次 reverify：缺字段证据不会被第二次洗成成功', async () => {
+      let saved: SupplementWriteVerification | null = null;
+      draftServiceMock.saveVerification.mockImplementation(
+        async (
+          _draftId: string,
+          _userId: string,
+          report: SupplementWriteVerification,
+        ) => {
+          saved = report;
+        },
+      );
+      draftServiceMock.get
+        .mockResolvedValueOnce(
+          draftView({ status: 'FINALIZED', verification: null }),
+        )
+        .mockImplementation(async () =>
+          draftView({
+            status: 'FINALIZED',
+            verification:
+              saved as unknown as SupplementDraftView['verification'],
+          }),
+        );
+
+      // 第一次：没有写入报告 → 明确失败，并保存 fields=[] 的报告。
+      const first = await service.reverify('user-1', 'draft-1');
+      expect(first.ok).toBe(false);
+      expect(first.fields).toEqual([]);
+      expect(featureOf(first.features, 'DIRECT_FIELDS_MISSING').severity).toBe(
+        'ERROR',
+      );
+      expect(featureOf(first.features, 'RETAIL').ok).toBe(true);
+
+      // 第二次：读到上次保存的 fields=[] 报告，仍必须失败，不能洗成成功。
+      const second = await service.reverify('user-1', 'draft-1');
+      expect(second.ok).toBe(false);
+      expect(second.fields).toEqual([]);
+      expect(featureOf(second.features, 'DIRECT_FIELDS_MISSING').severity).toBe(
+        'ERROR',
+      );
+      // 功能项仍保留（7 个功能 + 1 个缺字段标记）。
+      expect(featureOf(second.features, 'RETAIL').ok).toBe(true);
+      expect(second.features).toHaveLength(8);
+
+      expect(draftServiceMock.saveVerification).toHaveBeenCalledTimes(2);
+      const secondSaved = draftServiceMock.saveVerification.mock
+        .calls[1][2] as SupplementWriteVerification;
+      expect(secondSaved.ok).toBe(false);
+      expect(
+        secondSaved.features.some(
+          (feature) => feature.code === 'DIRECT_FIELDS_MISSING',
+        ),
+      ).toBe(true);
+    });
+
     it('reverify 只重跑功能核验：合并已存直接字段、保存并返回新报告', async () => {
       const stored = storedReport();
       draftServiceMock.get.mockResolvedValue(

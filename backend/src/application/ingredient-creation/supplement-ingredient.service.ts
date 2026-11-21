@@ -280,8 +280,11 @@ export class SupplementIngredientService {
   }
 
   private assertInput(input: CreateSupplementIngredientInput): void {
-    if (!Number.isInteger(input.servingUnitsPerDose) || input.servingUnitsPerDose < 1) {
-      throw new BadRequestException('每份几粒必须是大于 0 的整数');
+    if (
+      !Number.isFinite(input.servingUnitsPerDose) ||
+      input.servingUnitsPerDose <= 0
+    ) {
+      throw new BadRequestException('每份多少必须大于 0（胶囊是整数，粉/液体可以是小数）');
     }
     if (!Number.isFinite(input.purchaseToBaseRatio) || input.purchaseToBaseRatio <= 0) {
       throw new BadRequestException('换算倍数必须大于 0');
@@ -309,13 +312,19 @@ export class SupplementIngredientService {
       derived[key] = servingValue / input.servingUnitsPerDose;
     }
 
+    // 模型给了每单位含量就采用它（容差 1% 内视为一致）；没给才用上面折出来的
     for (const [key, claimed] of Object.entries(input.perUnitNutrients ?? {})) {
       const expected = derived[key];
-      if (expected === undefined || Math.abs(claimed - expected) > 1e-4) {
+      if (expected === undefined) {
+        continue;
+      }
+      const tolerance = Math.max(1e-4, expected * 0.01);
+      if (Math.abs(claimed - expected) > tolerance) {
         throw new BadRequestException(
-          `每粒值对不上折算：${key} 应为 ${expected ?? '（未提供每份值）'}，收到 ${claimed}`
+          `每份折算值对不上：${key} 应为 ${Math.round(expected * 1000) / 1000}，收到 ${claimed}`
         );
       }
+      derived[key] = claimed;
     }
 
     return derived;

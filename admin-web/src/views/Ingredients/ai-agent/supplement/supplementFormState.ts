@@ -185,7 +185,8 @@ export function toCreatePayload(
   if (!draft.purchaseUnit.trim()) {
     return null
   }
-  if (!draft.servingUnitsPerDose || draft.servingUnitsPerDose < 1) {
+  // 粉剂/液体每份是小数（0.9 g / 2.5 ml），只要求大于 0
+  if (!draft.servingUnitsPerDose || draft.servingUnitsPerDose <= 0) {
     return null
   }
   if (!draft.purchaseToBaseRatio || draft.purchaseToBaseRatio <= 0) {
@@ -219,8 +220,12 @@ export function toCreatePayload(
     labelNameSource: text(draft.labelNameSource) ?? undefined,
     tagNames: draft.tagNames,
     servingUnitsPerDose: draft.servingUnitsPerDose,
-    // 送「每份」值：折算只有服务端那一处说了算，这里最多是预览
+    // 送「每份」值；模型算好的每单位含量一起送，服务端校验后采用
     servingNutrients: { ...draft.servingNutrients },
+    perUnitNutrients:
+      Object.keys(draft.perUnitOverrides).length > 0
+        ? { ...draft.perUnitOverrides }
+        : undefined,
     evidence: {
       productUrl: text(draft.evidence.productUrl),
       frontImageUrl: text(draft.evidence.frontImageUrl),

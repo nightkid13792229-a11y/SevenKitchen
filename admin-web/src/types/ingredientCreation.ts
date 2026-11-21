@@ -606,6 +606,8 @@ export interface CreateSupplementIngredientPayload {
   tagNames: string[]
   servingUnitsPerDose: number
   servingNutrients: Record<string, number>
+  /** 模型算好的每单位含量（服务端校验后采用，不传就服务端自己折） */
+  perUnitNutrients?: Record<string, number>
   evidence: {
     productUrl?: string | null
     productName?: string | null

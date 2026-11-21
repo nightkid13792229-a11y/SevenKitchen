@@ -202,9 +202,12 @@ export class CreateSupplementIngredientDto {
   @IsString({ each: true })
   tagNames?: string[];
 
-  @ApiProperty({ description: '每份几粒', example: 2 })
-  @IsInt()
-  @Min(1)
+  @ApiProperty({
+    description: '每份多少（粒/克/毫升）。胶囊是整数，粉/液体可以是小数（0.9 g）',
+    example: 2,
+  })
+  @IsNumber()
+  @Min(0.001)
   servingUnitsPerDose!: number;
 
   @ApiProperty({

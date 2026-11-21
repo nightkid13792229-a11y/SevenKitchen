@@ -106,6 +106,11 @@ export class RecipeAgentService implements OnModuleInit {
   /** 一个草稿同一时间只允许一次运行。 */
   private readonly active = new Set<string>();
   private readonly stopped = new Set<string>();
+  /** 选材确认后当前运行还没释放 active，下一阶段延到 finally 再启动。 */
+  private readonly pendingStageStart = new Map<
+    string,
+    { actor: RecipeAgentActor; message: string }
+  >();
   private readonly logger = new Logger(RecipeAgentService.name);
 
   constructor(
@@ -356,6 +361,29 @@ export class RecipeAgentService implements OnModuleInit {
       .finally(() => {
         this.active.delete(draftId);
         this.stopped.delete(sessionId);
+        const pending = this.pendingStageStart.get(draftId);
+        if (pending) {
+          this.pendingStageStart.delete(draftId);
+          void this.start({
+            draftId,
+            actor: pending.actor,
+            message: pending.message,
+            silent: true,
+          }).catch(async (error: unknown) => {
+            await this.prisma.recipeDesignAgentSession
+              .update({
+                where: { id: sessionId },
+                data: {
+                  status: 'FAILED',
+                  lastError:
+                    (error as Error)?.message?.slice(0, 500) ??
+                    '下一阶段启动失败',
+                  endedAt: new Date(),
+                },
+              })
+              .catch(() => undefined);
+          });
+        }
       });
   }
 
@@ -718,10 +746,9 @@ export class RecipeAgentService implements OnModuleInit {
             },
           });
           if (confirmed) {
-            await this.start({
-              draftId,
+            // 当前 run 还占着 active；先登记，等 finally 释放后再启动设计。
+            this.pendingStageStart.set(draftId, {
               actor,
-              silent: true,
               message:
                 '选材已确认。请进入配方编辑阶段：读取当前草稿，按已确认方案与选材编辑配方，并调用评估验证；不要改动已确认的方案约束。',
             });

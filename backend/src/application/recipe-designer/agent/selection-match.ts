@@ -48,6 +48,10 @@ export async function matchSelectionToLibrary(
   }
 
   // 补剂剔除后，某个 CFCT 类型可能只剩 1 个；不足 2 个就整类不列。
+  // 用户最终确认的清单例外：用户选 1 个燕麦也要保留。
+  if (selection.confirmed === true) {
+    return { ...selection, items };
+  }
   const counts = new Map<string, number>();
   for (const item of items) {
     const category = item.foodCategory ?? '其他';

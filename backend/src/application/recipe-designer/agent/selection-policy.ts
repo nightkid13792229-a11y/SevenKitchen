@@ -10,6 +10,8 @@ export function filterSelectionByPlan(
   selection: AgentSelection,
   plan: AgentNutritionPlan | null | undefined,
 ): AgentSelection {
+  // 用户最终确认的清单不再按候选多样性/分类数量过滤；方案冲突应由确认前处理。
+  if (selection.confirmed === true) return selection;
   const fatMax =
     plan?.constraints.find((constraint) => constraint.key === 'fat')?.max ??
     null;

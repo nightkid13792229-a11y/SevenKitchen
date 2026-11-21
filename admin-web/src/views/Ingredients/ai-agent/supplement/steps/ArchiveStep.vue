@@ -122,7 +122,7 @@
         </el-button>
         <p v-for="note in diagnosticNotes" :key="note" class="upload-card__warn">{{ note }}</p>
         <p v-if="droppedHints.length > 0" class="upload-card__warn">
-          有 {{ droppedHints.length }} 条判断没过校验，已留空：{{ droppedHints.map((item) => item.reason).join('；') }}
+          有 {{ droppedHints.length }} 条已填上、但建议你核对：{{ droppedHints.map((item) => item.reason).join('；') }}
         </p>
         <p v-if="skipped.length > 0" class="upload-card__warn">
           这些没认出来，请照标签补：{{ skipped.join('、') }}
@@ -718,6 +718,14 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
   }
   if (analysis.addTiming) {
     draft.addTiming = analysis.addTiming
+  }
+  // 营养素以"模型 + 原文核对后"的结果为准（含模型漏掉、原文补上的项）
+  if ((analysis.nutrients ?? []).length > 0) {
+    const merged: Record<string, number> = { ...draft.servingNutrients }
+    for (const item of analysis.nutrients) {
+      merged[item.fieldPath] = item.value
+    }
+    draft.servingNutrients = merged
   }
   if ((analysis.defaultTargetFields ?? []).length > 0) {
     draft.defaultTargetFields = analysis.defaultTargetFields

@@ -49,8 +49,14 @@ export interface AnalysisResult {
 }
 
 export interface AnalysisOutcome {
+  /** 模型填的**全量**结果：不再因为对不上就留空 */
   result: AnalysisResult;
-  /** 被代码挡下来的结论（给界面提示，不静默丢弃） */
+  /**
+   * 代码核对出来的疑点（不再是"丢弃"，而是"填了但提醒你核对"）。
+   * 界面直接展示，人看一眼就知道哪一项是模型自己推的、哪一项和原文不一致。
+   */
+  notes: { field: string; reason: string; value: string }[];
+  /** 兼容旧调用点：与 notes 同源 */
   dropped: { field: string; reason: string; value: string }[];
 }
 
@@ -83,14 +89,14 @@ function toNumber(value: unknown): number | null {
  */
 export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOutcome {
   const source = (raw ?? {}) as Record<string, unknown>;
-  const dropped: AnalysisOutcome['dropped'] = [];
+  const notes: AnalysisOutcome['notes'] = [];
 
   const physicalFormRaw = String(source.physicalForm ?? '').toUpperCase();
   const physicalForm = ['POWDER', 'TABLET', 'CAPSULE', 'LIQUID'].includes(physicalFormRaw)
     ? (physicalFormRaw as AnalysisResult['physicalForm'])
     : null;
   if (source.physicalForm && !physicalForm) {
-    dropped.push({ field: 'physicalForm', reason: '不是允许的剂型', value: String(source.physicalForm) });
+    notes.push({ field: 'physicalForm', reason: '模型给的剂型不在允许值里，已忽略', value: String(source.physicalForm) });
   }
 
   // 基准单位：优先相信剂型推导，模型给的不一致就按剂型纠正
@@ -99,9 +105,9 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
   if (physicalForm && BASE_UNIT_BY_FORM[physicalForm]) {
     baseUnit = BASE_UNIT_BY_FORM[physicalForm];
     if (modelBaseUnit && modelBaseUnit !== baseUnit) {
-      dropped.push({
+      notes.push({
         field: 'baseUnit',
-        reason: `与剂型 ${physicalForm} 不一致，已按剂型给 ${baseUnit}`,
+        reason: `模型给 ${modelBaseUnit}，与剂型 ${physicalForm} 不一致，已按剂型给 ${baseUnit}`,
         value: modelBaseUnit
       });
     }
@@ -121,10 +127,13 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
   const priceRaw = toNumber(source.priceCny);
   let priceCny: number | null = null;
   if (priceRaw !== null && priceRaw > 0) {
-    if (textHasNumber(`${ctx.frontText}\n${ctx.labelText}`, priceRaw)) {
-      priceCny = priceRaw;
-    } else {
-      dropped.push({ field: 'priceCny', reason: '原文里找不到这个价格', value: String(priceRaw) });
+    priceCny = priceRaw;
+    if (!textHasNumber(`${ctx.frontText}\n${ctx.labelText}`, priceRaw)) {
+      notes.push({
+        field: 'priceCny',
+        reason: '原文里没找到这个价格，可能是页面其它数字，请核对',
+        value: String(priceRaw)
+      });
     }
   }
 
@@ -133,10 +142,13 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
   const hasNutrientWord =
     !ctx.nutrientLabel || name.includes(ctx.nutrientLabel) || /[\u4e00-\u9fa5]/.test(name);
   const saltBacked = !ctx.saltNameZh || name.includes(ctx.saltNameZh) || name.length >= 2;
-  let safeName: string | null = name.length > 0 && name.length <= 40 ? name : null;
+  let safeName: string | null = name.length > 0 ? name.slice(0, 40) : null;
   if (safeName && (!hasNutrientWord || !saltBacked)) {
-    dropped.push({ field: 'name', reason: '名称与标签里的形态/营养素对不上', value: name });
-    safeName = null;
+    notes.push({
+      field: 'name',
+      reason: '名称与标签里的形态/营养素对不上，请核对',
+      value: name
+    });
   }
 
   // 营养素：字段必须允许，数值必须和正则解析的结果一致（有的话）
@@ -146,20 +158,35 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
     const entry = (item ?? {}) as Record<string, unknown>;
     const fieldPath = String(entry.fieldPath ?? '');
     const value = toNumber(entry.value);
-    if (!ctx.allowedFieldPaths.includes(fieldPath) || value === null || value <= 0) {
-      dropped.push({ field: 'nutrients', reason: '字段或数值不合法', value: JSON.stringify(item) });
+    if (!ctx.allowedFieldPaths.includes(fieldPath)) {
+      notes.push({ field: 'nutrients', reason: '不是允许的营养素字段，已忽略', value: fieldPath });
+      continue;
+    }
+    if (value === null || value <= 0) {
       continue;
     }
     const parsed = ctx.parsedNutrients.find((row) => row.fieldPath === fieldPath);
     if (parsed && Math.abs(parsed.value - value) > 0.001) {
-      dropped.push({
+      notes.push({
         field: 'nutrients',
-        reason: `与标签原文解析不一致（原文 ${parsed.value}），已用原文值`,
+        reason: `模型写 ${value}${String(entry.unit ?? '')}，原文解析是 ${parsed.value}${parsed.unit}，已按原文`,
         value: `${fieldPath}=${value}`
       });
+      nutrients.push({ fieldPath, value: parsed.value, unit: parsed.unit });
       continue;
     }
     nutrients.push({ fieldPath, value, unit: String(entry.unit ?? '') });
+  }
+  // 模型漏掉的、原文里明明有的营养素，补上
+  for (const parsed of ctx.parsedNutrients) {
+    if (!nutrients.some((row) => row.fieldPath === parsed.fieldPath)) {
+      nutrients.push({ fieldPath: parsed.fieldPath, value: parsed.value, unit: parsed.unit });
+      notes.push({
+        field: 'nutrients',
+        reason: '模型没提到这一项，已按原文补上',
+        value: `${parsed.fieldPath}=${parsed.value}${parsed.unit}`
+      });
+    }
   }
 
   // 默认目标营养素：只认自己列出来的营养素，模型不能凭空加
@@ -203,8 +230,8 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       official = raw;
     }
     if (!official) {
-      dropped.push({ field: 'labelNames', reason: '不在目录候选里', value: raw });
-      continue;
+      notes.push({ field: 'labelNames', reason: '目录里没对上，请核对规范名', value: raw });
+      official = raw;
     }
     if (!labelNames.includes(official)) {
       labelNames.push(official);
@@ -239,7 +266,8 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       addTiming,
       defaultTargetFields
     },
-    dropped
+    notes,
+    dropped: notes
   };
 }
 

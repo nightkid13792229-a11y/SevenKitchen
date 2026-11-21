@@ -48,19 +48,29 @@ describe('validateAnalysis', () => {
     expect(dropped).toHaveLength(0);
   });
 
-  it('价格在原文里找不到就丢掉', () => {
+  it('价格在原文里找不到也保留，但要提醒核对', () => {
     const { result, dropped } = validateAnalysis({ priceCny: 99.99 }, ctx());
-    expect(result.priceCny).toBeNull();
+    expect(result.priceCny).toBe(99.99);
     expect(dropped.some((item) => item.field === 'priceCny')).toBe(true);
   });
 
-  it('营养素与原文解析不一致时用原文值并说明', () => {
+  it('营养素与原文解析不一致时按原文填，并说明模型写了什么', () => {
     const { result, dropped } = validateAnalysis(
       { nutrients: [{ fieldPath: 'minerals.iron', value: 180, unit: 'mg' }] },
       ctx(),
     );
-    expect(result.nutrients).toHaveLength(0);
-    expect(dropped[0].reason).toContain('不一致');
+    expect(result.nutrients).toEqual([
+      { fieldPath: 'minerals.iron', value: 18, unit: 'mg' },
+    ]);
+    expect(dropped[0].reason).toContain('已按原文');
+  });
+
+  it('模型漏掉的营养素按原文补上', () => {
+    const { result, dropped } = validateAnalysis({ nutrients: [] }, ctx());
+    expect(result.nutrients).toEqual([
+      { fieldPath: 'minerals.iron', value: 18, unit: 'mg' },
+    ]);
+    expect(dropped.some((item) => item.reason.includes('补上'))).toBe(true);
   });
 
   it('基准单位与剂型冲突时按剂型纠正（粉 → G）', () => {
@@ -73,12 +83,12 @@ describe('validateAnalysis', () => {
     expect(dropped.some((item) => item.field === 'baseUnit')).toBe(true);
   });
 
-  it('标签名称只能在目录候选里选', () => {
+  it('目录里没有的标签名照样填上，但要提醒核对', () => {
     const { result, dropped } = validateAnalysis(
       { labelNames: ['甘氨酸铁络（螯）合物', '我自己编的添加剂'] },
       ctx(),
     );
-    expect(result.labelNames).toEqual(['甘氨酸铁络（螯）合物']);
+    expect(result.labelNames).toEqual(['甘氨酸铁络（螯）合物', '我自己编的添加剂']);
     expect(dropped.some((item) => item.field === 'labelNames')).toBe(true);
   });
 

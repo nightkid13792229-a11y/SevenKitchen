@@ -232,6 +232,18 @@ export class SupplementLabelIntakeService {
     });
 
     const notes: string[] = [];
+    const FIELD_LABELS: Record<string, string> = {
+      name: '原料名称',
+      priceCny: '价格',
+      nutrients: '营养素',
+      labelNames: '标签名称',
+      labelCategory: '标签类型',
+      baseUnit: '基准单位',
+      physicalForm: '剂型',
+    };
+    for (const note of analysis?.notes ?? []) {
+      notes.push(`${FIELD_LABELS[note.field] ?? note.field}：${note.reason}`);
+    }
     if (!analysis) {
       notes.push('模型没给出结构化判断（可能超时），下面按原文能读到的先填');
     }

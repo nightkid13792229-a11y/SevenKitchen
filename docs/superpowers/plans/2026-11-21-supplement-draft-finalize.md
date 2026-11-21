@@ -491,17 +491,18 @@ bash scripts/session.sh commit -m "feat(supplement): 服务端草稿 CRUD" \
 
 **Interfaces:**
 - Produces:
-  - `SupplementDraftValidationContext` with `issues`, `duplicate`, `equivalenceGroup`, `config`, `catalog`.
+  - `SupplementDraftValidationContext` with `issues`, `duplicate`, `equivalenceGroup`, `concentration`, `config`, `catalog`.
+  - `catalog` shape: `{ allExact: boolean; missingNames: string[]; candidatesByName: Record<string, string[]> }` (built from `label.labelNames`, not `basic.name`).
   - `validateSupplementDraftFeatures(payload, context): SupplementDraftIssue[]`.
   - `SupplementDraftReviewService.validate(userId, draftId): Promise<SupplementDraftReview>`.
   - `SupplementDraftReviewService.recommendGroups(userId, draftId): Promise<{ equivalenceEnabled: boolean; candidates: Array<RecommendationCandidate & { reason: string }> }>`.
   - `SupplementDraftReview { draft: SupplementDraftView; blockers: SupplementDraftIssue[]; warnings: SupplementDraftIssue[]; completeness: DraftCompleteness }`.
   - `buildContext(payload): Promise<SupplementDraftValidationContext>` (public so the AI service can reuse it).
-  - `SupplementDraftIssue` gains `ackKey?: string` — stable `${code}:${paramsHash}` for warnings that need explicit acknowledgment.
+  - `SupplementDraftIssue` gains `ackKey?: string` — stable `${code}:${paramsHash}` for every warning (including `NAME_FORM_WORD`), so finalize can require acknowledgment.
 
 - [ ] **Step 1: Write failing feature-validation tests**
 
-Cover: duplicate; catalog exact → pass, non-exact → warning with candidates (not blocker); retail on with ERROR; retail off without reason; shelfLifeMonths present but invalid (0/negative/decimal); noSaleReason not in the four-value whitelist; DIY on without link; DIY platform not in the allowed whitelist; storageCondition >200; purchaseUnit >50; group not approved/singleton/skip; global shop/equivalence off warnings; missing evidence images → warning (not blocker). Assert levels and codes.
+Cover: duplicate; catalog exact → pass, non-exact labelNames → warning with candidates (not basic.name); retail on with ERROR; retail off without reason; shelfLifeMonths present but invalid (0/negative/decimal, including retail off); noSaleReason not in the four-value whitelist; DIY on without link; DIY platform not in the allowed whitelist; storageCondition >200; purchaseUnit >50; group not approved/singleton/skip; group concentration MISSING/UNIT_MISMATCH → warning; global shop/equivalence off warnings; missing evidence images → warning with per-image ackKey (not blocker). Assert levels and codes.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -528,9 +529,10 @@ Expected: FAIL — function/service missing.
   - Query `supplementShopConfig`.
   - Catalog exact via `feedAdditive.get(name)`/`feedMaterial.get(name)`; candidates via `lookup(name, 5)`.
   - Issue list via `evaluateSupplementIssues`.
-- `validate` loads the draft via `draftService.get(draftId, userId)`, calls basics + features, merges.
+- `validate` loads the draft via `draftService.get(draftId, userId)`, calls basics + features, merges. Test that every merged warning has `ackKey` and every blocker does not (including `NAME_FORM_WORD`).
 - `recommendGroups` builds a synthetic ingredient from the draft and lists groups (same query as `SupplementEquivalenceRecommendService`), resolves each candidate with `dosage.resolveConcentration`, then uses `sortRecommendations` + `describeRecommendation`; returns `{ equivalenceEnabled, candidates }` even when the ingredient doesn't exist yet.
-- Set `ackKey` on warnings that depend on params: group warnings (`:${groupId}`), DIY `:${platform}`, retail `:${noSaleReason}`; other warnings can use `code` alone.
+- Set `ackKey` on every warning: `NAME_FORM_WORD:${name}`, label names `:${missingNames.sort().join('|')}`, group warnings `:${groupId}`, DIY `:${platform}`, retail `:${noSaleReason}`, evidence `:${missing.sort().join('+')}`; simple warnings can use `code` alone.
+- Add group concentration warnings: selected group + concentration MISSING → `GROUP_NUTRIENT_MISSING`; UNIT_MISMATCH → `GROUP_UNIT_MISMATCH`; both WARNING with groupId ackKey.
 
 - [ ] **Step 4: Run tests**
 

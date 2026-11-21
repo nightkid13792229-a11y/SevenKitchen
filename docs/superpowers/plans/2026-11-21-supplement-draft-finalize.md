@@ -588,11 +588,15 @@ interface SupplementAiParseContext {
   allowedTags: string[];
   allowedTimings: string[];
   allowedNoSaleReasons: string[];
+  allowedPlatforms: string[];
   groupIds: string[];
 }
 ```
 - Parser returns `null` only if no JSON object; otherwise a normalized `SupplementAiDraft` with safe defaults (`decisions.retail.enabled=false` if absent, reasons `''`).
 - Prompt must tell the model: no inventing, null/missing when unknown, reasons required, catalog names only for names, no dog applicability, output JSON only; include `recommendCreate` + reason in the decisions.
+- Prompt must enumerate allowed enums: `baseUnit` PCS/G/ML, `physicalForm` POWDER/TABLET/CAPSULE/LIQUID, `labelCategory` FEED_MATERIAL/FEED_ADDITIVE, plus tags/timings/no-sale reasons/DIY platforms.
+- Parser must reject top-level arrays even when preceded by prose or fenced as ``` json; invalid enum field values are dropped and recorded as AI warnings/missing, not silently lost.
+- Prompt input includes `manualFields: string[]` and lists the human-edited paths so a re-run can avoid overwriting them.
 
 - [ ] **Step 4: Run tests**
 
@@ -651,7 +655,7 @@ Expected: FAIL — service missing.
 - Merge precedence: `manualFields` (never overwrite) > parser/link deterministic facts (nutrients, serving, price, brand, model, image) > `intake.analysis` first-pass facts > decision-call result > missing.
   - AI fills decisions and fields without facts.
   - Skip any path in `manualFields`.
-- Save via `draftService.update(draftId, userId, { name: basic.name || current.name, payload: mergedPayload, aiSnapshot: { status, fields, decisions, missing, warnings, reasons } })`. **`update` replaces `payload`; it does not merge**, so pass the full merged payload (current payload + facts + AI fields) or the AI-filled fields will never reach the draft. Do not send `manualFields` (preserve the server-side list).
+- Save via `draftService.update(draftId, userId, { name: basic.name || current.name, payload: mergedPayload, aiSnapshot: { status, ...aiDraft } })`. **`update` replaces `payload`; it does not merge**, so pass the full merged payload (current payload + facts + AI fields) or the AI-filled fields will never reach the draft. `aiDraft` already contains fields/decisions/missing/warnings; do not invent a top-level `reasons` key. Do not send `manualFields` (preserve the server-side list).
 - In-memory `Set<string>` guard: if `draftId` is already running, throw 409.
 
 - [ ] **Step 4: Run tests**
@@ -777,6 +781,7 @@ Expected: FAIL — modules missing.
   - Load draft; if status is already `FINALIZED`, return its existing ids + stored verification (idempotent), do not write again.
   - Run `SupplementDraftReviewService.validate`.
   - The group step calls the new `assignInTransaction` (below), not `assign` (which opens its own transaction).
+  - AI warnings are informational only: finalize checks only `SupplementDraftIssue` warnings from the validation service (fixed codes/ackKeys), never AI-invented warning codes.
   - If blockers or unacknowledged warnings → `BadRequestException({ message, blockers, warnings })`.
     - Build the acknowledged set from `payload.review.acknowledgedWarnings` as `${code}:${paramsHash}` (or `code` when `paramsHash` is empty) and compare with each warning's `ackKey`; any missing → 400.
   - Duplicate preflight.

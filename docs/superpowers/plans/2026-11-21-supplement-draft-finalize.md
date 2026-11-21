@@ -635,6 +635,11 @@ bash scripts/session.sh commit -m "feat(supplement): AI 起草结果解析与提
 - Writes `aiSnapshot` and `manualFields` through `draftService.update(draftId, userId, ...)`; `recommendCreate=false` is stored in the snapshot but does not change draft status or discard it.
 - If `vision.analyze` returns null, still saves facts and `aiSnapshot.status='PARTIAL'`.
 - Does not write any ingredient/nutrition/evidence.
+- A second `get` returns a newer draft/manual field before save → merge uses the newer payload and `expectedUpdatedAt`, not the stale first read.
+- AI-only fields/decisions reach the payload (brand/purchaseChannel/retail/labelNames/`__SKIP__`); deleting the AI apply loop must fail tests.
+- AI omits retail/DIY/procurement decisions → existing non-default values are preserved; snapshot decisions match effective payload.
+- FINALIZED/DISCARDED draft → 409 before intake.
+- AI `reapproveGroup=false` is ignored; link image beats AI image; lock releases after an intake failure.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -651,12 +656,16 @@ Expected: FAIL — service missing.
   - `nutrition`: `servingNutrients` from intake (canonical units), `labelText`.
   - `label`: catalog exact names/candidates + AI.
   - `diy.imageUrl` from link preview.
-- Build a provisional payload with current draft values overridden by facts; call `review.buildContext` for issues/config/catalog and `review.recommendGroups` for candidate groups.
+- Build a provisional payload with current draft values overridden by facts; call `review.buildContext` for issues/config/catalog and `review.recommendGroupsForPayload(provisional)` for candidate groups (do not use the persisted draft, it may still be empty).
 - Call `vision.analyze(buildSupplementDraftPrompt(...))` with label/front text, link preview, catalog names/candidates, group candidates, config, and the provisional draft; parse with context.
 - Merge precedence: `manualFields` (never overwrite) > parser/link deterministic facts (nutrients, serving, price, brand, model, image) > `intake.analysis` first-pass facts > decision-call result > missing.
   - AI fills decisions and fields without facts.
   - Skip any path in `manualFields`.
-- Save via `draftService.update(draftId, userId, { name: basic.name || current.name, payload: mergedPayload, aiSnapshot: { status, ...aiDraft } })`. **`update` replaces `payload`; it does not merge**, so pass the full merged payload (current payload + facts + AI fields) or the AI-filled fields will never reach the draft. `aiDraft` already contains fields/decisions/missing/warnings; do not invent a top-level `reasons` key. Do not send `manualFields` (preserve the server-side list).
+- **Re-read the draft immediately before merging/saving** (`latest = draftService.get(draftId, userId)`), merge against `latest.payload` + `latest.manualFields`, and pass `expectedUpdatedAt: latest.updatedAt` to `draftService.update`. This prevents a human autosave/rename during the AI run from being silently overwritten; a 409 must propagate.
+- Only apply decisions the AI actually supplied: a decision with an empty reason is absent. Do not let parser defaults (`retail=false`, `diy=false`, `noSaleReason=null`, `procurement=false`) reset existing non-default values; normalize `aiSnapshot.decisions` to the effective merged values (so snapshot and payload never disagree, especially procurement).
+- Ignore AI `equivalence.reapproveGroup`; keep the current value/default true (only the human can cancel in review).
+- Deterministic link image beats AI `diy.imageUrl`; do not let AI override it.
+- Save via `draftService.update(draftId, userId, { name: basic.name || latest.name, payload: mergedPayload, aiSnapshot: { status, ...aiDraft }, expectedUpdatedAt: latest.updatedAt })`. **`update` replaces `payload`; it does not merge**, so pass the full merged payload (latest payload + facts + AI fields). `aiDraft` already contains fields/decisions/missing/warnings; do not invent a top-level `reasons` key. Do not send `manualFields` (preserve the server-side list).
 - In-memory `Set<string>` guard: if `draftId` is already running, throw 409.
 
 - [ ] **Step 4: Run tests**

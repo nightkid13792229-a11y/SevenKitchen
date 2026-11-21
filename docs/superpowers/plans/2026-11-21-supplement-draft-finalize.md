@@ -1148,6 +1148,10 @@ bash scripts/session.sh commit -m "feat(supplement): 上架/DIY/采购/等价组
 **Interfaces:**
 - `DraftReview` props `review`, `draft`; emits `finalize`, `back`, `update:acknowledged`.
 - Displays completeness, blockers, warnings with checkboxes, AI decision log, field mapping table, “确认写入” disabled until blockers empty and all warnings acknowledged.
+- Add a **pre-write feature readiness card** derived from the draft (retail/shelf life/liquid; DIY/link/liquid; procurement fields; equivalence group + reapprove consequence; default targets; evidence images) labeled “按草稿意向估算”.
+- Add a **post-write verification checklist** card listing the 7 feature checks (RETAIL/RECIPE/DIY/PROCUREMENT/EQUIVALENCE/DUPLICATE/PACKAGING).
+- Show AI missing items and labelNames/defaultTargetFields decisions; show the equivalence reapprove consequence (“加入已审核组会打回待审核；取消则留 DRAFT”).
+- On finalize 400/409, re-run validate and refresh the review; for duplicate 409 show the existing record if the body has ingredientId; for stale 409 show “重新加载草稿”.
 - `DraftVerification` props `verification`; displays fields/features pass/fail and action links; “去原料库/上架清单/配方设计器”.
 
 - [ ] **Step 1: Write failing review test**
@@ -1165,10 +1169,11 @@ Expected: FAIL.
 - [ ] **Step 3: Implement review/verification**
 
 - Review loads via `useSupplementDraft.validate` on mount; if the draft is dirty or `validatedSignature` no longer matches, re-validate before enabling finalize; show loading/error.
-- While `finalize` is pending, show a non-dismissible overlay with the steps (校验 → 写原料 → 写营养 → 写证据/标签 → 归组 → 回读核验); on failure keep the review data and show the error.
+- While `finalize` is pending, show a non-dismissible overlay with the steps (校验 → 写原料 → 写营养 → 写证据/标签 → 归组 → 回读核验); on failure keep the review data, show the error, and re-run validate to refresh blockers/warnings.
+- Lock the editor while `validating`/`finalizing`; before entering review, flush/save and refuse if still dirty; if edits happen during validate, revalidate before enabling finalize.
 - Use `fieldMapRows` for “字段 → 生产落点”.
 - Acknowledge warnings using the backend-provided `ackKey` (fallback to `code` only if absent); call `canFinalize`.
-- Verification shows “已写入并核验通过” when `ok`, otherwise “已写入，但以下功能未生效” with per-feature action links; “重新核验” calls reverify.
+- Verification shows “已写入并核验通过” when `ok`, otherwise “已写入，但以下功能未生效” with per-feature action links; “重新核验” calls reverify; add “再建一条”/“返回草稿列表”.
 
 - [ ] **Step 4: Run tests + vue-tsc**
 

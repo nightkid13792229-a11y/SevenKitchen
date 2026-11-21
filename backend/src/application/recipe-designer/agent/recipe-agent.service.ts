@@ -1059,6 +1059,7 @@ export class RecipeAgentService implements OnModuleInit {
       port,
       catalog,
       knowledge,
+      plan,
       onAsk: (question: string, options: string[]) => onAsk(question, options),
     });
     const readSplit = splitReadImages(call.function.name, outcome);

@@ -7606,6 +7606,22 @@ export class RecipeDesignerService {
   }
 
   /**
+   * 给 Agent 读该原料最近一次用过的预处理写法。
+   *
+   * Agent 改了预处理时，用它和当前/历史写法比对，提示人工选“用新的/用旧的”。
+   * 没有历史或服务未注入时返回 null，不阻断。
+   */
+  async getLatestPreparationMethodText(
+    ingredientId: string | null | undefined,
+  ): Promise<string | null> {
+    const id = String(ingredientId ?? '').trim();
+    if (!id) return null;
+    const text =
+      await this.ingredientPreparationHistoryService?.getLatestText(id);
+    return text?.trim() || null;
+  }
+
+  /**
    * 方案专属评估预览：用方案覆盖后的目标跑一遍，但**不写回草稿**，
    * 保证食谱编辑器的可视化仍然显示通用标准。
    */

@@ -45,7 +45,13 @@ export function fail(code: string, message: string): ToolOutcome<never> {
   return { ok: false, error: { code, message } };
 }
 
-/** 一次编辑操作。add 需要 nutritionFoodId；set_weight / remove 需要 itemId。 */
+/** 补剂目标：只选营养素字段，具体值由服务端按营养档案计算。 */
+export interface RecipeSupplementTargetInput {
+  fieldPath: string;
+  unit?: string;
+}
+
+/** 一次编辑操作。add 需要 nutritionFoodId；update_item / set_weight / remove 需要 itemId。 */
 export type RecipeEditOp =
   | {
       op: 'add';
@@ -53,6 +59,14 @@ export type RecipeEditOp =
       ingredientId?: string;
       weightG: number;
       preparationMethod?: string;
+      supplementTargets?: RecipeSupplementTargetInput[];
+    }
+  | {
+      op: 'update_item';
+      itemId: string;
+      weightG?: number;
+      preparationMethod?: string | null;
+      supplementTargets?: RecipeSupplementTargetInput[];
     }
   | { op: 'set_weight'; itemId: string; weightG: number }
   | { op: 'replace'; itemId: string; nutritionFoodId: string; ingredientId?: string }

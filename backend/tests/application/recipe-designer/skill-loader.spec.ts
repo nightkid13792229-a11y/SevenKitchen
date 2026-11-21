@@ -10,6 +10,7 @@ describe('recipe agent skills', () => {
     expect(text).toContain('recipe-design');
     expect(text).toContain('recipe-assessment');
     expect(text).toContain('recipe-supplement');
+    expect(text).toContain('recipe-production');
   });
 
   it('does not hard-code general food taboos in skills', () => {

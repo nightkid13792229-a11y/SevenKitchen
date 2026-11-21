@@ -216,6 +216,40 @@
             }}
           </div>
         </div>
+
+        <div
+          v-if="visiblePreparationChanges.length"
+          class="agent-plan agent-prep"
+        >
+          <div class="agent-plan__title">预处理写法待确认</div>
+          <div
+            v-for="change in visiblePreparationChanges"
+            :key="prepChangeKey(change)"
+            class="agent-prep__row"
+          >
+            <div class="agent-prep__text">
+              「{{ change.itemName }}」：{{
+                change.source === "HISTORY" ? "历史" : "当前"
+              }}
+              <span class="agent-prep__value">{{ change.before }}</span>
+              → 本次
+              <span class="agent-prep__value">{{ change.after }}</span>
+            </div>
+            <div class="agent-plan__actions">
+              <el-button
+                size="small"
+                type="primary"
+                @click="applyPreparationChange(change, false)"
+                >用新的</el-button
+              >
+              <el-button
+                size="small"
+                @click="applyPreparationChange(change, true)"
+                >用旧的</el-button
+              >
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="agent-compose">
@@ -330,6 +364,70 @@ const cfctCoverage = computed(() =>
     };
   }),
 );
+interface PreparationChange {
+  itemId: string;
+  itemName: string;
+  before: string;
+  after: string;
+  source: "DRAFT" | "HISTORY";
+}
+
+/** 已经点过“用新的/用旧的”的变更，不再重复显示。 */
+const dismissedPrepChanges = ref<string[]>([]);
+
+/**
+ * AI 改了预处理时，从最近一条 edit_recipe 工具结果里取“旧 → 新”。
+ * 后端在 add/update_item 时把 preparationChange 放进 results。
+ */
+const preparationChanges = computed<PreparationChange[]>(() => {
+  const editMessages = messages.value.filter(
+    (message) =>
+      message.role === "TOOL" && message.toolName === "edit_recipe",
+  );
+  const last = editMessages[editMessages.length - 1];
+  if (!last) return [];
+  try {
+    const parsed = JSON.parse(last.content);
+    const data = parsed?.data;
+    const results = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.results)
+        ? data.results
+        : [];
+    return results
+      .map((result: any) => result?.preparationChange)
+      .filter((change: any): change is PreparationChange => Boolean(change));
+  } catch {
+    return [];
+  }
+});
+
+function prepChangeKey(change: PreparationChange): string {
+  return `${change.itemId}|${change.before}|${change.after}`;
+}
+
+const visiblePreparationChanges = computed(() =>
+  preparationChanges.value.filter(
+    (change) => !dismissedPrepChanges.value.includes(prepChangeKey(change)),
+  ),
+);
+
+async function applyPreparationChange(
+  change: PreparationChange,
+  useOld: boolean,
+): Promise<void> {
+  if (useOld) {
+    await recipeDesignerApi.updateItem(change.itemId, {
+      preparationMethod: change.before,
+    });
+    emit("draft-changed");
+  }
+  dismissedPrepChanges.value = [
+    ...dismissedPrepChanges.value,
+    prepChangeKey(change),
+  ];
+}
+
 /** 方案/选材已经用卡片展示，旧的摘要文字隐藏，避免重复。 */
 const visibleMessages = computed(() =>
   messages.value.filter(
@@ -607,6 +705,26 @@ watch(
   font-size: 13px;
   font-weight: 600;
   margin-bottom: 6px;
+}
+.agent-prep {
+  border-color: #f3d19e;
+  background: #fdf6ec;
+}
+.agent-prep__row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.agent-prep__text {
+  font-size: 12px;
+  line-height: 1.6;
+}
+.agent-prep__value {
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: #fff;
+  font-family: monospace;
 }
 .agent-plan__summary {
   font-size: 13px;

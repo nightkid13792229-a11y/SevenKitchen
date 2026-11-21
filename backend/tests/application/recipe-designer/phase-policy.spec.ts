@@ -39,6 +39,7 @@ describe('recipe agent phase policy', () => {
     const tools = names('DESIGN', 'ORDER');
 
     expect(tools).toContain('edit_recipe');
+    expect(tools).toContain('write_production_steps');
     expect(tools).toContain('assess');
     expect(tools).toContain('write_copy');
     expect(tools).toContain('revise_plan');

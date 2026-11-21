@@ -5,7 +5,12 @@ import type { AgentPhase } from './phase-policy';
 const PHASE_SKILLS: Record<AgentPhase, string[]> = {
   PLAN: ['recipe-plan'],
   SELECT: ['recipe-selection'],
-  DESIGN: ['recipe-design', 'recipe-assessment', 'recipe-supplement'],
+  DESIGN: [
+    'recipe-design',
+    'recipe-assessment',
+    'recipe-supplement',
+    'recipe-production',
+  ],
 };
 
 const cache = new Map<string, string>();

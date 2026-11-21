@@ -198,3 +198,14 @@ describe('制作步骤 · 一次完整编辑行为（加载 → 新增 → 排�
     if (!emptyInstruction.ok) expect(emptyInstruction.error).toContain('操作说明')
   })
 })
+
+describe('制作步骤 · 备注步骤', () => {
+  const component = clean(productionStepsEditorSource)
+
+  it('把“备注：”开头的步骤显示为备注，而不是第 N 步', () => {
+    expect(component).toContain('isNoteStep')
+    expect(component).toContain("startsWith('备注：')")
+    expect(component).toContain("isNoteStep(step) ? '备注'")
+    expect(component).not.toContain('第 {{ index + 1 }} 步')
+  })
+})

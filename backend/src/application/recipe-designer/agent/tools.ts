@@ -33,6 +33,7 @@ import {
   fail,
   ok,
   type RecipeEditOp,
+  type RecipeSupplementTargetInput,
   type ToolOutcome,
 } from './agent-types';
 
@@ -124,7 +125,9 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'edit_recipe',
       description:
-        '修改当前草稿的原料。一次可传多个操作，按顺序执行并逐条回报结果。',
+        '修改当前草稿的原料。一次可传多个操作，按顺序执行并逐条回报结果。' +
+        '预处理方式按“部位/状态/处理”写，斜杠分隔，不写原料名；原料名已含部位/状态的那一段直接省略。' +
+        '补剂目标只传 fieldPath（营养素字段），具体数值由系统按档案计算。',
       parameters: {
         type: 'object',
         properties: {
@@ -137,13 +140,35 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
               properties: {
                 op: {
                   type: 'string',
-                  enum: ['add', 'set_weight', 'replace', 'remove'],
+                  enum: [
+                    'add',
+                    'update_item',
+                    'set_weight',
+                    'replace',
+                    'remove',
+                  ],
                 },
                 nutritionFoodId: { type: 'string' },
                 ingredientId: { type: 'string' },
                 itemId: { type: 'string' },
                 weightG: { type: 'number', minimum: 0 },
                 preparationMethod: { type: 'string', maxLength: 20 },
+                supplementTargets: {
+                  type: 'array',
+                  maxItems: 3,
+                  items: {
+                    type: 'object',
+                    properties: {
+                      fieldPath: {
+                        type: 'string',
+                        description: '营养素字段，如 minerals.zinc',
+                      },
+                      unit: { type: 'string' },
+                    },
+                    required: ['fieldPath'],
+                    additionalProperties: false,
+                  },
+                },
               },
               required: ['op'],
               additionalProperties: false,
@@ -157,6 +182,34 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
           },
         },
         required: ['ops'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'write_production_steps',
+      description:
+        '写制作步骤。按 recipe-production Skill：只写加工到“全部原料搅拌均匀”，最后追加两条备注步骤（冷冻保存 / 烹饪推荐）；不写分装、时间、温度、设备。',
+      parameters: {
+        type: 'object',
+        properties: {
+          steps: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 50,
+            items: {
+              type: 'object',
+              properties: {
+                instruction: { type: 'string', maxLength: 500 },
+              },
+              required: ['instruction'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['steps'],
         additionalProperties: false,
       },
     },
@@ -364,6 +417,32 @@ export async function executeTool(
         };
       }
 
+      case 'write_production_steps': {
+        const rawSteps = Array.isArray(args.steps) ? args.steps : [];
+        if (rawSteps.length === 0) {
+          return fail('INVALID_ARGUMENT', 'steps 至少需要一条');
+        }
+        const steps: Array<{ instruction: string }> = [];
+        for (const [index, entry] of rawSteps.entries()) {
+          if (!isRecord(entry)) {
+            return fail(
+              'INVALID_ARGUMENT',
+              `第 ${index + 1} 条制作步骤格式不正确`,
+            );
+          }
+          const instruction = readText(entry.instruction);
+          if (!instruction) {
+            return fail(
+              'INVALID_ARGUMENT',
+              `第 ${index + 1} 条制作步骤缺少 instruction`,
+            );
+          }
+          steps.push({ instruction });
+        }
+        const result = await context.port.writeProductionSteps(steps);
+        return ok(result, `已写 ${result.stepCount} 步（含保存/烹饪备注）`);
+      }
+
       case 'assess': {
         const summary = await context.port.assess();
         const planResult = context.plan
@@ -456,12 +535,47 @@ function parseOps(
       if (!nutritionFoodId || !Number.isFinite(weightG) || weightG <= 0) {
         return { ok: false, message: 'add 需要 nutritionFoodId 和 weightG' };
       }
+      const supplementTargets = parseSupplementTargets(
+        entry.supplementTargets,
+      );
+      if (!supplementTargets.ok) return supplementTargets;
       ops.push({
         op: 'add',
         nutritionFoodId,
         ingredientId: readText(entry.ingredientId),
         weightG,
         preparationMethod: readText(entry.preparationMethod),
+        ...(supplementTargets.targets
+          ? { supplementTargets: supplementTargets.targets }
+          : {}),
+      });
+      continue;
+    }
+    if (op === 'update_item') {
+      const itemId = readText(entry.itemId);
+      if (!itemId) return { ok: false, message: 'update_item 需要 itemId' };
+      const weightG =
+        entry.weightG === undefined || entry.weightG === null
+          ? undefined
+          : Number(entry.weightG);
+      if (
+        weightG !== undefined &&
+        (!Number.isFinite(weightG) || weightG < 0)
+      ) {
+        return { ok: false, message: 'update_item 的 weightG 必须是非负数字' };
+      }
+      const supplementTargets = parseSupplementTargets(
+        entry.supplementTargets,
+      );
+      if (!supplementTargets.ok) return supplementTargets;
+      ops.push({
+        op: 'update_item',
+        itemId,
+        ...(weightG !== undefined ? { weightG } : {}),
+        preparationMethod: readText(entry.preparationMethod),
+        ...(supplementTargets.targets
+          ? { supplementTargets: supplementTargets.targets }
+          : {}),
       });
       continue;
     }
@@ -644,4 +758,34 @@ function readText(value: unknown): string | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function parseSupplementTargets(
+  value: unknown,
+):
+  | { ok: true; targets?: RecipeSupplementTargetInput[] }
+  | { ok: false; message: string } {
+  if (value === undefined || value === null) return { ok: true };
+  if (!Array.isArray(value)) {
+    return { ok: false, message: 'supplementTargets 必须是数组' };
+  }
+  const targets: RecipeSupplementTargetInput[] = [];
+  for (const [index, entry] of value.entries()) {
+    if (!isRecord(entry)) {
+      return {
+        ok: false,
+        message: `supplementTargets[${index}] 格式不正确`,
+      };
+    }
+    const fieldPath = readText(entry.fieldPath);
+    if (!fieldPath) {
+      return {
+        ok: false,
+        message: `supplementTargets[${index}] 缺少 fieldPath`,
+      };
+    }
+    const unit = readText(entry.unit);
+    targets.push({ fieldPath, ...(unit ? { unit } : {}) });
+  }
+  return targets.length > 0 ? { ok: true, targets } : { ok: true };
 }

@@ -93,7 +93,7 @@
           class="step-card"
         >
           <div class="step-card__header">
-            <span class="step-index">第 {{ index + 1 }} 步</span>
+            <span class="step-index">{{ stepLabel(index, step) }}</span>
             <div class="step-card__actions">
               <el-button
                 size="small"
@@ -237,6 +237,14 @@ const emit = defineEmits<{
 }>()
 
 const steps = ref<DesignerProductionStep[]>([])
+
+function isNoteStep(step: DesignerProductionStep): boolean {
+  return String(step.instruction ?? '').trim().startsWith('备注：')
+}
+
+function stepLabel(index: number, step: DesignerProductionStep): string {
+  return isNoteStep(step) ? '备注' : `第 ${index + 1} 步`
+}
 const loading = ref(true)
 const saving = ref(false)
 const loadError = ref('')

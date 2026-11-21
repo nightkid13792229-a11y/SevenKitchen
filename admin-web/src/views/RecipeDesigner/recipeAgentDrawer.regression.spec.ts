@@ -25,3 +25,13 @@ describe('AI 设计对话 · 方案重新确认', () => {
     expect(drawerSource).not.toContain('选材已确认，正在进入配方编辑阶段…')
   })
 })
+
+describe('AI 设计对话 · 预处理写法比对', () => {
+  it('AI 改了预处理时显示旧/新，并提供用新的/用旧的', () => {
+    expect(drawerSource).toContain('preparationChange')
+    expect(drawerSource).toContain('visiblePreparationChanges')
+    expect(drawerSource).toContain('用新的')
+    expect(drawerSource).toContain('用旧的')
+    expect(drawerSource).toContain('preparationMethod: change.before')
+  })
+})

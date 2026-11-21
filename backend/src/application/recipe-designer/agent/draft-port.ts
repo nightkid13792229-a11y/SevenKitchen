@@ -133,6 +133,21 @@ export interface AssessmentSummary {
   warnings: DraftWarning[];
 }
 
+export interface PreparationChange {
+  itemId: string;
+  itemName: string;
+  before: string;
+  after: string;
+  source: 'DRAFT' | 'HISTORY';
+}
+
+export type EditRecipeResult = {
+  op: string;
+  ok: boolean;
+  message: string;
+  preparationChange?: PreparationChange;
+};
+
 @Injectable()
 export class RecipeDraftPort {
   constructor(
@@ -247,25 +262,107 @@ export class RecipeDraftPort {
   }
 
   /** 一次可执行多个编辑操作；返回每一条的结果。 */
-  async editRecipe(
-    ops: RecipeEditOp[],
-  ): Promise<Array<{ op: string; ok: boolean; message: string }>> {
-    const results: Array<{ op: string; ok: boolean; message: string }> = [];
+  async editRecipe(ops: RecipeEditOp[]): Promise<EditRecipeResult[]> {
+    const results: EditRecipeResult[] = [];
+    let beforeItems: Map<string, any> | null = null;
+
+    const getBeforeItem = async (itemId: string): Promise<any | null> => {
+      if (!beforeItems) {
+        const draft = (await this.designer.getDraft(
+          this.draftId,
+          this.access,
+        )) as any;
+        beforeItems = new Map(
+          (Array.isArray(draft?.items) ? draft.items : []).map(
+            (item: any) => [String(item.id), item] as const,
+          ),
+        );
+      }
+      return beforeItems.get(itemId) ?? null;
+    };
+
+    const getHistory = async (
+      ingredientId: unknown,
+    ): Promise<string | null> => {
+      try {
+        return await this.designer.getLatestPreparationMethodText(
+          typeof ingredientId === 'string' ? ingredientId : null,
+        );
+      } catch {
+        return null;
+      }
+    };
 
     for (const op of ops) {
       try {
         if (op.op === 'add') {
-          await this.designer.addItem(
+          const created = (await this.designer.addItem(
             this.draftId,
             {
               nutritionFoodId: op.nutritionFoodId,
               ingredientId: op.ingredientId,
               weightG: op.weightG,
               preparationMethod: op.preparationMethod,
+              supplementTargets: op.supplementTargets,
             } as any,
             this.access,
+          )) as any;
+          const after = String(
+            created?.preparationMethod ?? op.preparationMethod ?? '',
+          ).trim();
+          const before = await getHistory(
+            op.ingredientId ?? created?.ingredientId,
           );
-          results.push({ op: 'add', ok: true, message: '已加入' });
+          const preparationChange = buildPreparationChange(
+            created,
+            before,
+            after,
+            'HISTORY',
+          );
+          results.push({
+            op: 'add',
+            ok: true,
+            message: '已加入',
+            ...(preparationChange ? { preparationChange } : {}),
+          });
+          continue;
+        }
+
+        if (op.op === 'update_item') {
+          const beforeItem = await getBeforeItem(op.itemId);
+          const updated = (await this.designer.updateItem(
+            op.itemId,
+            {
+              ...(op.weightG !== undefined ? { weightG: op.weightG } : {}),
+              ...(op.preparationMethod !== undefined
+                ? { preparationMethod: op.preparationMethod }
+                : {}),
+              ...(op.supplementTargets
+                ? { supplementTargets: op.supplementTargets }
+                : {}),
+            } as any,
+            this.access,
+          )) as any;
+          const currentBefore = String(
+            beforeItem?.preparationMethod ?? '',
+          ).trim();
+          const before =
+            currentBefore || (await getHistory(beforeItem?.ingredientId));
+          const after = String(
+            updated?.preparationMethod ?? op.preparationMethod ?? '',
+          ).trim();
+          const preparationChange = buildPreparationChange(
+            updated ?? beforeItem,
+            before,
+            after,
+            currentBefore ? 'DRAFT' : 'HISTORY',
+          );
+          results.push({
+            op: 'update_item',
+            ok: true,
+            message: '已更新',
+            ...(preparationChange ? { preparationChange } : {}),
+          });
           continue;
         }
 
@@ -307,6 +404,28 @@ export class RecipeDraftPort {
     }
 
     return results;
+  }
+
+  /**
+   * 覆盖写制作步骤。只写 instruction；序号由服务端按顺序补，
+   * 时间/温度/设备留空（家庭厨房 SOP 不要求）。
+   */
+  async writeProductionSteps(
+    steps: Array<{ instruction: string }>,
+  ): Promise<{ stepCount: number }> {
+    const normalized = steps.map((step, index) => ({
+      sortOrder: index + 1,
+      instruction: step.instruction.trim(),
+      durationMinutes: null,
+      temperatureC: null,
+      equipment: null,
+    }));
+    const result = await this.designer.updateDraftProductionSteps(
+      this.draftId,
+      { steps: normalized } as any,
+      this.access,
+    );
+    return { stepCount: result.productionSteps.length };
   }
 
   private lastTargetOverrides?: AssessmentTargetOverride[];
@@ -680,6 +799,27 @@ function readStoredAssessment(draft: any): {
     }));
 
   return { gaps, warnings };
+}
+
+function buildPreparationChange(
+  item: any,
+  before: string | null | undefined,
+  after: string | null | undefined,
+  source: 'DRAFT' | 'HISTORY',
+): PreparationChange | undefined {
+  const itemId = String(item?.id ?? '');
+  const beforeText = String(before ?? '').trim();
+  const afterText = String(after ?? '').trim();
+  if (!itemId || !beforeText || !afterText || beforeText === afterText) {
+    return undefined;
+  }
+  const itemName = String(
+    item?.ingredient?.name ??
+      item?.nutritionFood?.displayNameZh ??
+      item?.nutritionFood?.name ??
+      '原料',
+  );
+  return { itemId, itemName, before: beforeText, after: afterText, source };
 }
 
 function round(value: number): string {

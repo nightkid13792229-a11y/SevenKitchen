@@ -65,6 +65,10 @@ interface ReviewMock {
     Promise<SupplementDraftGroupRecommendations>,
     [string, string]
   >;
+  recommendGroupsForPayload: jest.Mock<
+    Promise<SupplementDraftGroupRecommendations>,
+    [SupplementDraftPayload]
+  >;
 }
 
 interface IntakeMock {
@@ -218,6 +222,12 @@ function makePayload(
   patch: {
     name?: string;
     shelfLifeMonths?: number;
+    retailEnabled?: boolean;
+    procurementEnabled?: boolean;
+    diyEnabled?: boolean;
+    reapproveGroup?: boolean;
+    noSaleReason?: string | null;
+    storageCondition?: string;
   } = {},
 ): SupplementDraftPayload {
   const payload = emptySupplementDraftPayload();
@@ -225,17 +235,40 @@ function makePayload(
   if (patch.shelfLifeMonths !== undefined) {
     payload.retail.shelfLifeMonths = patch.shelfLifeMonths;
   }
+  if (patch.retailEnabled !== undefined) {
+    payload.retail.enabled = patch.retailEnabled;
+  }
+  if (patch.procurementEnabled !== undefined) {
+    payload.procurement.enabled = patch.procurementEnabled;
+  }
+  if (patch.diyEnabled !== undefined) {
+    payload.diy.enabled = patch.diyEnabled;
+  }
+  if (patch.reapproveGroup !== undefined) {
+    payload.equivalence.reapproveGroup = patch.reapproveGroup;
+  }
+  if (patch.noSaleReason !== undefined) {
+    payload.retail.noSaleReason = patch.noSaleReason;
+  }
+  if (patch.storageCondition !== undefined) {
+    payload.retail.storageCondition = patch.storageCondition;
+  }
   return payload;
 }
 
 function draftView(
   payload: SupplementDraftPayload = makePayload(),
-  options: { name?: string; manualFields?: string[] } = {},
+  options: {
+    name?: string;
+    manualFields?: string[];
+    status?: SupplementDraftView['status'];
+    updatedAt?: Date;
+  } = {},
 ): SupplementDraftView {
   return {
     id: 'draft-1',
     createdBy: 'u1',
-    status: 'DRAFT',
+    status: options.status ?? 'DRAFT',
     schemaVersion: 1,
     name: options.name ?? payload.basic.name,
     payload,
@@ -247,7 +280,7 @@ function draftView(
     finalizedEvidenceId: null,
     finalizedAt: null,
     createdAt: NOW,
-    updatedAt: NOW,
+    updatedAt: options.updatedAt ?? NOW,
     completeness: computeDraftCompleteness(payload),
   };
 }
@@ -335,6 +368,10 @@ describe('SupplementDraftAiService', () => {
         Promise<SupplementDraftGroupRecommendations>,
         [string, string]
       >(() => Promise.resolve(groupRecommendations())),
+      recommendGroupsForPayload: jest.fn<
+        Promise<SupplementDraftGroupRecommendations>,
+        [SupplementDraftPayload]
+      >(() => Promise.resolve(groupRecommendations())),
     };
     intake = {
       read: jest.fn<
@@ -417,7 +454,9 @@ describe('SupplementDraftAiService', () => {
     expect(provisional.nutrition.servingNutrients['minerals.zinc']).toBe(50);
     expect(provisional.evidence.frontImageUrl).toBe(FRONT_IMAGE);
     expect(provisional.evidence.labelImageUrl).toBe(LABEL_IMAGE);
-    expect(review.recommendGroups).toHaveBeenCalledWith('u1', 'draft-1');
+    // 组推荐必须用「草稿现值 + 本次事实」的临时载荷，而不是按 id 再读空草稿。
+    expect(review.recommendGroupsForPayload).toHaveBeenCalledWith(provisional);
+    expect(review.recommendGroups).not.toHaveBeenCalled();
 
     expect(vision.analyze).toHaveBeenCalledTimes(1);
     const prompt = vision.analyze.mock.calls[0][0];
@@ -616,6 +655,7 @@ describe('SupplementDraftAiService', () => {
     const input = draftService.update.mock.calls[0][2];
     expect(Object.keys(input).sort()).toEqual([
       'aiSnapshot',
+      'expectedUpdatedAt',
       'name',
       'payload',
     ]);
@@ -687,7 +727,7 @@ describe('SupplementDraftAiService', () => {
     await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
     expect(lastPayload().equivalence.groupId).toBe('group-1');
 
-    review.recommendGroups.mockResolvedValue({
+    review.recommendGroupsForPayload.mockResolvedValue({
       equivalenceEnabled: true,
       candidates: [],
     });
@@ -706,5 +746,301 @@ describe('SupplementDraftAiService', () => {
         (item) => item.fieldPath === 'equivalence.groupId',
       ),
     ).toBe(true);
+  });
+
+  it('AI 期间人自动保存：写回前重读最新草稿，并用乐观锁更新', async () => {
+    const oldUpdatedAt = new Date('2026-11-21T10:00:00.000Z');
+    const latestUpdatedAt = new Date('2026-11-21T10:30:00.000Z');
+    const oldDraft = draftView(
+      makePayload({ name: '旧名字', storageCondition: '旧储存' }),
+      { updatedAt: oldUpdatedAt },
+    );
+    const latestDraft = draftView(
+      makePayload({ name: '人手改的名字', storageCondition: '最新储存' }),
+      { manualFields: ['basic.name'], updatedAt: latestUpdatedAt },
+    );
+    draftService.get
+      .mockResolvedValueOnce(oldDraft)
+      .mockResolvedValueOnce(latestDraft);
+    intake.read.mockResolvedValue(
+      makeIntake({ analysis: { name: '分析出来的名字' } }),
+    );
+    vision.analyze.mockResolvedValue(
+      aiReply({ fields: { 'basic.name': field('AI 名字') } }),
+    );
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    expect(draftService.get).toHaveBeenCalledTimes(2);
+    const input = lastUpdateInput();
+    const payload = normalizeSupplementDraftPayload(input.payload);
+    // 人改的新值/新 manualFields 来自第二次 get，不能拿第一次的旧草稿盖掉
+    expect(payload.basic.name).toBe('人手改的名字');
+    expect(payload.retail.storageCondition).toBe('最新储存');
+    expect(input.expectedUpdatedAt).toBe(latestUpdatedAt.toISOString());
+    expect(input.expectedUpdatedAt).not.toBe(oldUpdatedAt.toISOString());
+  });
+
+  it('写回时乐观锁冲突 409 直接抛出，不吞掉', async () => {
+    draftService.update.mockRejectedValueOnce(
+      new ConflictException('草稿已被更新，请刷新后再试'),
+    );
+
+    await expect(
+      service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT),
+    ).rejects.toThrow('草稿已被更新，请刷新后再试');
+    expect(draftService.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('全新空草稿按内存事实推荐等价组，并写回推荐/__SKIP__', async () => {
+    currentDraft = draftView(makePayload());
+    intake.read.mockResolvedValue(
+      makeIntake({
+        analysis: null,
+        suggestedName: null,
+        servingUnitsPerDose: 1,
+        nutrients: [
+          {
+            fieldPath: 'fattyAcids.epa',
+            value: 650,
+            unit: 'mg',
+            rawName: 'EPA',
+          },
+        ],
+        front: {
+          brandCandidate: null,
+          productModel: null,
+          physicalForm: 'CAPSULE',
+          unitDisplayLabel: '粒',
+        },
+      }),
+    );
+    vision.analyze.mockResolvedValue({
+      text: JSON.stringify({
+        fields: {},
+        decisions: {
+          equivalence: { groupId: '__SKIP__', reason: '暂不归组' },
+        },
+      }),
+      model: 'mock-model',
+    });
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    expect(review.recommendGroupsForPayload).toHaveBeenCalledTimes(1);
+    expect(review.recommendGroups).not.toHaveBeenCalled();
+    const recommendedPayload =
+      review.recommendGroupsForPayload.mock.calls[0][0];
+    expect(recommendedPayload.basic.baseUnit).toBe('PCS');
+    expect(recommendedPayload.basic.unitDisplayLabel).toBe('粒');
+    expect(
+      recommendedPayload.nutrition.servingNutrients['fattyAcids.epa'],
+    ).toBe(650);
+
+    const prompt = vision.analyze.mock.calls[0][0];
+    expect(prompt).toContain('group-1');
+    expect(lastPayload().equivalence.groupId).toBe('__SKIP__');
+    expect(lastSnapshot().decisions.equivalence.groupId).toBe('__SKIP__');
+  });
+
+  it('AI 省略决定时不重置已有值，快照与 payload 一致', async () => {
+    currentDraft = draftView(
+      makePayload({
+        retailEnabled: true,
+        procurementEnabled: true,
+        diyEnabled: true,
+        noSaleReason: 'UNDECIDED',
+      }),
+    );
+    intake.read.mockResolvedValue(
+      makeIntake({ analysis: null, suggestedName: null }),
+    );
+    vision.analyze.mockResolvedValue({
+      text: JSON.stringify({
+        fields: {},
+        decisions: { recommendCreate: { value: true, reason: '信息够' } },
+      }),
+      model: 'mock-model',
+    });
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    const payload = lastPayload();
+    expect(payload.retail.enabled).toBe(true);
+    expect(payload.procurement.enabled).toBe(true);
+    expect(payload.diy.enabled).toBe(true);
+    expect(payload.retail.noSaleReason).toBe('UNDECIDED');
+
+    const snapshot = lastSnapshot();
+    expect(snapshot.decisions.retail.enabled).toBe(true);
+    expect(snapshot.decisions.procurement.enabled).toBe(true);
+    expect(snapshot.decisions.diy.enabled).toBe(true);
+    expect(snapshot.decisions.noSaleReason).toBe('UNDECIDED');
+  });
+
+  it('AI 明确给 false + 理由时才关掉开关，快照同步', async () => {
+    currentDraft = draftView(
+      makePayload({
+        retailEnabled: true,
+        procurementEnabled: true,
+        diyEnabled: true,
+      }),
+    );
+    vision.analyze.mockResolvedValue(
+      aiReply({
+        decisions: {
+          retail: { enabled: false, reason: '标签缺保质期，暂不上架' },
+          diy: {
+            enabled: false,
+            linkUrl: '',
+            imageUrl: '',
+            reason: '没有可靠购买链接',
+          },
+          procurement: { enabled: false, reason: '自制品，不走采购' },
+        },
+      }),
+    );
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    const payload = lastPayload();
+    expect(payload.retail.enabled).toBe(false);
+    expect(payload.procurement.enabled).toBe(false);
+    expect(payload.diy.enabled).toBe(false);
+
+    const snapshot = lastSnapshot();
+    expect(snapshot.decisions.retail.enabled).toBe(false);
+    expect(snapshot.decisions.procurement.enabled).toBe(false);
+    expect(snapshot.decisions.diy.enabled).toBe(false);
+  });
+
+  it('AI-only 字段和决定能进入 payload，不被事实/默认值遮住', async () => {
+    currentDraft = draftView(makePayload());
+    intake.read.mockResolvedValue(
+      makeIntake({
+        analysis: null,
+        suggestedName: null,
+        servingUnitsPerDose: null,
+        nutrients: [],
+        detectedPriceCny: null,
+        front: {
+          brandCandidate: null,
+          productModel: null,
+          physicalForm: null,
+          unitDisplayLabel: null,
+        },
+      }),
+    );
+    vision.analyze.mockResolvedValue(
+      aiReply({
+        fields: {
+          'basic.name': field('AI 名称'),
+          'basic.brand': field('AI 品牌'),
+          'basic.purchaseChannel': field('AI 渠道'),
+          'retail.enabled': field(true),
+          'retail.shelfLifeMonths': field(24),
+          'label.labelNames': field(['AI 标签名']),
+        },
+        decisions: {
+          retail: { enabled: false, reason: '' },
+          diy: { enabled: false, linkUrl: '', imageUrl: '', reason: '' },
+          procurement: { enabled: false, reason: '' },
+          equivalence: { groupId: '__SKIP__', reason: '暂不归组' },
+          labelNames: [],
+          tagNames: ['矿物质'],
+          addTiming: 'BEFORE_MIXING',
+          defaultTargetFields: [],
+        },
+      }),
+    );
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    const payload = lastPayload();
+    expect(payload.basic.name).toBe('AI 名称');
+    expect(payload.basic.brand).toBe('AI 品牌');
+    expect(payload.basic.purchaseChannel).toBe('AI 渠道');
+    expect(payload.retail.enabled).toBe(true);
+    expect(payload.retail.shelfLifeMonths).toBe(24);
+    expect(payload.label.labelNames).toEqual(['AI 标签名']);
+    expect(payload.equivalence.groupId).toBe('__SKIP__');
+
+    const snapshot = lastSnapshot();
+    expect(snapshot.fields['basic.brand']?.value).toBe('AI 品牌');
+    expect(snapshot.decisions.retail.enabled).toBe(true);
+    expect(snapshot.decisions.equivalence.groupId).toBe('__SKIP__');
+  });
+
+  it.each(['FINALIZED', 'DISCARDED'] as const)(
+    '%s 状态拒绝起草，且不读图/不写草稿',
+    async (status) => {
+      currentDraft = draftView(makePayload(), { status });
+      const promise = service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+      await expect(promise).rejects.toBeInstanceOf(ConflictException);
+      await expect(promise).rejects.toThrow('已写入或已放弃的草稿不能再起草');
+      expect(intake.read).not.toHaveBeenCalled();
+      expect(vision.analyze).not.toHaveBeenCalled();
+      expect(draftService.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('AI 不能改 reapproveGroup，只有人能取消', async () => {
+    currentDraft = draftView(makePayload({ reapproveGroup: false }));
+    vision.analyze.mockResolvedValue(
+      aiReply({
+        fields: { 'equivalence.reapproveGroup': field(true) },
+      }),
+    );
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+    expect(lastPayload().equivalence.reapproveGroup).toBe(false);
+
+    currentDraft = draftView(makePayload());
+    vision.analyze.mockResolvedValue(
+      aiReply({
+        fields: { 'equivalence.reapproveGroup': field(false) },
+      }),
+    );
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+    expect(lastPayload().equivalence.reapproveGroup).toBe(true);
+  });
+
+  it('商品链接主图是确定性事实，AI 不能覆盖 DIY 主图', async () => {
+    linkPreview.preview.mockResolvedValue(makeLinkPreview());
+    vision.analyze.mockResolvedValue(
+      aiReply({
+        fields: { 'diy.imageUrl': field('https://ai.example/other.jpg') },
+        decisions: {
+          diy: {
+            enabled: true,
+            linkUrl: PRODUCT_URL,
+            imageUrl: 'https://ai.example/other.jpg',
+            reason: '换成别的图',
+          },
+        },
+      }),
+    );
+
+    await service.fill({ userId: 'u1' }, 'draft-1', {
+      ...FILL_INPUT,
+      productUrl: PRODUCT_URL,
+    });
+
+    expect(lastPayload().diy.imageUrl).toBe(
+      'https://images-iherb.com/now-foods-zinc.jpg',
+    );
+  });
+
+  it('读图失败也释放锁，第二次可以继续', async () => {
+    intake.read.mockRejectedValueOnce(new BadRequestException('读图失败'));
+    await expect(
+      service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT),
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(draftService.update).not.toHaveBeenCalled();
+
+    intake.read.mockResolvedValue(makeIntake());
+    await expect(
+      service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT),
+    ).resolves.toBeDefined();
+    expect(draftService.update).toHaveBeenCalledTimes(1);
   });
 });

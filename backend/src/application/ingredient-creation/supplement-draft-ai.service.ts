@@ -167,8 +167,6 @@ export interface SupplementDraftAiMergeInput {
   /** 人改过的路径；事实和 AI 都不写 */
   manualFields: readonly string[];
   aiDraft: SupplementAiDraft | null;
-  /** 商品链接主图；AI 没给 DIY 图时兜底 */
-  linkImageUrl?: string | null;
   /** 本次等价组候选（按推荐顺序） */
   groupCandidates?: readonly { groupId: string }[];
   /** 名称兜底（建议名/商品标题），优先级低于 AI */
@@ -236,8 +234,8 @@ export class SupplementDraftAiService {
     draftId: string,
     input: SupplementDraftAiFillInput,
   ): Promise<SupplementDraftView> {
-    // 每次写回前重新读草稿：期间人可能又改过，manualFields 也要用最新的。
     const draft = await this.draftService.get(draftId, userId);
+    assertDraftFillable(draft);
     const manualFields = normalizeManualFields(draft.manualFields);
 
     const intake = await this.intake.read({
@@ -283,7 +281,9 @@ export class SupplementDraftAiService {
 
     const [context, recommendations] = await Promise.all([
       this.review.buildContext(provisional),
-      this.review.recommendGroups(userId, draftId),
+      // 全新草稿的 payload 还是空的，必须按「草稿现值 + 本次事实」推荐，
+      // 不能按 id 再读持久化草稿，否则候选全是 MISSING。
+      this.review.recommendGroupsForPayload(provisional),
     ]);
 
     const groupCandidates: SupplementDraftPromptGroupCandidate[] =
@@ -335,12 +335,23 @@ export class SupplementDraftAiService {
       aiDraft = null;
     }
 
+    // AI 跑的这段时间里人可能已经自动保存过：写回前必须重读最新草稿。
+    // 用最新的 payload/manualFields 合并，并把 updatedAt 交给 update 的乐观锁；
+    // 如果又被人改过，update 会 409，不能拿旧草稿把人改的内容盖掉。
+    const latest = await this.draftService.get(draftId, userId);
+    assertDraftFillable(latest);
+    const latestManualFields = normalizeManualFields(latest.manualFields);
+    const latestProvisional = applyFactsToPayload(
+      latest.payload,
+      bundle.facts,
+      latestManualFields,
+    );
+
     const merged = mergeDraftAiResult({
-      provisional,
+      provisional: latestProvisional,
       factPaths: bundle.paths,
-      manualFields,
+      manualFields: latestManualFields,
       aiDraft,
-      linkImageUrl: link?.imageUrl ?? null,
       groupCandidates,
       nameFallback: intake.suggestedName ?? link?.productName ?? null,
     });
@@ -360,18 +371,21 @@ export class SupplementDraftAiService {
     const aiSnapshot: SupplementAiSnapshot = {
       status: aiDraft ? 'OK' : 'PARTIAL',
       fields: aiDraft?.fields ?? {},
-      decisions: aiDraft?.decisions ?? createEmptyAiDecisions(),
+      // 快照里的决定项写「实际生效后的值」：不要出现 snapshot 说关、
+      // payload 却是开（人改过/AI 没真正表态都会被保留）。
+      decisions: buildEffectiveDecisions(aiDraft, merged.payload),
       // AI 自己报的缺项 + 系统补的缺项（如没有等价组候选）都要留在快照里。
       missing: [...(aiDraft?.missing ?? []), ...merged.missing],
       warnings,
     };
 
-    // update 会整份替换 payload：这里传的是「当前草稿 + 事实 + AI」的完整合并结果。
-    // 不回传 manualFields（服务端已有列表），也不写 status/finalized*。
+    // update 会整份替换 payload：这里传的是「最新草稿 + 事实 + AI」的完整合并结果。
+    // 不回传 manualFields（服务端已有列表），也不写 status/finalized*；带乐观锁。
     const update: UpdateSupplementDraftInput = {
-      name: merged.payload.basic.name.trim() || draft.name,
+      name: merged.payload.basic.name.trim() || latest.name,
       payload: merged.payload,
       aiSnapshot,
+      expectedUpdatedAt: latest.updatedAt.toISOString(),
     };
 
     return this.draftService.update(draftId, userId, update);
@@ -410,15 +424,32 @@ export function mergeDraftAiResult(
     }
 
     const decisions = aiDraft.decisions;
+    const fieldValue = (path: string): unknown => aiDraft.fields[path]?.value;
+    const fieldBoolean = (path: string): boolean | undefined => {
+      const value = fieldValue(path);
+      return typeof value === 'boolean' ? value : undefined;
+    };
 
-    if (canWrite('retail.enabled')) {
-      payload.retail.enabled = decisions.retail.enabled;
+    // 「AI 没真正表态」时解析器会给安全默认值（false / null）。这些默认值
+    // 不能把人已经改过的值冲掉：只有 reason 非空、明确 true，或对应字段有值
+    // 才应用；否则保留 current。
+    const retailEnabled =
+      decisions.retail.reason.trim() || decisions.retail.enabled
+        ? decisions.retail.enabled
+        : fieldBoolean('retail.enabled');
+    if (retailEnabled !== undefined && canWrite('retail.enabled')) {
+      payload.retail.enabled = retailEnabled;
     }
-    if (canWrite('retail.noSaleReason')) {
+    if (canWrite('retail.noSaleReason') && decisions.noSaleReason !== null) {
       payload.retail.noSaleReason = decisions.noSaleReason;
     }
-    if (canWrite('diy.enabled')) {
-      payload.diy.enabled = decisions.diy.enabled;
+
+    const diyEnabled =
+      decisions.diy.reason.trim() || decisions.diy.enabled
+        ? decisions.diy.enabled
+        : fieldBoolean('diy.enabled');
+    if (diyEnabled !== undefined && canWrite('diy.enabled')) {
+      payload.diy.enabled = diyEnabled;
     }
     if (canWrite('diy.linkUrl')) {
       const linkUrl = trimText(decisions.diy.linkUrl);
@@ -426,17 +457,23 @@ export function mergeDraftAiResult(
         payload.diy.linkUrl = linkUrl;
       }
     }
+    // 链接主图是确定性事实（已在 factPaths 里）；AI 的 diy.imageUrl 不会覆盖它。
     if (canWrite('diy.imageUrl')) {
       const imageUrl = trimText(decisions.diy.imageUrl);
       if (imageUrl) {
         payload.diy.imageUrl = imageUrl;
       }
     }
-    applyProcurementDecision(
-      payload,
-      decisions.procurement,
-      canWrite('procurement.enabled'),
-    );
+
+    const procurementReason = decisions.procurement.reason.trim();
+    const procurementEnabled = procurementReason
+      ? decisions.procurement.enabled
+      : decisions.procurement.enabled
+        ? true
+        : fieldBoolean('procurement.enabled');
+    if (procurementEnabled !== undefined && canWrite('procurement.enabled')) {
+      payload.procurement.enabled = procurementEnabled;
+    }
 
     if (canWrite('label.labelNames') && decisions.labelNames.length > 0) {
       payload.label.labelNames = uniqueStrings(decisions.labelNames);
@@ -457,20 +494,6 @@ export function mergeDraftAiResult(
       if (targets.length > 0) {
         payload.nutrition.defaultTargetFields = uniqueStrings(targets);
       }
-    }
-  } else {
-    applyProcurementDecision(
-      payload,
-      undefined,
-      canWrite('procurement.enabled'),
-    );
-  }
-
-  // DIY 主图：AI 决定/字段都没给时，用商品链接主图兜底（只填空，不覆盖已有值）。
-  if (canWrite('diy.imageUrl') && !payload.diy.imageUrl.trim()) {
-    const imageUrl = trimText(input.linkImageUrl);
-    if (imageUrl) {
-      payload.diy.imageUrl = imageUrl;
     }
   }
 
@@ -564,6 +587,7 @@ function buildSupplementDraftAiFacts(
   const basic: Record<string, unknown> = {};
   const nutrition: Record<string, unknown> = {};
   const label: Record<string, unknown> = {};
+  const diy: Record<string, unknown> = {};
   const evidence: Record<string, unknown> = {};
   const paths: string[] = [];
 
@@ -604,6 +628,8 @@ function buildSupplementDraftAiFacts(
     'currentPricePerPurchaseUnit',
     positiveNumber(link?.pagePriceCny),
   );
+  // 商品页主图是确定性事实：DIY 展示图由它兜底，AI 不能改成别的图。
+  put(diy, 'diy', 'imageUrl', trimText(link?.imageUrl));
 
   // 营养素：标签解析器是原文口径；为空才退到商品页读出的营养素。
   const nutrientMap: Record<string, number> = {};
@@ -745,6 +771,9 @@ function buildSupplementDraftAiFacts(
   if (Object.keys(label).length > 0) {
     facts.label = label as Partial<SupplementDraftLabel>;
   }
+  if (Object.keys(diy).length > 0) {
+    facts.diy = diy as Partial<SupplementDraftDiy>;
+  }
   if (Object.keys(evidence).length > 0) {
     facts.evidence = evidence as Partial<SupplementDraftEvidence>;
   }
@@ -834,7 +863,8 @@ function applyAiFieldValue(
   value: unknown,
 ): void {
   // 等价组由 decision 统一处理（需要候选校验和推荐兜底），字段不直接写。
-  if (path === 'equivalence.groupId') {
+  // reapproveGroup 只有人能取消，AI 字段一律忽略。
+  if (path === 'equivalence.groupId' || path === 'equivalence.reapproveGroup') {
     return;
   }
 
@@ -865,20 +895,48 @@ function applyAiFieldValue(
   target[key] = value;
 }
 
-/** 采购开关：AI 明确“关 + 原因”才关，其余按默认 true。 */
-function applyProcurementDecision(
+/**
+ * 快照里的决定项必须写「实际生效后的值」。
+ *
+ * AI 没表态时保留的是草稿原值（如 procurement=true），如果快照直接回放
+ * 解析器的安全默认值，就会出现 snapshot 说关、payload 却是开。这里统一从
+ * 合并后的 payload 取生效值，只保留 AI 给出的理由和 recommendCreate。
+ */
+function buildEffectiveDecisions(
+  aiDraft: SupplementAiDraft | null,
   payload: SupplementDraftPayload,
-  decision: SupplementAiDecisions['procurement'] | undefined,
-  allowed: boolean,
-): void {
-  if (!allowed) {
-    return;
+): SupplementAiDecisions {
+  const base = aiDraft?.decisions ?? createEmptyAiDecisions();
+  return {
+    recommendCreate: { ...base.recommendCreate },
+    retail: { enabled: payload.retail.enabled, reason: base.retail.reason },
+    noSaleReason: payload.retail.noSaleReason,
+    diy: {
+      enabled: payload.diy.enabled,
+      linkUrl: payload.diy.linkUrl,
+      imageUrl: payload.diy.imageUrl,
+      reason: base.diy.reason,
+    },
+    procurement: {
+      enabled: payload.procurement.enabled,
+      reason: base.procurement.reason,
+    },
+    equivalence: {
+      groupId: payload.equivalence.groupId,
+      reason: base.equivalence.reason,
+    },
+    labelNames: [...payload.label.labelNames],
+    defaultTargetFields: [...payload.nutrition.defaultTargetFields],
+    tagNames: [...payload.label.tagNames],
+    addTiming: payload.basic.addTiming.trim() || null,
+  };
+}
+
+/** 只有 DRAFT 能跑 AI；已写入/已放弃的草稿返回 409。 */
+function assertDraftFillable(draft: SupplementDraftView): void {
+  if (draft.status !== 'DRAFT') {
+    throw new ConflictException('已写入或已放弃的草稿不能再起草');
   }
-  if (!decision || decision.enabled || !decision.reason.trim()) {
-    payload.procurement.enabled = true;
-    return;
-  }
-  payload.procurement.enabled = false;
 }
 
 /** AI 完全不可用时的安全决定项：只展示，不丢草稿。 */

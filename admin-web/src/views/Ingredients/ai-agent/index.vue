@@ -1452,7 +1452,7 @@ import {
   shouldBlockRunForPendingPlan
 } from './reviewLock'
 import {
-  discardDraftsSequentially,
+  discardAllDraftPages,
   formatDraftUpdatedAt,
   pickLatestDraft,
   readDraftIdFromQuery,
@@ -2683,7 +2683,7 @@ async function discardAllOldDrafts() {
 
   try {
     await ElMessageBox.confirm(
-      `清空这 ${ids.length} 份旧建档草稿吗？未写入的内容会一起删除，不能恢复。`,
+      `会分批清空你账号下全部旧建档草稿（列表一次只显示 ${ids.length} 份，可能还有更早的）。未写入的内容会一起删除，不能恢复。`,
       '清空旧草稿',
       { type: 'warning', confirmButtonText: '清空', cancelButtonText: '取消' }
     )
@@ -2693,21 +2693,22 @@ async function discardAllOldDrafts() {
 
   draftClearing.value = true
   try {
-    const result = await discardDraftsSequentially(ids, (id) =>
-      ingredientCreationApi.discardDraft(id)
+    const result = await discardAllDraftPages(
+      () => ingredientCreationApi.listDrafts(),
+      (id) => ingredientCreationApi.discardDraft(id)
     )
-    const removed = new Set(result.removed)
-    draftOptions.value = draftOptions.value.filter(
-      (item) => !removed.has(item.draftId)
-    )
-    const latest = pickLatestDraft(draftOptions.value)
-    selectedResumeId.value =
-      latest?.draftId ?? draftOptions.value[0]?.draftId ?? ''
+    await loadDraftOptions()
 
     if (result.failed.length > 0) {
       ElMessage.warning(
         `已清理 ${result.removed.length} 份，还有 ${result.failed.length} 份失败，请重试`
       )
+    } else if (!result.exhausted) {
+      ElMessage.warning(
+        `已清理 ${result.removed.length} 份，但可能还没清完，请再点一次「清空全部」`
+      )
+    } else if (result.removed.length === 0) {
+      ElMessage.info('没有可清理的旧草稿')
     } else {
       ElMessage.success(`已清理 ${result.removed.length} 份旧草稿`)
     }

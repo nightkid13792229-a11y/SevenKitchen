@@ -87,3 +87,56 @@ export async function discardDraftsSequentially(
 
   return { removed, failed }
 }
+
+
+export interface DraftDiscardAllResult extends DraftDiscardResult {
+  /** 实际处理了几个非空批次 */
+  batches: number
+  /** 是否确认清到列表为空（false = 有失败/重复页/达到上限） */
+  exhausted: boolean
+}
+
+/**
+ * 分批清空旧草稿。
+ *
+ * 后端列表一次最多回 20 条，只清当前页会出现「清完又冒 20 条」；
+ * 这里每清完一批就重新拉列表，直到为空。某批有失败立刻停，避免
+ * 在服务端异常时无限循环；同一批 ID 重复出现也停。
+ */
+export async function discardAllDraftPages(
+  list: () => Promise<readonly IngredientCreationDraftSummary[]>,
+  discard: (id: string) => Promise<unknown>,
+  maxBatches = 100,
+): Promise<DraftDiscardAllResult> {
+  const removed: string[] = []
+  const failed: Array<{ id: string; error: unknown }> = []
+  let batches = 0
+  let previousKey = ''
+
+  for (let index = 0; index < maxBatches; index += 1) {
+    const items = await list()
+    if (items.length === 0) {
+      return { removed, failed, batches, exhausted: true }
+    }
+
+    const key = items.map((item) => item.draftId).join('|')
+    if (key === previousKey) {
+      return { removed, failed, batches, exhausted: false }
+    }
+    previousKey = key
+    batches += 1
+
+    const batch = await discardDraftsSequentially(
+      items.map((item) => item.draftId),
+      discard,
+    )
+    removed.push(...batch.removed)
+    failed.push(...batch.failed)
+
+    if (batch.failed.length > 0 || batch.removed.length === 0) {
+      return { removed, failed, batches, exhausted: false }
+    }
+  }
+
+  return { removed, failed, batches, exhausted: false }
+}

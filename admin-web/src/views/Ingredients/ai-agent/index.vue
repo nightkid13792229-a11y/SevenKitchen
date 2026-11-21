@@ -585,6 +585,14 @@
         <div v-else-if="draftLoading" v-loading="true" class="review-loading" />
 
         <div v-else-if="draft" class="review-panel__body">
+          <el-alert
+            v-if="state.running"
+            class="review-running"
+            type="info"
+            :closable="false"
+            show-icon
+            title="AI 运行中：审核区已锁定，等这一轮结束再改"
+          />
           <div class="review-tabs-shell">
             <el-tabs v-model="activeTab" class="review-tabs">
               <el-tab-pane label="原料档案" name="ingredient">
@@ -607,7 +615,7 @@
 
               <el-form
                 class="ingredient-form"
-                :disabled="Boolean(commitResult) || saving || submitting"
+                :disabled="reviewLocked"
                 @submit.prevent
               >
                 <section
@@ -820,7 +828,7 @@
                       ? ingredientForm.category
                       : ''
                   "
-                  :disabled="Boolean(commitResult) || saving || submitting"
+                  :disabled="reviewLocked"
                   clearable
                   placeholder="空"
                   class="nutrition-category__select"
@@ -926,7 +934,7 @@
                         :controls="false"
                         size="small"
                         class="profile-row__input"
-                        :disabled="Boolean(commitResult) || saving || submitting"
+                        :disabled="reviewLocked"
                         @change="
                           handleCellChange(group.profileIndex, row, $event)
                         "
@@ -1359,6 +1367,10 @@ import {
   toCheckRunSummary,
   toLocateTarget
 } from './checkReportView'
+import {
+  isReviewLocked,
+  shouldBlockRunForPendingPlan
+} from './reviewLock'
 import CheckReportDialog from './components/CheckReportDialog.vue'
 import {
   buildIngredientCardCells,
@@ -2124,9 +2136,20 @@ const gate = computed(() =>
   })
 )
 
+const reviewLocked = computed(() =>
+  isReviewLocked({
+    running: state.running,
+    saving: saving.value,
+    submitting: submitting.value,
+    committed:
+      Boolean(commitResult.value) || draft.value?.step === 'COMMIT'
+  })
+)
+
 const canAuthorize = computed(
   () =>
     Boolean(draft.value) &&
+    !reviewLocked.value &&
     !commitResult.value &&
     !submitting.value &&
     !staleBundle.value &&
@@ -2435,6 +2458,17 @@ async function loadDraft(draftId: string) {
 }
 
 async function handleRun() {
+  // 有未确认的检索方案：先让人确认/跳过，不能把方案卡悄悄清掉。
+  if (
+    shouldBlockRunForPendingPlan({
+      pendingPlan: state.pendingPlan,
+      running: state.running
+    })
+  ) {
+    ElMessage.warning('先把检索方案确认或跳过，再继续对话')
+    return
+  }
+
   // 新一轮会让草稿内容变化，先取消「已核对」确认。
   reportAcknowledged.value = false
   // 线路没定、或者选了补剂，一个请求都不发：闸门不是提示，是硬拦。
@@ -2445,6 +2479,19 @@ async function handleRun() {
   if (!text || state.running || saving.value || commitResult.value) {
     return
   }
+  // 运行前先把未失焦的原料卡改动补存，避免 AI 读到旧版本。
+  await saveQueue
+  if (saving.value) {
+    return
+  }
+  if (hasUnsavedIngredientChanges.value) {
+    const flushed = await flushIngredientCard()
+    if (!flushed) {
+      ElMessage.warning('原料卡还没保存成功，先重试')
+      return
+    }
+  }
+
   const sentLine = line.value
 
   inputText.value = ''
@@ -2732,9 +2779,8 @@ function isIngredientCellClearable(cell: IngredientCardCell): boolean {
 function isIngredientCellDisabled(cell: IngredientCardCell): boolean {
   return (
     cell.isAfterCreate ||
-    Boolean(commitResult.value) ||
-    saving.value ||
-    submitting.value
+    reviewLocked.value ||
+    state.running
   )
 }
 
@@ -3374,6 +3420,10 @@ async function showAuthorizeBlocked(
  */
 async function handleAuthorize() {
   if (!draft.value || submitting.value || commitResult.value) {
+    return
+  }
+  if (state.running) {
+    ElMessage.warning('AI 正在运行，等这一轮结束再授权')
     return
   }
   // 写入前再确认一次页面是不是被后台的新版本顶掉了（2026-11-08）：

@@ -197,8 +197,9 @@
           </span>
           <el-input-number
             v-model="basic.servingUnitsPerDose"
-            :min="0.01"
-            :precision="2"
+            :min="servingIsPcs ? 1 : 0.01"
+            :precision="servingIsPcs ? 0 : 2"
+            :step="servingIsPcs ? 1 : 0.1"
             controls-position="right"
             style="width: 100%"
           />
@@ -414,6 +415,12 @@ const displayUnitOptions = supplementUsageUnitOptions.filter(
 const unitLabel = computed(() => basic.value.unitDisplayLabel.trim() || '个基准单位')
 
 const nameFormWord = computed(() => findSupplementFormWord(basic.value.name))
+
+/**
+ * 片/胶囊按个，每份量必须是整数（1.5 粒没有意义）；粉剂/液体按克/毫升，
+ * 允许两位小数。输入框精度跟着基准单位走，避免 UI 让人填出 1.5 粒。
+ */
+const servingIsPcs = computed(() => basic.value.baseUnit === 'PCS')
 
 /** 粉/液体标每份小数，片/胶囊按整数；文案跟着形态变。 */
 const servingHint = computed(() => {

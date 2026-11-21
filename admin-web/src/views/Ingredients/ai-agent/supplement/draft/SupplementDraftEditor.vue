@@ -19,8 +19,14 @@
       </div>
 
       <div class="draft-editor__top-side">
-        <el-tag :type="saving ? 'info' : 'success'" size="small" effect="plain">
-          {{ saving ? '保存中…' : '已自动保存' }}
+        <el-tag
+          :type="saveStateTagType"
+          size="small"
+          effect="plain"
+          :data-save-state="saveState"
+          :title="saveState === 'failed' ? saveError : undefined"
+        >
+          {{ saveStateText }}
         </el-tag>
         <span class="draft-editor__completeness">
           必填 {{ draft.completeness.filledRequired }}/{{
@@ -31,7 +37,7 @@
         <el-tooltip :content="aiHint" placement="bottom">
           <span class="draft-editor__ai-anchor">
             <el-button
-              :disabled="!aiReady || aiRunning || validating"
+              :disabled="!aiReady || aiRunning || validating || finalizing || saving"
               :loading="aiRunning"
               data-action="run-ai"
               @click="emit('run-ai')"
@@ -43,7 +49,7 @@
 
         <el-button
           type="primary"
-          :disabled="saving || aiRunning || validating"
+          :disabled="saving || aiRunning || validating || finalizing"
           :loading="validating"
           data-action="review"
           @click="emit('review')"
@@ -100,14 +106,18 @@
     </div>
 
     <footer class="draft-editor__footer">
-      <span class="draft-editor__footer-status">
-        {{ saving ? '保存中…' : '已自动保存' }} · 必填
+      <span
+        class="draft-editor__footer-status"
+        :title="saveState === 'failed' ? saveError : undefined"
+      >
+        {{ saveStateText }} · 必填
         {{ draft.completeness.filledRequired }}/{{ draft.completeness.totalRequired }}
       </span>
       <div class="draft-editor__footer-actions">
         <el-button
           type="primary"
           :loading="saving"
+          :disabled="aiRunning || validating || finalizing"
           data-action="save"
           @click="emit('save')"
         >
@@ -116,7 +126,7 @@
         <el-button
           type="danger"
           plain
-          :disabled="saving || aiRunning"
+          :disabled="saving || aiRunning || validating || finalizing"
           data-action="discard"
           @click="emit('discard')"
         >
@@ -156,6 +166,11 @@ const props = defineProps<{
   saving: boolean
   aiRunning: boolean
   validating: boolean
+  finalizing: boolean
+  /** 有还没存到服务端的改动；决定顶部显示「未保存」而不是「已保存」 */
+  dirty: boolean
+  /** 保存失败的中文原因；为空表示最近一次保存没有失败 */
+  saveError: string
 }>()
 
 const emit = defineEmits<{
@@ -228,6 +243,39 @@ const aiHint = computed(() =>
     ? 'AI 会读正面图和标签图，重填草稿里没被人改过的字段；改过的字段留给你决定'
     : '先到「证据与来源」上传商品正面图和标签图，才能让 AI 起草'
 )
+
+type SaveState = 'saving' | 'failed' | 'unsaved' | 'saved'
+
+const SAVE_STATE_TEXT: Record<SaveState, string> = {
+  saving: '保存中…',
+  failed: '保存失败',
+  unsaved: '未保存',
+  saved: '已保存'
+}
+
+const SAVE_STATE_TAG: Record<
+  SaveState,
+  'info' | 'danger' | 'warning' | 'success'
+> = {
+  saving: 'info',
+  failed: 'danger',
+  unsaved: 'warning',
+  saved: 'success'
+}
+
+/**
+ * 真实保存状态：防抖期间是「未保存」，保存失败是「保存失败」，
+ * 只有服务端确认过（load/save 成功）才是「已保存」。
+ */
+const saveState = computed<SaveState>(() => {
+  if (props.saving) return 'saving'
+  if (props.saveError.trim()) return 'failed'
+  if (props.dirty) return 'unsaved'
+  return 'saved'
+})
+
+const saveStateText = computed(() => SAVE_STATE_TEXT[saveState.value])
+const saveStateTagType = computed(() => SAVE_STATE_TAG[saveState.value])
 </script>
 
 <style scoped>

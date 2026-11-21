@@ -2,24 +2,29 @@
   <div class="draft-flow">
     <!-- 列表 -->
     <template v-if="view === 'list'">
-      <div v-if="listError" class="draft-flow__alert">
-        <el-alert :title="listError" type="error" :closable="false" show-icon />
-        <el-button text size="small" @click="refreshList">重新加载</el-button>
-      </div>
-
       <SupplementDraftList
         :drafts="drafts"
         :loading="listLoading || creating"
+        :error="listError"
         @new="handleCreate"
         @continue="handleContinue"
         @discard="handleListDiscard"
+        @retry="refreshList"
       />
     </template>
 
     <!-- 编辑 -->
     <template v-else-if="view === 'editor'">
       <el-alert
-        v-if="error"
+        v-if="saveError"
+        :title="saveError"
+        type="error"
+        :closable="false"
+        show-icon
+        class="draft-flow__alert"
+      />
+      <el-alert
+        v-else-if="error"
         :title="error"
         type="error"
         :closable="false"
@@ -32,6 +37,9 @@
         :saving="saving"
         :ai-running="aiRunning"
         :validating="validating"
+        :finalizing="finalizing"
+        :dirty="dirty"
+        :save-error="saveError"
         @save="handleSaveAndLeave"
         @run-ai="handleRunAi"
         @review="handleReview"
@@ -136,16 +144,20 @@ const creating = ref(false)
 const {
   draft,
   review,
+  dirty,
   saving,
+  saveError,
   aiRunning,
   validating,
+  finalizing,
   error,
   load,
   save,
   runAi,
   validate,
   finalize,
-  discard
+  discard,
+  reset
 } = useSupplementDraft(selectedDraftId)
 
 /* ------------------------------------------------------------------ */
@@ -184,9 +196,12 @@ async function handleContinue(id: string): Promise<void> {
 }
 
 async function openDraft(id: string): Promise<void> {
+  // 先清掉上一张草稿的上下文并作废它的在飞请求，避免加载期间还显示/写入旧草稿。
+  reset()
   selectedDraftId.value = id
   view.value = 'editor'
   const loaded = await load()
+  if (selectedDraftId.value !== id) return
   if (!loaded) {
     // 别人的草稿/已被放弃时后端返回 404；拦截器已经提示过，退回列表。
     await returnToList()
@@ -232,75 +247,122 @@ async function confirmDiscard(name: string): Promise<boolean> {
 /* 编辑                                                                */
 /* ------------------------------------------------------------------ */
 
+/** 保存/AI/校验/写入进行中时，不允许离开编辑页；返回一句中文原因。 */
+function editorBusyMessage(): string | null {
+  if (saving.value) return '正在保存，请稍候再试'
+  if (aiRunning.value) return 'AI 正在起草，请稍候再试'
+  if (validating.value) return '正在校验，请稍候再试'
+  if (finalizing.value) return '正在写入，请稍候再试'
+  return null
+}
+
 /**
- * 「保存并离开」/顶部「返回草稿列表」都先存一次。
+ * 「保存并离开」：存成功才走。
  *
- * 保存失败（409 / 断网）就留在编辑页，让上面的错误提示可见，
- * 避免静默丢掉还没保存的修改；只有保存成功或已有保存请求在飞才离开。
+ * 保存失败（409 / 断网）就留在编辑页，让 saveError 的提示可见，
+ * 避免静默丢掉还没保存的修改。
  */
 async function handleSaveAndLeave(): Promise<void> {
+  const busy = editorBusyMessage()
+  if (busy) {
+    ElMessage.warning(busy)
+    return
+  }
   const saved = await save()
-  if (saved || saving.value) {
+  if (saved) {
     await returnToList()
+    return
+  }
+  // 刚好撞上自动保存：不硬走，提示等它完成；失败原因由 saveError 显示。
+  if (saving.value) {
+    ElMessage.warning('正在保存，请稍候再试')
   }
 }
 
 async function handleRunAi(): Promise<void> {
+  const idAtStart = selectedDraftId.value
   const updated = await runAi()
-  if (updated) {
-    ElMessage.success('AI 起草完成，请按区块逐项核对')
-  }
+  if (!updated) return
+  if (selectedDraftId.value !== idAtStart) return
+  ElMessage.success('AI 起草完成，请按区块逐项核对')
 }
 
 /**
- * 顶部「返回草稿列表」：尽力保存一次再走，不阻塞导航。
+ * 顶部「返回草稿列表」：有改动先存；保存失败就留在编辑页。
  *
- * 自动保存平时已经存过；这里补一次是为了兜住「刚改完就点返回」。
- * 保存失败（如 409）时接口层已提示，仍让人回到列表，避免卡在编辑页。
+ * 不再「尽力保存后照样清空」——那会在 409/断网时静默丢改动。
  */
 async function handleBack(): Promise<void> {
-  if (draft.value) {
-    await save()
+  const busy = editorBusyMessage()
+  if (busy) {
+    ElMessage.warning(busy)
+    return
+  }
+  if (dirty.value) {
+    const saved = await save()
+    if (!saved) {
+      if (saving.value) {
+        ElMessage.warning('正在保存，请稍候再试')
+      }
+      return
+    }
   }
   await returnToList()
 }
 
 /** 最终审核：先让服务端校验，拿到阻断/提醒后再进审核视图。 */
 async function handleReview(): Promise<void> {
-  const result = await validate()
-  if (result) {
-    view.value = 'review'
+  const idAtStart = selectedDraftId.value
+  if (!idAtStart) return
+  const busy = editorBusyMessage()
+  if (busy) {
+    ElMessage.warning(busy)
+    return
   }
+  const result = await validate()
+  if (!result) return
+  // 校验期间如果已经切走（reset/打开别的草稿），不要把视图拉到旧草稿的审核屏。
+  if (selectedDraftId.value !== idAtStart) return
+  view.value = 'review'
 }
 
 /** 编辑页「放弃草稿」：确认后走 composable 的 discard，再回列表。 */
 async function handleEditorDiscard(): Promise<void> {
+  const busy = editorBusyMessage()
+  if (busy) {
+    ElMessage.warning(busy)
+    return
+  }
   const current = draft.value
   if (!current) return
+  const idAtStart = current.id
   if (!(await confirmDiscard(current.name))) return
   const discarded = await discard()
-  if (discarded) {
-    await returnToList()
-  }
+  if (!discarded) return
+  if (selectedDraftId.value !== idAtStart) return
+  await returnToList()
 }
 
 /** 最终写入（Task 16 的审核页接上按钮后启用）。 */
 async function handleFinalize(): Promise<void> {
+  const idAtStart = selectedDraftId.value
+  if (!idAtStart) return
   const result = await finalize()
-  if (result) {
-    view.value = 'verification'
-  }
+  if (!result) return
+  // 同 validate：写入结果只属于发起它的那张草稿。
+  if (selectedDraftId.value !== idAtStart) return
+  view.value = 'verification'
 }
 
 /* ------------------------------------------------------------------ */
 /* 视图切换                                                            */
 /* ------------------------------------------------------------------ */
 
-/** 回列表：清掉编辑状态（`load()` 在 id 为空时会清空草稿/审核结果）。 */
+/** 回列表：作废在飞请求并清空编辑状态，再刷新列表。 */
 async function returnToList(): Promise<void> {
   view.value = 'list'
   selectedDraftId.value = null
-  await load()
+  reset()
   await refreshList()
 }
 

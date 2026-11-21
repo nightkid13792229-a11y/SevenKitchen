@@ -105,7 +105,7 @@
  * 页面上永远只列目录里的字段（`supplementNutrientGroups`），键就是服务端
  * 营养档案的字段路径，避免自己造字段名。
  */
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { SupplementDraftNutrition } from '@/api/supplementDrafts'
 import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 
@@ -119,6 +119,27 @@ const props = defineProps<{
 const nutrition = defineModel<SupplementDraftNutrition>({ required: true })
 
 const showAll = ref(false)
+
+/**
+ * 每份值被清掉/改成 0 后，已经选中的默认目标要同步剔除。
+ *
+ * 否则选择框里会留着一个「标签上已经没有」的字段，最终校验报
+ * DEFAULT_TARGET_INVALID，人还得回头找是哪一项。
+ */
+watch(
+  () => nutrition.value.servingNutrients,
+  (nutrients) => {
+    const stillPositive = (fieldPath: string): boolean => {
+      const value = nutrients[fieldPath]
+      return typeof value === 'number' && Number.isFinite(value) && value > 0
+    }
+    const next = nutrition.value.defaultTargetFields.filter(stillPositive)
+    if (next.length !== nutrition.value.defaultTargetFields.length) {
+      nutrition.value.defaultTargetFields = next
+    }
+  },
+  { deep: true }
+)
 
 const unitLabel = computed(
   () => props.unitDisplayLabel.trim() || '个基准单位'

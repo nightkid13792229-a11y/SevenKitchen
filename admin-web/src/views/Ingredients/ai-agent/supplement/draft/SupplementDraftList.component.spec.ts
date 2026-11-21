@@ -23,9 +23,13 @@ function summary(
   }
 }
 
-async function mountList(drafts: SupplementDraftSummary[], loading = false) {
+async function mountList(
+  drafts: SupplementDraftSummary[],
+  loading = false,
+  error = ''
+) {
   const wrapper = mount(SupplementDraftList, {
-    props: { drafts, loading },
+    props: { drafts, loading, error },
     global: { plugins: [ElementPlus] }
   })
   // el-table 在挂载后的下一个宏任务里才完成列宽/表体布局；jsdom 没有布局引擎，
@@ -61,6 +65,26 @@ describe('补剂草稿列表', () => {
     expect(text).toContain('未命名补剂')
     expect(text).toContain('9/15')
     expect(text).toContain('3/12')
+  })
+
+  it('每行状态固定显示「草稿」，不 invent 后端字段', async () => {
+    const wrapper = await mountList([
+      summary(),
+      summary({ id: 'draft-2' })
+    ])
+
+    expect(wrapper.findAll('[data-status="draft"]')).toHaveLength(2)
+    expect(wrapper.text()).toContain('草稿')
+  })
+
+  it('加载失败时显示失败原因而不是空状态，并可重试', async () => {
+    const wrapper = await mountList([], false, '加载草稿列表失败')
+
+    expect(wrapper.text()).toContain('加载草稿列表失败')
+    expect(wrapper.text()).not.toContain('还没有草稿')
+
+    await wrapper.find('[data-action="retry"]').trigger('click')
+    expect(wrapper.emitted('retry')).toHaveLength(1)
   })
 
   it('点继续带出草稿 id', async () => {

@@ -12,12 +12,25 @@
       </el-button>
     </header>
 
+    <el-alert
+      v-if="error"
+      :title="error"
+      type="error"
+      :closable="false"
+      show-icon
+      class="draft-list__error"
+    >
+      <el-button text size="small" data-action="retry" @click="emit('retry')">
+        重新加载
+      </el-button>
+    </el-alert>
+
     <p v-if="loading && drafts.length === 0" class="draft-list__loading">
       正在加载草稿…
     </p>
 
     <el-empty
-      v-else-if="drafts.length === 0"
+      v-else-if="!error && drafts.length === 0"
       description="还没有草稿"
       :image-size="96"
     >
@@ -29,7 +42,7 @@
       </el-button>
     </el-empty>
 
-    <template v-else>
+    <template v-else-if="drafts.length > 0">
       <el-table :data="drafts" row-key="id" stripe style="width: 100%">
         <el-table-column label="草稿名" min-width="220">
           <template #default="{ row }">
@@ -39,6 +52,19 @@
             >
               {{ draftName(row) }}
             </span>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="状态" width="90">
+          <template #default>
+            <el-tag
+              type="info"
+              size="small"
+              effect="plain"
+              data-status="draft"
+            >
+              草稿
+            </el-tag>
           </template>
         </el-table-column>
 
@@ -102,16 +128,25 @@
  */
 import type { SupplementDraftSummary } from '@/api/supplementDrafts'
 
-defineProps<{
-  /** 我的未完成草稿，按最近编辑倒序（后端已排序） */
-  drafts: SupplementDraftSummary[]
-  loading: boolean
-}>()
+withDefaults(
+  defineProps<{
+    /** 我的未完成草稿，按最近编辑倒序（后端已排序） */
+    drafts: SupplementDraftSummary[]
+    loading: boolean
+    /**
+     * 列表加载失败的中文原因。有值时不要显示「还没有草稿」，
+     * 否则会把「网络失败」说成「没有草稿」。
+     */
+    error?: string
+  }>(),
+  { error: '' }
+)
 
 const emit = defineEmits<{
   (event: 'new'): void
   (event: 'continue', id: string): void
   (event: 'discard', draft: SupplementDraftSummary): void
+  (event: 'retry'): void
 }>()
 
 /** 名字是空的草稿显示成「未命名补剂」，不要显示空行。 */
@@ -165,6 +200,10 @@ function formatEditedAt(value: string): string {
   font-size: 12.5px;
   line-height: 1.6;
   color: #6b7482;
+}
+
+.draft-list__error {
+  border-radius: 10px;
 }
 
 .draft-list__loading {

@@ -369,9 +369,12 @@ export async function executeTool(
         const planResult = context.plan
           ? await context.port.assessPlan(context.plan)
           : null;
+        const planAssessment = planResult?.assessment as any;
+        const planCompliant =
+          planAssessment?.isCompliant ?? planAssessment?.summary?.isCompliant;
         const planText = planResult
-          ? planResult.assessment
-            ? `；方案专属评估：${(planResult.assessment as any)?.summary?.isCompliant ? '通过' : '未通过'}${
+          ? planAssessment
+            ? `；方案专属评估：${planCompliant ? '通过' : '未通过'}${
                 planResult.unsupported.length > 0
                   ? `（${planResult.unsupported.length} 条方案约束需 Agent/人工判断）`
                   : ''

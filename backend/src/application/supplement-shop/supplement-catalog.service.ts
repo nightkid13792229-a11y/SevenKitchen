@@ -11,32 +11,20 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { SupplementDosageService } from './supplement-dosage.service';
-import { isSupplementUnitOneToOne } from './supplement-unit.util';
 import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
+import {
+  evaluateSupplementIssues,
+  type SupplementCatalogIssue,
+} from './supplement-catalog-issues';
+
+// 体检问题类型搬到 supplement-catalog-issues.ts（纯函数），这里继续对外导出，保持旧引用可用
+export type {
+  SupplementCatalogIssue,
+  SupplementCatalogIssueCode,
+} from './supplement-catalog-issues';
 
 /** 物理形态（与 prisma schema 的 IngredientPhysicalForm 对齐） */
 export type IngredientPhysicalFormCode = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID';
-
-export type SupplementCatalogIssueCode =
-  | 'NO_PRICE'
-  | 'FORM_MISSING'
-  | 'LIQUID_UNSUPPORTED'
-  | 'SHELF_LIFE_MISSING'
-  | 'STORAGE_MISSING'
-  | 'UNIT_INCONSISTENT'
-  | 'UNIT_INCOMPATIBLE'
-  | 'DUPLICATE_NAME'
-  | 'EQUIVALENCE_UNGROUPED'
-  | 'EQUIVALENCE_GROUP_NOT_APPROVED'
-  | 'EQUIVALENCE_GROUP_SINGLETON'
-  | 'EQUIVALENCE_NUTRIENT_MISSING'
-  | 'EQUIVALENCE_UNIT_MISMATCH';
-
-export interface SupplementCatalogIssue {
-  code: SupplementCatalogIssueCode;
-  level: 'ERROR' | 'WARN';
-  message: string;
-}
 
 export interface SupplementCatalogItem {
   id: string;
@@ -488,116 +476,40 @@ export class SupplementCatalogService {
     );
     const suggestedShelfLifeMonths = this.suggestShelfLifeMonths(ingredient.brand);
 
-    const issues: SupplementCatalogIssue[] = [];
-
-    if (price <= 0) {
-      issues.push({
-        code: 'NO_PRICE',
-        level: 'ERROR',
-        message: '进货价为 0，无法计价，需先补价或不上架',
-      });
-    }
-
-    if (!physicalForm) {
-      issues.push({
-        code: 'FORM_MISSING',
-        level: 'ERROR',
-        message: '未填写物理形态，无法确定分装方式',
-      });
-    } else if (physicalForm === 'LIQUID') {
-      issues.push({
-        code: 'LIQUID_UNSUPPORTED',
-        level: 'ERROR',
-        message: '液体补剂暂不支持分装，不应上架',
-      });
-    }
-
-    if (!isSupplementUnitOneToOne(displayUnit, ingredient.baseUnit)) {
-      issues.push({
-        code: 'UNIT_INCOMPATIBLE',
-        level: 'ERROR',
-        message: `展示单位「${displayUnit}」无法与库存基准单位 ${ingredient.baseUnit} 1:1 对应；请先修档案，禁止上架`,
-      });
-    }
-
-    if (!ingredient.shelfLifeMonths) {
-      issues.push({
-        code: 'SHELF_LIFE_MISSING',
-        level: 'ERROR',
-        message: '未填写原厂保质期，无法计算分装后有效期',
-      });
-    }
-
-    if (!ingredient.storageCondition) {
-      issues.push({
-        code: 'STORAGE_MISSING',
-        level: 'WARN',
-        message: '未填写储存条件，标签无法印刷',
-      });
-    }
-
-    if (
-      rawPropertiesDisplayUnit &&
-      ingredient.unitDisplayLabel &&
-      rawPropertiesDisplayUnit !== ingredient.unitDisplayLabel
-    ) {
-      issues.push({
-        code: 'UNIT_INCONSISTENT',
-        level: 'WARN',
-        message: `单位口径不一致：properties.display_unit="${rawPropertiesDisplayUnit}"，unit_display_label="${ingredient.unitDisplayLabel}"`,
-      });
-    }
-
-    if (context.sameNameCount > 1) {
-      issues.push({
-        code: 'DUPLICATE_NAME',
-        level: 'WARN',
-        message: `同名补剂档案有 ${context.sameNameCount} 条，需确认是否重复`,
-      });
-    }
-
     const equipGroup = ingredient.equivalenceGroup;
-    if (!equipGroup) {
-      issues.push({
-        code: 'EQUIVALENCE_UNGROUPED',
-        level: 'WARN',
-        message: '未归入等价组：缺货时无法推荐同营养替代原料',
-      });
-    } else {
-      if (equipGroup.status !== 'APPROVED' || equipGroup.isActive === false) {
-        issues.push({
-          code: 'EQUIVALENCE_GROUP_NOT_APPROVED',
-          level: 'WARN',
-          message: `所在等价组「${equipGroup.name}」还未审核通过，不参与替换`,
-        });
-      }
-      if (equipGroup._count.ingredients <= 1) {
-        issues.push({
-          code: 'EQUIVALENCE_GROUP_SINGLETON',
-          level: 'WARN',
-          message: `所在等价组「${equipGroup.name}」只有 1 个成员，等于不能替换`,
-        });
-      }
-      const resolution = this.dosage.resolveConcentration(ingredient, {
-        fieldPath: equipGroup.nutrientKey,
-        label: equipGroup.nutrientLabel,
-        unit: equipGroup.nutrientUnit,
-        targetValuePerKg: 1,
-      });
-      if (resolution.status === 'UNIT_MISMATCH') {
-        issues.push({
-          code: 'EQUIVALENCE_UNIT_MISMATCH',
-          level: 'WARN',
-          message: `等价组「${equipGroup.name}」要求 ${equipGroup.nutrientLabel}（${equipGroup.nutrientUnit}），档案浓度单位是 ${resolution.actualUnit || '未知'}，该原料不参与替换`,
-        });
-      } else if (resolution.status !== 'OK') {
-        issues.push({
-          code: 'EQUIVALENCE_NUTRIENT_MISSING',
-          level: 'WARN',
-          message: `等价组「${equipGroup.name}」要求的 ${equipGroup.nutrientLabel} 浓度缺失，该原料不参与替换`,
-        });
-      }
-    }
+    const concentration = equipGroup
+      ? this.dosage.resolveConcentration(ingredient, {
+          fieldPath: equipGroup.nutrientKey,
+          label: equipGroup.nutrientLabel,
+          unit: equipGroup.nutrientUnit,
+          targetValuePerKg: 1,
+        })
+      : null;
+
+    // 体检规则抽到纯函数里，上架清单和草稿最终校验共用；行为与文案保持不变
+    const issues = evaluateSupplementIssues({
+      price,
+      purchaseToBaseRatio: ratio,
+      physicalForm,
+      baseUnit: ingredient.baseUnit,
+      unitDisplayLabel: ingredient.unitDisplayLabel,
+      displayUnit,
+      propertiesDisplayUnit: rawPropertiesDisplayUnit,
+      shelfLifeMonths: ingredient.shelfLifeMonths,
+      storageCondition: ingredient.storageCondition,
+      sameNameCount: context.sameNameCount,
+      equivalenceGroup: equipGroup
+        ? {
+            name: equipGroup.name,
+            status: equipGroup.status,
+            isActive: equipGroup.isActive,
+            memberCount: equipGroup._count.ingredients,
+            nutrientLabel: equipGroup.nutrientLabel,
+            nutrientUnit: equipGroup.nutrientUnit,
+          }
+        : null,
+      concentration,
+    });
 
     const hasError = issues.some((issue) => issue.level === 'ERROR');
 

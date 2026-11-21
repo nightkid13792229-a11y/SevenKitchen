@@ -96,7 +96,9 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
         summary: { type: 'string', description: '方案摘要' },
         rationale: {
           type: 'string',
-          description: '方案制定的理由与建议；纯文本',
+          maxLength: 2000,
+          description:
+            '理由与建议；分“核心判断 / 关键取舍 / 待确认”三段，用空行分隔，每段最多 3 条，不超过 1200 字。',
         },
         constraints: {
           type: 'array',
@@ -246,7 +248,7 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   const summary =
     stripMedicationSentences(readText(input.summary, 'summary', 4000)) ||
     '营养管理方案';
-  const rationaleRaw = readOptionalText(input.rationale, 6000);
+  const rationaleRaw = readOptionalText(input.rationale, 2000);
   const rationale = rationaleRaw
     ? stripMedicationSentences(rationaleRaw)
     : undefined;

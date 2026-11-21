@@ -88,3 +88,28 @@ describe('AI 设计对话 · 第三阶段', () => {
     expect(drawerSource).toContain('normalizeCfctCategory')
   })
 })
+
+describe('AI 设计对话 · 营养方案排版', () => {
+  it('数值约束和非数值约束分开列，非数值约束在理由前面', () => {
+    expect(drawerSource).toContain('数值约束（')
+    expect(drawerSource).toContain('非数值约束（')
+    expect(drawerSource).toContain('agent-plan__section-title')
+    expect(drawerSource.indexOf('非数值约束（')).toBeLessThan(
+      drawerSource.indexOf('agent-plan__rationale'),
+    )
+  })
+
+  it('理由按段落排版，不再是一坨文本', () => {
+    expect(drawerSource).toContain('agent-plan__rationale-text')
+    expect(drawerSource).toContain('white-space: pre-wrap')
+    expect(drawerSource).toContain('line-height: 1.8')
+  })
+})
+
+describe('AI 设计对话 · 长理由折叠', () => {
+  it('理由超过 600 字可展开/收起', () => {
+    expect(drawerSource).toContain('rationaleExpanded')
+    expect(drawerSource).toContain('展开全文')
+    expect(drawerSource).toContain('is-collapsed')
+  })
+})

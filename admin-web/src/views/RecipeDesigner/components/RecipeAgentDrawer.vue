@@ -67,7 +67,13 @@
             营养方案{{ session.planConfirmedAt ? "（已确认）" : "（待确认）" }}
           </div>
           <div class="agent-plan__summary">{{ planSummary }}</div>
-          <table class="agent-plan__table">
+          <div class="agent-plan__section-title">
+            数值约束（{{ session.plan.constraints.length }} 条）
+          </div>
+          <table
+            v-if="session.plan.constraints.length"
+            class="agent-plan__table"
+          >
             <thead>
               <tr>
                 <th>约束</th>
@@ -97,9 +103,14 @@
               </tr>
             </tbody>
           </table>
-          <div class="agent-plan__table-note">
-            仅列疾病特异性、或比 FEDIAF 2025
-            默认评估更严的约束；通用项以营养评估为准。
+          <div v-else class="agent-plan__table-note">
+            没有需要加严的数值约束；通用营养项以营养评估为准。
+          </div>
+          <div
+            v-if="session.plan.constraints.length"
+            class="agent-plan__table-note"
+          >
+            只列疾病特异性、或比通用标准更严的项；蛋白、钙磷、微量元素等未加严的通用项，会在选材后按 FEDIAF 默认标准评估。
           </div>
           <div
             v-if="unverifiedCitations.size"
@@ -108,14 +119,46 @@
             有 {{ unverifiedCitations.size }} 条引用未在本次知识库检索结果中核验；
             只提示，不阻断。
           </div>
+          <template v-if="visiblePlanNonNutrient.length">
+            <div class="agent-plan__section-title">
+              非数值约束（{{ visiblePlanNonNutrient.length }} 条）
+            </div>
+            <table class="agent-plan__table">
+              <thead>
+                <tr>
+                  <th>项目</th>
+                  <th>要求</th>
+                  <th>备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="item in visiblePlanNonNutrient"
+                  :key="item.key"
+                >
+                  <td>{{ item.label }}</td>
+                  <td>{{ item.value }}{{ item.unit || "" }}</td>
+                  <td>{{ item.note || "—" }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </template>
           <div v-if="planRationale" class="agent-plan__rationale">
             <div class="agent-plan__rationale-title">理由与建议</div>
-            <div>{{ planRationale }}</div>
-          </div>
-          <div v-if="visiblePlanNonNutrient.length" class="agent-plan__notes">
-            <div v-for="item in visiblePlanNonNutrient" :key="item.key">
-              {{ item.label }}：{{ item.value }}{{ item.unit || "" }}
+            <div
+              class="agent-plan__rationale-text"
+              :class="{ 'is-collapsed': !rationaleExpanded }"
+            >
+              {{ planRationale }}
             </div>
+            <el-button
+              v-if="planRationale.length > 600"
+              size="small"
+              text
+              type="primary"
+              @click="rationaleExpanded = !rationaleExpanded"
+              >{{ rationaleExpanded ? "收起" : "展开全文" }}</el-button
+            >
           </div>
           <div
             v-if="!session.planConfirmedAt"
@@ -537,6 +580,7 @@ const planSummary = computed(() =>
 const planRationale = computed(() =>
   stripMedicationText(session.value?.plan?.rationale ?? ""),
 );
+const rationaleExpanded = ref(false);
 const unverifiedCitations = computed(
   () => new Set(session.value?.citationAudit?.unverified ?? []),
 );
@@ -1098,16 +1142,34 @@ watch(
   color: #606266;
   margin-bottom: 8px;
 }
-.agent-plan__rationale {
+.agent-plan__section-title {
   font-size: 12px;
-  line-height: 1.6;
+  font-weight: 600;
   color: #303133;
+  margin: 10px 0 4px;
+}
+.agent-plan__rationale {
   margin-bottom: 8px;
-  white-space: pre-wrap;
+  padding: 8px 10px;
+  border-left: 3px solid #dcdfe6;
+  border-radius: 4px;
+  background: #fafafa;
 }
 .agent-plan__rationale-title {
   font-weight: 600;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+}
+.agent-plan__rationale-text {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #606266;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.agent-plan__rationale-text.is-collapsed {
+  max-height: 180px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 70%, transparent);
 }
 .agent-plan__table-note {
   font-size: 12px;

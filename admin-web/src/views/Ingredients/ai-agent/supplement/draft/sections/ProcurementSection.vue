@@ -27,16 +27,6 @@
         {{ priceText }}。要改单位/倍数/价格，回「商品与基本信息」修改，避免两处填出两套口径。
       </p>
     </div>
-
-    <div class="draft-section__group">
-      <h4 class="draft-section__title">采购 SKU</h4>
-      <p class="draft-section__readonly">
-        采购 SKU 可选，没建也能用原料档案兜底；这里不填不会阻塞最终写入。
-      </p>
-      <em class="draft-field__hint">
-        生成采购需求时会优先匹配 SKU；没有 SKU 时按原料档案里的采购单位、倍数、价格下单。
-      </em>
-    </div>
   </section>
 </template>
 

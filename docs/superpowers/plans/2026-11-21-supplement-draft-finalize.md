@@ -1105,7 +1105,7 @@ Expected: FAIL.
 - **409 recovery**: show a “重新加载草稿” action (reload from server) alongside the 409 message; do not require a browser refresh.
 - RetailSection: switch, shelf life, opened shelf life (days), storage, oil, no-sale reason (visible when off), price preview from existing quote API (optional).
 - DiySection: switch, platform/link/image, upload/paste, link fetch, “采用” with image transfer.
-- ProcurementSection: switch, purchase fields, SKU hint.
+- ProcurementSection: procurement switch + read-only purchase summary; no internal procurement SKU hint for supplements (they buy from product links, not internal SKUs).
 - EquivalenceSection: group select, recommendation list, group status/members/priority, reapprove checkbox default `true`.
 - LabelSection: category, label names (catalog candidates clickable; no dog applicability), tag names, add timing.
 - EvidenceSection: front/label images, product URL, selection note, AI reasons/missing list.

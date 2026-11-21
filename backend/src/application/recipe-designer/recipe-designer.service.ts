@@ -936,6 +936,7 @@ type IngredientOptionRecord = {
   id: string;
   name: string;
   type: IngredientType;
+  procurementEnabled: boolean;
   unitDisplayLabel?: string | null;
   purchaseUnit: string;
   properties?: unknown;
@@ -2342,6 +2343,7 @@ export class RecipeDesignerService {
               id: true,
               name: true,
               type: true,
+              procurementEnabled: true,
               unitDisplayLabel: true,
               purchaseUnit: true,
               properties: true,
@@ -2354,6 +2356,7 @@ export class RecipeDesignerService {
         id: ingredient.id,
         name: ingredient.name,
         type: ingredient.type,
+        procurementEnabled: ingredient.procurementEnabled,
         unitDisplayLabel: ingredient.unitDisplayLabel ?? usageUnit,
         purchaseUnit: ingredient.purchaseUnit,
         properties: ingredient.properties,
@@ -11285,6 +11288,7 @@ export class RecipeDesignerService {
       id: ingredient.id,
       name: ingredient.name,
       type: ingredient.type,
+      procurementEnabled: ingredient.procurementEnabled,
       purchaseUnit: resolveRecipeDesignerIngredientUnit(ingredient),
       brand: ingredient.brand,
       productModel: ingredient.productModel,
@@ -11301,6 +11305,7 @@ export class RecipeDesignerService {
       id: true,
       name: true,
       type: true,
+      procurementEnabled: true,
       unitDisplayLabel: true,
       purchaseUnit: true,
       properties: true,

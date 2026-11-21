@@ -69,6 +69,8 @@ export interface FoodCandidate {
   name: string;
   /** FOOD / SUPPLEMENT；选材阶段只能留下 FOOD。 */
   type?: string | null;
+  /** 补剂是否已开启生产/采购；补剂只能选 true。 */
+  procurementEnabled?: boolean;
   category: string | null;
   preparationState: string | null;
   isPrimary: boolean;
@@ -222,6 +224,10 @@ export class RecipeDraftPort {
         ? row.nutritionProfiles
         : [];
       if (profiles.length === 0) continue;
+      // 补剂只允许选已开启生产/采购的；关闭的直接不给 Agent 看到。
+      if (row.type === 'SUPPLEMENT' && row.procurementEnabled !== true) {
+        continue;
+      }
       const primary =
         profiles.find((profile) => profile.isPrimary) ?? profiles[0];
       candidates.push({
@@ -229,6 +235,7 @@ export class RecipeDraftPort {
         nutritionFoodId: String(primary.nutritionFoodId),
         name: String(row.name ?? primary.displayNameZh ?? ''),
         type: row.type ?? null,
+        procurementEnabled: row.procurementEnabled === true,
         category: row.category ?? primary.category ?? null,
         preparationState: primary.preparationStateLabel ?? null,
         isPrimary: Boolean(primary.isPrimary),

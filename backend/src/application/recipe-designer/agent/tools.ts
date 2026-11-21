@@ -98,7 +98,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'find_food',
       description:
-        '按关键词或营养素找原料。按营养素找时，每条会带该营养素的含量、单位和基准。一次最多 8 条。',
+        '按关键词或营养素找原料。按营养素找时，每条会带该营养素的含量、单位和基准；补剂只返回已开启生产/采购的。一次最多 8 条。',
       parameters: {
         type: 'object',
         properties: {

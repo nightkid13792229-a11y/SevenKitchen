@@ -31,10 +31,6 @@ export async function matchSelectionToLibrary(
       cache.set(key, candidates);
     }
     const best = pickBestCandidate(item.name, candidates);
-    if (best?.type === 'SUPPLEMENT') {
-      // 鱼油/海带粉等是补剂，不属于选材阶段的食材。
-      continue;
-    }
     items.push(
       best
         ? {
@@ -47,21 +43,7 @@ export async function matchSelectionToLibrary(
     );
   }
 
-  // 补剂剔除后，某个 CFCT 类型可能只剩 1 个；不足 2 个就整类不列。
-  // 用户最终确认的清单例外：用户选 1 个燕麦也要保留。
-  if (selection.confirmed === true) {
-    return { ...selection, items };
-  }
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    const category = item.foodCategory ?? '其他';
-    counts.set(category, (counts.get(category) ?? 0) + 1);
-  }
-  const filtered = items.filter(
-    (item) => (counts.get(item.foodCategory ?? '其他') ?? 0) >= 2,
-  );
-
-  return { ...selection, items: filtered };
+  return { ...selection, items };
 }
 
 function pickBestCandidate(

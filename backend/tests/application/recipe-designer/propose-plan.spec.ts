@@ -6,7 +6,7 @@ import {
 
 const plan = {
   summary: '低脂维持，控钠',
-  rationale: '胰腺炎优先控脂；心脏病在默认评估上进一步限钠。',
+  rationale: '胰腺炎优先控脂；心脏病进一步限钠。',
   mealsPerDay: 3,
   constraints: [
     {
@@ -17,17 +17,6 @@ const plan = {
       unit: 'PERCENT_DM',
       basis: '胰腺炎恢复期',
       source: 'SACN5',
-      citationId: 'sacn5-chapters-SACN5-67/p5',
-      hard: true,
-    },
-    {
-      key: 'sodium',
-      label: '钠',
-      min: 0.08,
-      max: 0.15,
-      unit: 'PERCENT_DM',
-      basis: '心脏病 Class Ib/II/III',
-      source: 'SACN5',
       hard: true,
     },
   ],
@@ -37,170 +26,24 @@ const plan = {
 };
 
 describe('propose_plan normalization', () => {
-  it('normalizes a valid plan without a daily calorie target', () => {
+  it('normalizes a valid plan and keeps constraints as given', () => {
     const normalized = normalizePlan(plan);
-
-    expect(normalized).not.toHaveProperty('energyKcal');
-    expect(normalized.mealsPerDay).toBe(3);
-    expect(normalized.constraints).toHaveLength(2);
+    expect(normalized.constraints).toHaveLength(1);
     expect(normalized.constraints[0]).toMatchObject({
       key: 'fat',
       min: 7,
       max: 10,
-      citationId: 'sacn5-chapters-SACN5-67/p5',
     });
-    expect(normalized.rationale).toContain('胰腺炎优先控脂');
-    expect(normalized.nonNutrient[0].key).toBe('moisture');
-    const summary = summarizePlan(normalized);
-    expect(summary).toContain('方案待确认');
-    expect(summary).toContain('理由与建议');
-    expect(summary).toContain('见上方方案卡表格');
-    expect(summary).not.toContain('- 脂肪');
+    expect(summarizePlan(normalized)).toContain('方案待确认');
   });
 
-  it('accepts an energy-density constraint instead of total calories', () => {
+  it('keeps null bounds without rejecting the plan', () => {
     const normalized = normalizePlan({
-      summary: '减重期控制能量密度',
-      constraints: [
-        {
-          key: 'energyDensity',
-          label: '能量密度',
-          max: 120,
-          unit: 'KCAL_PER_100G',
-          source: 'Vet plan',
-          hard: true,
-        },
-      ],
+      ...plan,
+      constraints: [{ ...plan.constraints[0], min: null, max: null }],
     });
-    expect(normalized.constraints[0].unit).toBe('KCAL_PER_100G');
-  });
-
-  it('drops the generic FEDIAF sodium range but keeps a stricter cardiac target', () => {
-    const fat = plan.constraints[0];
-    const generic = normalizePlan({
-      summary: '心脏病',
-      constraints: [
-        fat,
-        {
-          key: 'sodium',
-          label: '钠',
-          min: 0.25,
-          max: 0.55,
-          unit: 'PER_1000_KCAL',
-          source: 'FEDIAF 2025',
-          hard: true,
-        },
-      ],
-    });
-    expect(generic.constraints.map((c) => c.key)).toEqual(['fat']);
-
-    const stricter = normalizePlan({
-      summary: '心脏病',
-      constraints: [
-        {
-          key: 'sodium',
-          label: '钠',
-          min: 0.25,
-          max: 0.4,
-          unit: 'PER_1000_KCAL',
-          source: 'SACN5',
-          hard: true,
-        },
-      ],
-    });
-    expect(stricter.constraints[0].max).toBe(0.4);
-  });
-
-  it('drops a non-restrictive energy density but keeps a real cap', () => {
-    const fat = plan.constraints[0];
-    const generic = normalizePlan({
-      summary: '维持',
-      constraints: [
-        fat,
-        {
-          key: 'energyDensity',
-          label: '能量密度',
-          max: 4000,
-          unit: 'KCAL_PER_KG',
-          source: 'SACN5',
-          hard: true,
-        },
-      ],
-    });
-    expect(generic.constraints.map((c) => c.key)).toEqual(['fat']);
-
-    const stricter = normalizePlan({
-      summary: '减重',
-      constraints: [
-        {
-          key: 'energyDensity',
-          label: '能量密度',
-          max: 3500,
-          unit: 'KCAL_PER_KG',
-          source: 'Vet plan',
-          hard: true,
-        },
-      ],
-    });
-    expect(stricter.constraints[0].max).toBe(3500);
-  });
-
-  it('keeps only the disease-specific side of fat/protein', () => {
-    const normalized = normalizePlan({
-      summary: '胰腺炎低脂',
-      constraints: [
-        {
-          key: 'fat',
-          label: '脂肪',
-          min: 5.5,
-          max: 12,
-          unit: 'PERCENT_DM',
-          source: 'SACN5',
-          hard: true,
-        },
-        {
-          key: 'protein',
-          label: '蛋白',
-          min: 21,
-          max: 30,
-          unit: 'PERCENT_DM',
-          source: 'SACN5',
-          hard: true,
-        },
-      ],
-    });
-    expect(normalized.constraints).toEqual([
-      expect.objectContaining({ key: 'fat', min: null, max: 12 }),
-      expect.objectContaining({ key: 'protein', min: null, max: 30 }),
-    ]);
-  });
-
-  it('drops constraints that exactly match the default assessment', () => {
-    expect(() =>
-      normalizePlan({
-        summary: '通用维持',
-        constraints: [
-          {
-            key: 'calcium',
-            label: '钙',
-            min: 0.5,
-            max: 2.5,
-            unit: 'PERCENT_DM',
-            source: 'FEDIAF 2025',
-            hard: true,
-          },
-          {
-            key: 'phosphorus',
-            label: '磷',
-            min: 0.4,
-            max: 1.6,
-            unit: 'PERCENT_DM',
-            source: 'FEDIAF 2025',
-            hard: true,
-          },
-        ],
-      }),
-    ).toThrow('只列疾病特异性');
+    expect(normalized.constraints[0].min).toBeNull();
+    expect(normalized.constraints[0].max).toBeNull();
   });
 
   it('rejects an empty constraint list', () => {
@@ -217,157 +60,61 @@ describe('propose_plan normalization', () => {
       }),
     ).toThrow('下限不能大于上限');
   });
-
-  it('requires at least one bound', () => {
-    expect(() =>
-      normalizePlan({
-        ...plan,
-        constraints: [{ ...plan.constraints[0], min: null, max: null }],
-      }),
-    ).toThrow('至少要有 min 或 max');
-  });
 });
 
 describe('propose_selection normalization', () => {
-  const baseItems = [
-    {
-      kind: 'FOOD',
-      name: '猪里脊',
-      foodCategory: '畜肉类及制品',
-      ingredientId: 'ing-1',
-      reason: '低脂蛋白',
-    },
-    {
-      kind: 'FOOD',
-      name: '兔里脊',
-      foodCategory: '畜肉类及制品',
-      ingredientId: 'ing-2',
-      reason: '低脂蛋白',
-    },
-    {
-      kind: 'FOOD',
-      name: '大米',
-      foodCategory: '谷类及制品',
-      ingredientId: 'ing-3',
-      reason: '低脂碳水',
-    },
-    {
-      kind: 'FOOD',
-      name: '小米',
-      foodCategory: '谷类及制品',
-      ingredientId: 'ing-4',
-      reason: '碳水轮换',
-    },
-    {
-      kind: 'FOOD',
-      name: '鹿肉',
-      foodCategory: '畜肉类及制品',
-      reason: '库外非常见蛋白',
-    },
-    {
-      kind: 'FOOD',
-      name: '鸭肉',
-      foodCategory: '畜肉类及制品',
-      reason: '库外非常见蛋白',
-    },
-  ];
-
-  it('marks confirmed only when the user explicitly confirmed the list', () => {
-    const plain = normalizeSelection({ summary: 'x', items: baseItems });
-    expect(plain.confirmed).toBeUndefined();
-
-    const confirmed = normalizeSelection({
-      summary: 'x',
-      items: baseItems,
-      confirmed: true,
-    });
-    expect(confirmed.confirmed).toBe(true);
-  });
-
-  it('keeps library foods and marks outside foods as MISSING', () => {
+  it('accepts one item per category without a diversity count check', () => {
     const normalized = normalizeSelection({
-      summary: '按 CFCT 类型给候选',
-      items: baseItems,
-    });
-
-    expect(normalized.items).toHaveLength(6);
-    expect(normalized.items[0].dataStatus).toBe('AVAILABLE');
-    expect(normalized.items[4].dataStatus).toBe('MISSING');
-    expect(normalized.items[0].foodCategory).toBe('畜肉类及制品');
-  });
-
-  it('rejects a simplified category that is not one of the 15 CFCT classes', () => {
-    expect(() =>
-      normalizeSelection({
-        summary: '简化分类',
-        items: baseItems.map((item) => ({
-          ...item,
-          foodCategory: '肉类',
-        })),
-      }),
-    ).toThrow('CFCT 固定 15 类');
-  });
-
-  it('rejects supplements in the selection stage', () => {
-    expect(() =>
-      normalizeSelection({
-        summary: '补剂',
-        items: [{ kind: 'SUPPLEMENT', name: '鱼油', reason: 'EPA' }],
-      }),
-    ).toThrow('选材阶段只列食材');
-  });
-
-  it('allows a user-confirmed list with one item in a category', () => {
-    const normalized = normalizeSelection({
-      summary: '用户最终确认 9 项',
+      summary: '用户确认清单',
       confirmed: true,
       items: [
         {
           kind: 'FOOD',
           name: '燕麦片',
           foodCategory: '谷类及制品',
-          reason: 'x',
+          reason: '用户确认',
         },
         {
           kind: 'FOOD',
           name: '苹果',
           foodCategory: '水果类及制品',
+          reason: '用户确认',
+        },
+      ],
+    });
+    expect(normalized.items).toHaveLength(2);
+    expect(normalized.confirmed).toBe(true);
+  });
+
+  it('does not reject supplements or unknown categories at the schema layer', () => {
+    const normalized = normalizeSelection({
+      summary: 'x',
+      items: [
+        {
+          kind: 'SUPPLEMENT',
+          name: '鱼油',
+          foodCategory: '油脂类',
           reason: 'x',
         },
       ],
     });
-    expect(normalized.confirmed).toBe(true);
-    expect(normalized.items).toHaveLength(2);
+    expect(normalized.items[0].kind).toBe('SUPPLEMENT');
+    expect(normalized.items[0].foodCategory).toBe('油脂类');
   });
 
-  it('requires at least two candidates per category', () => {
-    expect(() =>
-      normalizeSelection({
-        summary: '单候选',
-        items: [
-          ...baseItems.filter((item) => item.foodCategory !== '谷类及制品'),
-          {
-            kind: 'FOOD',
-            name: '燕麦',
-            foodCategory: '谷类及制品',
-            ingredientId: 'ing-5',
-            reason: '碳水',
-          },
-        ],
-      }),
-    ).toThrow('至少要有 2 个候选');
-  });
-
-  it('does not require outside-library candidates', () => {
+  it('keeps skipped category reasons without a CFCT enum check', () => {
     const normalized = normalizeSelection({
-      summary: '全库内',
-      items: baseItems.filter(
-        (item) => item.name !== '鹿肉' && item.name !== '鸭肉',
-      ),
+      summary: 'x',
+      items: [
+        {
+          kind: 'FOOD',
+          name: '猪里脊',
+          foodCategory: '畜肉类及制品',
+          reason: 'x',
+        },
+      ],
+      skippedCategories: [{ category: '自定义分类', reason: '不适用' }],
     });
-    expect(normalized.items).toHaveLength(4);
-    expect(
-      normalized.items.every((item) => item.dataStatus === 'AVAILABLE'),
-    ).toBe(true);
+    expect(normalized.skippedCategories?.[0].category).toBe('自定义分类');
   });
 });

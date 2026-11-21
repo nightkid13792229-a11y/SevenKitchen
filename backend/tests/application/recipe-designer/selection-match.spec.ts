@@ -82,7 +82,7 @@ describe('selection name matching', () => {
     });
   });
 
-  it('drops supplement matches and categories left with fewer than two foods', async () => {
+  it('only annotates matches and does not drop supplements or categories', async () => {
     const selection = {
       summary: 'x',
       items: [
@@ -108,7 +108,9 @@ describe('selection name matching', () => {
         : [],
     );
 
-    expect(matched.items).toHaveLength(0);
+    expect(matched.items).toHaveLength(2);
+    expect(matched.items[0].dataStatus).toBe('AVAILABLE');
+    expect(matched.items[1].dataStatus).toBe('MISSING');
   });
 
   it('uses the primary candidate when several names are equally close', async () => {

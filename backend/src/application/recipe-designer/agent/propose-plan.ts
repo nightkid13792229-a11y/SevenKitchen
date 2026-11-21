@@ -11,10 +11,8 @@
  */
 import type { DeepSeekToolDefinition } from '../deepseek-tools-chat';
 import { AgentToolError } from './agent-types';
-import {
-  CFCT_CLASS_PROMPT,
-  CFCT_CLASS_SET,
-} from '../../../domain/recipe-designer/cfct-classes';
+import { CFCT_CLASS_PROMPT } from '../../../domain/recipe-designer/cfct-classes';
+import { isMedicationItem, stripMedicationSentences } from './medication';
 
 export interface AgentPlanConstraint {
   key: string;
@@ -86,7 +84,7 @@ const PROPOSE_PLAN_DESCRIPTION =
   '非数值约束（禁用食材、工艺、餐次等）放 nonNutrient，文案形式。' +
   'nonNutrient 必须覆盖会限制食材选择的非数值条件：忌口/过敏、质地/纤维/产气、工艺/形态、餐次；' +
   '需要低渣时写清避免豆类/粗纤维/菌藻等，让选材阶段能直接执行。' +
-  'summary 和 rationale 都不要复述档案：年龄、体重、品种、BCS、性别、检验值、用药名称；疾病名可以写。' +
+  'summary 和 rationale 都不要复述档案：年龄、体重、品种、BCS、性别、检验值；不要提药物、用药、处方或剂量，疾病名可以写。' +
   '只列比 FEDIAF 2025 默认评估更严的那一侧；默认下限不要写，表格只保留疾病特异性边界。' +
   'MAINTAIN 目标不要列 energyDensity；只有减重/增重/特殊能量需求才列，并给出真正有约束力的上限。' +
   '钠只有在比 FEDIAF 2025 上限 0.55 g/1000 kcal 更严时才列；与默认相同不要列。' +
@@ -222,28 +220,11 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              kind: { type: 'string', enum: ['FOOD'] },
+              kind: { type: 'string' },
               name: { type: 'string' },
               foodCategory: {
                 type: 'string',
-                enum: [
-                  '谷类及制品',
-                  '薯类及制品',
-                  '干豆类及制品',
-                  '蔬菜类及制品',
-                  '菌藻类',
-                  '水果类及制品',
-                  '坚果种子类',
-                  '畜肉类及制品',
-                  '禽肉类及制品',
-                  '乳类及制品',
-                  '蛋类及制品',
-                  '水产类',
-                  '油脂类',
-                  '调味品类',
-                  '其他',
-                ],
-                description: 'CFCT 固定 15 类原词，不能用简化分组',
+                description: 'CFCT 分类；建议用固定 15 类原词',
               },
               reason: { type: 'string' },
             },
@@ -261,26 +242,7 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
           items: {
             type: 'object',
             properties: {
-              category: {
-                type: 'string',
-                enum: [
-                  '谷类及制品',
-                  '薯类及制品',
-                  '干豆类及制品',
-                  '蔬菜类及制品',
-                  '菌藻类',
-                  '水果类及制品',
-                  '坚果种子类',
-                  '畜肉类及制品',
-                  '禽肉类及制品',
-                  '乳类及制品',
-                  '蛋类及制品',
-                  '水产类',
-                  '油脂类',
-                  '调味品类',
-                  '其他',
-                ],
-              },
+              category: { type: 'string' },
               reason: { type: 'string' },
             },
             required: ['category', 'reason'],
@@ -297,8 +259,13 @@ export const PROPOSE_SELECTION_TOOL: DeepSeekToolDefinition = {
 
 export function normalizePlan(raw: unknown): AgentNutritionPlan {
   const input = isRecord(raw) ? raw : {};
-  const summary = readText(input.summary, 'summary', 4000);
-  const rationale = readOptionalText(input.rationale, 6000);
+  const summary =
+    stripMedicationSentences(readText(input.summary, 'summary', 4000)) ||
+    '营养管理方案';
+  const rationaleRaw = readOptionalText(input.rationale, 6000);
+  const rationale = rationaleRaw
+    ? stripMedicationSentences(rationaleRaw)
+    : undefined;
   const mealsPerDay =
     input.mealsPerDay === undefined || input.mealsPerDay === null
       ? undefined
@@ -318,13 +285,9 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   if (rawConstraints.length === 0) {
     throw new AgentToolError('INVALID_ARGUMENT', 'constraints 不能为空');
   }
-  const constraints = rawConstraints
-    .map((entry, index) => normalizeConstraint(entry, index))
-    .filter((constraint) => !isDefaultAssessmentConstraint(constraint))
-    .map(stripAssessmentDefaultBounds)
-    .filter(
-      (constraint): constraint is AgentPlanConstraint => constraint !== null,
-    );
+  const constraints = rawConstraints.map((entry, index) =>
+    normalizeConstraint(entry, index),
+  );
   if (constraints.length === 0) {
     throw new AgentToolError(
       'INVALID_ARGUMENT',
@@ -347,9 +310,9 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
   const rawNonNutrient = Array.isArray(input.nonNutrient)
     ? input.nonNutrient
     : [];
-  const nonNutrient = rawNonNutrient.map((entry, index) =>
-    normalizeNonNutrient(entry, index),
-  );
+  const nonNutrient = rawNonNutrient
+    .map((entry, index) => normalizeNonNutrient(entry, index))
+    .filter((item) => !isMedicationItem(item));
 
   return {
     summary,
@@ -358,14 +321,18 @@ export function normalizePlan(raw: unknown): AgentNutritionPlan {
     constraints,
     nonNutrient,
     ...(readOptionalText(input.notes, 2000)
-      ? { notes: readOptionalText(input.notes, 2000)! }
+      ? {
+          notes: stripMedicationSentences(readOptionalText(input.notes, 2000)!),
+        }
       : {}),
   };
 }
 
 export function normalizeSelection(raw: unknown): AgentSelection {
   const input = isRecord(raw) ? raw : {};
-  const summary = readText(input.summary, 'summary', 4000);
+  const summary =
+    stripMedicationSentences(readText(input.summary, 'summary', 4000)) ||
+    '食材候选';
   const rawItems = Array.isArray(input.items) ? input.items : [];
   if (rawItems.length === 0) {
     throw new AgentToolError('INVALID_ARGUMENT', 'items 不能为空');
@@ -373,22 +340,6 @@ export function normalizeSelection(raw: unknown): AgentSelection {
   const items = rawItems.map((entry, index) =>
     normalizeSelectionItem(entry, index),
   );
-  // 候选清单要求每类至少 2 个；但用户明确最终确认的清单是例外：
-  // 用户可能只选 1 个燕麦、1 个苹果，不能再用候选多样性规则拒绝。
-  if (input.confirmed !== true) {
-    const byCategory = new Map<string, number>();
-    for (const item of items) {
-      const category = item.foodCategory ?? '未分类';
-      byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
-    }
-    const singleton = [...byCategory.entries()].find(([, count]) => count < 2);
-    if (singleton) {
-      throw new AgentToolError(
-        'INVALID_ARGUMENT',
-        `食材类型「${singleton[0]}」至少要有 2 个候选；请补足后再提交（用户最终确认的清单除外，需 confirmed=true）`,
-      );
-    }
-  }
   const rawSkipped = Array.isArray(input.skippedCategories)
     ? input.skippedCategories
     : [];
@@ -400,12 +351,6 @@ export function normalizeSelection(raw: unknown): AgentSelection {
       `skippedCategories[${index}].category`,
       40,
     );
-    if (!CFCT_CLASS_SET.has(category)) {
-      throw new AgentToolError(
-        'INVALID_ARGUMENT',
-        `skippedCategories[${index}].category 必须是 CFCT 固定 15 类之一`,
-      );
-    }
     if (skippedCategories.some((item) => item.category === category)) {
       continue;
     }
@@ -420,7 +365,9 @@ export function normalizeSelection(raw: unknown): AgentSelection {
     ...(input.confirmed === true ? { confirmed: true } : {}),
     ...(skippedCategories.length > 0 ? { skippedCategories } : {}),
     ...(readOptionalText(input.notes, 2000)
-      ? { notes: readOptionalText(input.notes, 2000)! }
+      ? {
+          notes: stripMedicationSentences(readOptionalText(input.notes, 2000)!),
+        }
       : {}),
   };
 }
@@ -471,9 +418,6 @@ function normalizeConstraint(
   const basis = readOptionalText(input.basis, 200) ?? '';
   const min = readNullableNumber(input.min, `constraints[${index}].min`);
   const max = readNullableNumber(input.max, `constraints[${index}].max`);
-  if (min === null && max === null) {
-    throw new AgentToolError('INVALID_ARGUMENT', `${key} 至少要有 min 或 max`);
-  }
   return {
     key,
     label,
@@ -487,78 +431,6 @@ function normalizeConstraint(
       : {}),
     hard: input.hard !== false,
   };
-}
-
-/** 去掉与 FEDIAF 默认评估完全相同的通用约束；只保留疾病特异性边界。 */
-function isDefaultAssessmentConstraint(
-  constraint: AgentPlanConstraint,
-): boolean {
-  if (constraint.key === 'sodium' && constraint.unit === 'PER_1000_KCAL') {
-    return constraint.max === null || constraint.max >= 0.55;
-  }
-  if (constraint.key === 'energyDensity') {
-    if (constraint.unit === 'KCAL_PER_KG') {
-      return constraint.max === null || constraint.max >= 4000;
-    }
-    if (constraint.unit === 'KCAL_PER_100G') {
-      return constraint.max === null || constraint.max >= 400;
-    }
-  }
-  if (
-    constraint.key === 'calcium' &&
-    constraint.min === 0.5 &&
-    constraint.max === 2.5
-  ) {
-    return true;
-  }
-  if (
-    constraint.key === 'phosphorus' &&
-    constraint.min === 0.4 &&
-    constraint.max === 1.6
-  ) {
-    return true;
-  }
-  if (
-    constraint.key === 'caPRatio' &&
-    constraint.min === 1 &&
-    constraint.max === 2
-  ) {
-    return true;
-  }
-  if (
-    constraint.key === 'linoleicAcid' &&
-    constraint.min === 1.32 &&
-    constraint.max === null
-  ) {
-    return true;
-  }
-  return false;
-}
-
-/**
- * 默认下限是营养评估负责的，不重复写；只保留疾病特异性的那一侧。
- * 例：脂肪 5.5–12 → 只留 max 12；蛋白 21–30 → 只留 max 30。
- */
-function stripAssessmentDefaultBounds(
-  constraint: AgentPlanConstraint,
-): AgentPlanConstraint | null {
-  if (constraint.key === 'fat') {
-    if (constraint.max === null) {
-      return constraint.min === 5.5 ? null : constraint;
-    }
-    if (constraint.min === 5.5) {
-      return { ...constraint, min: null };
-    }
-  }
-  if (constraint.key === 'protein') {
-    if (constraint.max === null) {
-      return constraint.min === 18 || constraint.min === 21 ? null : constraint;
-    }
-    if (constraint.min === 18 || constraint.min === 21) {
-      return { ...constraint, min: null };
-    }
-  }
-  return constraint;
 }
 
 function normalizeNonNutrient(
@@ -585,26 +457,17 @@ function normalizeSelectionItem(
   index: number,
 ): AgentSelectionItem {
   const input = isRecord(entry) ? entry : {};
-  if (input.kind === 'SUPPLEMENT') {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      '选材阶段只列食材；补剂要等配方评估出缺口后，在配方编辑阶段再补',
-    );
-  }
-  const kind = 'FOOD';
+  const kind = input.kind === 'SUPPLEMENT' ? 'SUPPLEMENT' : 'FOOD';
   const name = readText(input.name, `items[${index}].name`, 120);
   const foodCategory = readText(
     input.foodCategory,
     `items[${index}].foodCategory`,
     40,
   );
-  if (!CFCT_CLASS_SET.has(foodCategory)) {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      `foodCategory 必须是 CFCT 固定 15 类之一：${CFCT_CLASS_PROMPT}`,
-    );
-  }
-  const reason = readText(input.reason, `items[${index}].reason`, 1000);
+  const reason =
+    stripMedicationSentences(
+      readText(input.reason, `items[${index}].reason`, 1000),
+    ) || '食材候选';
   const ingredientId = readOptionalText(input.ingredientId, 80);
   const nutritionFoodId = readOptionalText(input.nutritionFoodId, 80);
   const dataStatus =

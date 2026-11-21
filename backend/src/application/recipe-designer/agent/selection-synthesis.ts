@@ -83,7 +83,7 @@ export function buildSelectionSynthesisMessages(input: {
   messages.push({
     role: 'user',
     content:
-      '请直接调用 propose_selection 提交食材候选。只列 FOOD，不要列补剂；' +
+      '请直接调用 propose_selection 提交食材候选。只列 FOOD，不要列补剂；不要提药物/用药/处方/剂量；' +
       '先逐条读已确认方案（含 nonNutrient），任何候选违反一条就淘汰；方案约束优先级最高，不要按疾病名做选材特判；' +
       `按 CFCT 固定 15 类（${CFCT_CLASS_PROMPT}）分组；` +
       '15 类是词表，不是必须每类都填：只在合格食材里分组，每个适用类型至少 2 个；凑不出就放 skippedCategories，写清违反的是哪条方案约束；' +

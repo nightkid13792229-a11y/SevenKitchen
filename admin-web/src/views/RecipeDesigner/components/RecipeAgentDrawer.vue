@@ -58,7 +58,7 @@
           <div class="agent-plan__title">
             营养方案{{ session.planConfirmedAt ? "（已确认）" : "（待确认）" }}
           </div>
-          <div class="agent-plan__summary">{{ session.plan.summary }}</div>
+          <div class="agent-plan__summary">{{ planSummary }}</div>
           <div v-if="session.plan.mealsPerDay" class="agent-plan__meta">
             每日 {{ session.plan.mealsPerDay }} 餐
           </div>
@@ -86,15 +86,12 @@
             仅列疾病特异性、或比 FEDIAF 2025
             默认评估更严的约束；通用项以营养评估为准。
           </div>
-          <div v-if="session.plan.rationale" class="agent-plan__rationale">
+          <div v-if="planRationale" class="agent-plan__rationale">
             <div class="agent-plan__rationale-title">理由与建议</div>
-            <div>{{ session.plan.rationale }}</div>
+            <div>{{ planRationale }}</div>
           </div>
-          <div
-            v-if="session.plan.nonNutrient?.length"
-            class="agent-plan__notes"
-          >
-            <div v-for="item in session.plan.nonNutrient" :key="item.key">
+          <div v-if="visiblePlanNonNutrient.length" class="agent-plan__notes">
+            <div v-for="item in visiblePlanNonNutrient" :key="item.key">
               {{ item.label }}：{{ item.value }}{{ item.unit || "" }}
             </div>
           </div>
@@ -264,6 +261,32 @@ const selectionFoodItems = computed(() =>
     (item) => item.kind === "FOOD",
   ),
 );
+const MEDICATION_PATTERN =
+  /用药|药物|处方|服药|口服|注射|溃速平|潘飞龙|抗生素|止痛药|激素|mg\/kg/i;
+
+function stripMedicationText(text: string) {
+  return text
+    .split(/(?<=[。；;！？!?\n])/)
+    .filter((sentence) => !MEDICATION_PATTERN.test(sentence))
+    .join("")
+    .trim();
+}
+
+const planSummary = computed(() =>
+  stripMedicationText(session.value?.plan?.summary ?? ""),
+);
+const planRationale = computed(() =>
+  stripMedicationText(session.value?.plan?.rationale ?? ""),
+);
+const visiblePlanNonNutrient = computed(() =>
+  (session.value?.plan?.nonNutrient ?? []).filter(
+    (item) =>
+      !MEDICATION_PATTERN.test(
+        `${item.key ?? ""} ${item.label ?? ""} ${item.value ?? ""}`,
+      ),
+  ),
+);
+
 const cfctCoverage = computed(() =>
   CFCT_CLASS_OPTIONS.map((category) => {
     const confirmed = Boolean(session.value?.selectionConfirmedAt);

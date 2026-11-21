@@ -12,6 +12,12 @@ import {
   type PreparationState,
 } from '../../domain/ingredient-creation/preparation-state';
 import {
+  checkProfileSourceConsistency,
+  collectSourceConsistencyValues,
+  readSourceBasis,
+  type SourceConsistencyRecord,
+} from '../../domain/ingredient-creation/source-consistency';
+import {
   resolveStateCoverage,
   type CoverageCategory,
 } from '../../domain/ingredient-creation/state-coverage';
@@ -388,7 +394,7 @@ export class IngredientDraftFinalCheckEvaluator {
     );
     const basis = profileBasis ?? (await this.resolvePlanPrimaryBasis(plan));
 
-    return runFinalCheck({
+    const result = runFinalCheck({
       entries,
       basis,
       macroSumG: sumMacroGrams(metricEntries),
@@ -399,6 +405,29 @@ export class IngredientDraftFinalCheckEvaluator {
         present: collectProfileStates(profiles),
       },
     });
+
+    // 2026-11-21：数值必须与来源一致、且来源口径必须是每 100g。
+    // 放在 runFinalCheck 前面，保证「来源问题」比其它营养规则更先被看见。
+    const consistencyRecords = new Map<string, SourceConsistencyRecord>();
+    for (const [id, record] of profileRecords.entries()) {
+      consistencyRecords.set(id, {
+        id,
+        basis: readSourceBasis(record.normalizedNutrition),
+        values: collectSourceConsistencyValues(record.normalizedNutrition),
+      });
+    }
+    const consistency = checkProfileSourceConsistency(
+      profiles,
+      consistencyRecords,
+    );
+    if (consistency.length === 0) {
+      return result;
+    }
+
+    return {
+      ...result,
+      blocking: [...consistency, ...result.blocking],
+    };
   }
 
   /** 没有 profiles 时的旧路径：mergePlan + 证据账本。 */

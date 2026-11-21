@@ -574,7 +574,10 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
           status: 'ACTIVE',
           foodName: 'Chicken, liver, raw',
           foodNameEn: 'Chicken, liver, raw',
-          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+          normalizedNutrition: {
+            meta: { sampleState: 'RAW' },
+            macros: { crudeProtein: 20 },
+          },
         },
       ],
     });
@@ -1285,7 +1288,10 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
           status: 'ACTIVE',
           foodName: 'Chicken, liver, raw',
           foodNameEn: 'Chicken, liver, raw',
-          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+          normalizedNutrition: {
+            meta: { sampleState: 'RAW' },
+            macros: { crudeProtein: 20 },
+          },
         },
       ],
     });
@@ -1451,14 +1457,20 @@ describe('IngredientDraftAgentService · 原子工具循环', () => {
           status: 'ACTIVE',
           foodName: 'Chicken, liver, raw',
           foodNameEn: 'Chicken, liver, raw',
-          normalizedNutrition: { meta: { sampleState: 'RAW' } },
+          normalizedNutrition: {
+            meta: { sampleState: 'RAW' },
+            macros: { crudeProtein: 19.5 },
+          },
         },
         {
           id: 'rec-liver-cooked',
           status: 'ACTIVE',
           foodName: 'Chicken, liver, cooked, simmered',
           foodNameEn: 'Chicken, liver, cooked, simmered',
-          normalizedNutrition: { meta: { sampleState: 'COOKED' } },
+          normalizedNutrition: {
+            meta: { sampleState: 'COOKED' },
+            macros: { crudeProtein: 25.1 },
+          },
         },
       ],
     });

@@ -310,7 +310,7 @@ describe('IngredientCheckRunService', () => {
       expect(evaluate).toHaveBeenCalledTimes(1);
       expect(evaluate).toHaveBeenCalledWith(draft);
       expect(run.domain).toBe('NUTRITION');
-      expect(run.rulesVersion).toBe('final-check-v1');
+      expect(run.rulesVersion).toBe(CHECK_RULES_VERSION.NUTRITION);
       expect(run.payloadHash).toBe(hashDraftPayload(draft.payload));
       expect(run.result).toEqual(nutritionResult);
       expect(run.counts).toEqual({
@@ -322,7 +322,7 @@ describe('IngredientCheckRunService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             domain: 'NUTRITION',
-            rulesVersion: 'final-check-v1',
+            rulesVersion: CHECK_RULES_VERSION.NUTRITION,
             result: nutritionResult,
             blockingCount: 2,
             exceptionableCount: 1,
@@ -357,7 +357,7 @@ describe('IngredientCheckRunService', () => {
         exceptionable: [],
         warnings: [],
       });
-      expect(run.rulesVersion).toBe('final-check-v1');
+      expect(run.rulesVersion).toBe(CHECK_RULES_VERSION.NUTRITION);
       expect(run.counts).toEqual({
         blocking: 1,
         exceptionable: 0,
@@ -367,7 +367,7 @@ describe('IngredientCheckRunService', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             domain: 'NUTRITION',
-            rulesVersion: 'final-check-v1',
+            rulesVersion: CHECK_RULES_VERSION.NUTRITION,
             result: {
               blocking: [
                 expect.objectContaining({
@@ -538,7 +538,7 @@ describe('IngredientCheckRunService', () => {
         draftId: 'draft-1',
         domain: 'NUTRITION',
         trigger: 'USER',
-        rulesVersion: 'final-check-v1',
+        rulesVersion: CHECK_RULES_VERSION.NUTRITION,
         payloadHash: 'hash-1',
         result,
         counts: { blocking: 1, exceptionable: 0, warning: 0 },

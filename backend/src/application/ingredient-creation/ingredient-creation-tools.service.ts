@@ -33,6 +33,10 @@ import {
 } from '../../domain/ingredient-creation/search-plan';
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
+  readSourceBasis,
+  sourceValuesMatch,
+} from '../../domain/ingredient-creation/source-consistency';
+import {
   NUTRITION_FIELD_CATALOG,
   type NutritionFieldDefinition,
 } from '../../domain/ingredient/nutrition-field-catalog';
@@ -2429,6 +2433,7 @@ export class IngredientCreationToolsService {
     }
 
     const failed: Array<{ fieldPath: string; error: string }> = [];
+    const skipped: Array<{ fieldPath: string; reason: 'MANUAL' }> = [];
     const writtenFieldPaths: string[] = [];
     const sourceCache = new Map<string, SourceRecordRow | null>();
     let applied = 0;
@@ -2466,6 +2471,14 @@ export class IngredientCreationToolsService {
         failed.push({
           fieldPath: validation.fieldPath,
           error: write.error,
+        });
+        continue;
+      }
+
+      if (write.skipped === 'MANUAL') {
+        skipped.push({
+          fieldPath: validation.fieldPath,
+          reason: 'MANUAL',
         });
         continue;
       }
@@ -2509,6 +2522,7 @@ export class IngredientCreationToolsService {
         profileIndex,
         applied,
         failed,
+        ...(skipped.length > 0 ? { skipped } : {}),
         ...(writtenFieldPaths.length > 0
           ? { writtenFieldPaths }
           : {}),
@@ -2516,7 +2530,11 @@ export class IngredientCreationToolsService {
           ? {
               hint: 'failed 里的条目没有写入；按每条的 error 改正后，只重试失败项即可。',
             }
-          : {}),
+          : skipped.length > 0
+            ? {
+                hint: 'skipped 里的字段人工核对过，AI 不覆盖；不要重复尝试写它们。',
+              }
+            : {}),
       }),
       progress: {
         writtenFieldPaths,
@@ -2791,6 +2809,8 @@ export class IngredientCreationToolsService {
         profiles: ProfileDraft[];
         preparationState: PreparationState;
         changed: boolean;
+        /** 该字段人工核对过，AI 不覆盖（不落库、不计入 applied）。 */
+        skipped?: 'MANUAL';
       }
     | { ok: false; error: string }
   > {
@@ -2813,15 +2833,41 @@ export class IngredientCreationToolsService {
       };
     }
 
+    // 档案口径恒为每 100g；来源是每份/每 100ml 时本流程不做换算，直接拒绝。
+    const basis = readSourceBasis(sourceRecord.normalizedNutrition);
+    if (basis !== 'PER_100_G') {
+      return {
+        ok: false,
+        error: `来源记录 ${sourceRecord.id} 的口径是 ${basis}，档案口径是每 100g；本流程不做换算，不能把这份数据写成每 100g。请换一条每 100g 的来源。`,
+      };
+    }
+
+    const sourceValue = readCatalogFieldValue(
+      sourceRecord.normalizedNutrition,
+      fieldPath,
+    );
+    if (sourceValue === null) {
+      return {
+        ok: false,
+        error: `来源记录 ${sourceRecord.id} 里没有字段 ${fieldPath} 的数值；不能凭这个来源写入，请换一条有该字段的来源或留空。`,
+      };
+    }
+    if (!sourceValuesMatch(value, sourceValue)) {
+      return {
+        ok: false,
+        error: `字段 ${fieldPath} 写的是 ${value}${field.unit}，来源记录 ${sourceRecord.id} 是 ${sourceValue}${field.unit}；两个数对不上，不能写成“直接来自来源”。请按来源值改正。`,
+      };
+    }
+
     const entry: NutritionEvidenceEntry = {
       fieldPath,
       finalValue: value,
       unit: field.unit,
       status: 'DIRECT',
       sourceRecordId: input.sourceRecordId,
-      // 工具只收到目录单位下的值，不伪造来源原文值 / 原文单位。
-      sourceValue: null,
-      sourceUnit: null,
+      // 2026-11-21：来源值一起落库，人工复核时能直接对照。
+      sourceValue,
+      sourceUnit: field.unit,
       formula: null,
       // 人没有参与这一步：标记 AI 起草，人工审核时再覆盖。
       confirmedBy: null,
@@ -2869,6 +2915,21 @@ export class IngredientCreationToolsService {
       const existing = current.entries.find(
         (candidate) => candidate.fieldPath === fieldPath,
       );
+      // 人工核对过的字段 AI 不再覆盖：与原料卡的 manualFields 同一口径。
+      if (
+        existing &&
+        (existing.status === 'MANUAL' ||
+          (typeof existing.confirmedBy === 'string' &&
+            existing.confirmedBy.trim() !== ''))
+      ) {
+        return {
+          ok: true,
+          profiles,
+          preparationState: current.preparationState,
+          changed: false,
+          skipped: 'MANUAL',
+        };
+      }
       // 新增字段或值/单位变了才算进展；重复写同一个值不算。
       const changed =
         !existing ||

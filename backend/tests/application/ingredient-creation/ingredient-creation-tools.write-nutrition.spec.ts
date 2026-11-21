@@ -22,7 +22,10 @@ const SEARCH_PLAN = {
   editedByUser: false,
 };
 
-function createHarness(payload: Record<string, unknown> = {}) {
+function createHarness(
+  payload: Record<string, unknown> = {},
+  options: { normalizedNutrition?: unknown } = {},
+) {
   const draft = {
     id: DRAFT_ID,
     name: '鸡蛋清',
@@ -51,7 +54,9 @@ function createHarness(payload: Record<string, unknown> = {}) {
         foodName: `来源 ${where.id}`,
         foodNameEn: null,
         // 没有 meta.sampleState：推不出生熟。
-        normalizedNutrition: { macros: { crudeProtein: 10 } },
+        normalizedNutrition: options.normalizedNutrition ?? {
+          macros: { crudeProtein: 10 },
+        },
       })),
     },
   };
@@ -170,5 +175,154 @@ describe('writeNutrition · 显式状态与「一份档案一个来源」', () =
 
     expect(result.ok).toBe(false);
     expect(String(result.error)).toContain('一份档案只能有一个来源');
+  });
+});
+
+describe('writeNutrition · 来源数值与人工值保护', () => {
+  it('写入值与来源不一致 → 拒绝，并写出两边数值', async () => {
+    const { tools } = createHarness(
+      {},
+      { normalizedNutrition: { macros: { crudeProtein: 25 } } },
+    );
+
+    const result = await write(tools, {
+      preparationState: 'RAW',
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 45,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('45');
+    expect(String(result.error)).toContain('25');
+  });
+
+  it('来源口径不是每 100g → 拒绝', async () => {
+    const { tools } = createHarness(
+      {},
+      {
+        normalizedNutrition: {
+          meta: { rawBasisType: 'PER_SERVING' },
+          macros: { crudeProtein: 10 },
+        },
+      },
+    );
+
+    const result = await write(tools, {
+      preparationState: 'RAW',
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 10,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('每 100g');
+  });
+
+  it('来源里没有这个字段 → 拒绝', async () => {
+    const { tools } = createHarness(
+      {},
+      { normalizedNutrition: { macros: { crudeFat: 5 } } },
+    );
+
+    const result = await write(tools, {
+      preparationState: 'RAW',
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 10,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('没有字段');
+  });
+
+  it('人工改过的字段 → 跳过，不覆盖也不落库', async () => {
+    const manualEntry = {
+      fieldPath: 'macros.crudeProtein',
+      finalValue: 21.2,
+      unit: 'g',
+      status: 'MANUAL',
+      sourceRecordId: 'rec-1',
+      sourceValue: 21.2,
+      sourceUnit: 'g',
+      formula: null,
+      confirmedBy: 'HUMAN_REVIEW',
+      confirmedAt: '2026-11-21T00:00:00.000Z',
+    };
+    const { tools, draftService } = createHarness({
+      profiles: [
+        {
+          preparationState: 'RAW',
+          sourceRecordId: 'rec-1',
+          entries: [manualEntry],
+          notes: '',
+        },
+      ],
+    });
+
+    const result = await write(tools, {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 10,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    const content = JSON.parse(String(result.content));
+    expect(content.skipped).toEqual([
+      { fieldPath: 'macros.crudeProtein', reason: 'MANUAL' },
+    ]);
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('写入成功时把来源值写进证据行', async () => {
+    const { tools, draftService } = createHarness(
+      {},
+      { normalizedNutrition: { macros: { crudeProtein: 10 } } },
+    );
+
+    const result = await write(tools, {
+      preparationState: 'RAW',
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 10,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    const patched = draftService.patch.mock.calls.at(-1)?.[2] as {
+      profiles?: Array<{ entries: Array<Record<string, unknown>> }>;
+    };
+    expect(patched.profiles?.[0]?.entries[0]).toMatchObject({
+      fieldPath: 'macros.crudeProtein',
+      finalValue: 10,
+      sourceValue: 10,
+      sourceUnit: 'g',
+      status: 'DIRECT',
+    });
   });
 });

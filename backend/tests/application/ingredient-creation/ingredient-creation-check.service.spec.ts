@@ -236,7 +236,19 @@ describe('IngredientCreationCheckService', () => {
 
     const result = await service.runCheck('draft-1');
 
-    expect(result).toEqual(emptyCheckResult);
+    // 2026-11-21：来源口径是每份、第二份档案的来源不存在 → 两条来源阻断。
+    expect(result.blocking).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SOURCE_BASIS_NOT_PER_100G',
+          fieldPath: 'profiles.0',
+        }),
+        expect.objectContaining({
+          code: 'SOURCE_RECORD_MISSING',
+          fieldPath: 'profiles.1',
+        }),
+      ]),
+    );
     expect(runFinalCheckMock).toHaveBeenCalledTimes(1);
     expect(draftService.get).toHaveBeenCalledTimes(1);
 
@@ -254,8 +266,41 @@ describe('IngredientCreationCheckService', () => {
     });
   });
 
-  it('人改过的 profile entries 参与终检：非法单位 → UNIT_MISMATCH（拦死）', async () => {
-    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
+  it('营养值与来源不一致 → SOURCE_VALUE_MISMATCH（拦死）', async () => {
+    prisma.nutritionSourceRecord.findMany.mockResolvedValue([
+      {
+        id: 'src-primary',
+        normalizedNutrition: {
+          meta: { rawBasisType: 'PER_100_G' },
+          macros: { crudeProtein: 20 },
+        },
+      },
+    ]);
+    draftService.get.mockResolvedValue(
+      createDraft({
+        payload: {
+          intake: intakeCard,
+          mergePlan: fullMergePlan,
+          profiles: [
+            profile('RAW', 'src-primary', [
+              entry({ fieldPath: 'macros.crudeProtein', finalValue: 45 }),
+            ]),
+          ],
+        },
+      }),
+    );
+
+    const result = await service.runCheck('draft-1');
+
+    const mismatch = result.blocking.find(
+      (item) => item.code === 'SOURCE_VALUE_MISMATCH',
+    );
+    expect(mismatch).toBeDefined();
+    expect(mismatch?.message).toContain('45');
+    expect(mismatch?.message).toContain('20');
+  });
+
+  it('人改过的 profile entries 参与终检：非法单位 → UNIT_MISMATCH（拦死）', async () => {    runFinalCheckMock.mockImplementation(actualFinalCheck.runFinalCheck);
     draftService.get.mockResolvedValue(humanEditedIronDraft());
 
     const result = await service.runCheck('draft-1');

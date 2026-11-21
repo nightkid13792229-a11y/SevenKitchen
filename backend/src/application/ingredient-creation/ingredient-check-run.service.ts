@@ -68,7 +68,8 @@ export interface CheckRunView {
  */
 export const CHECK_RULES_VERSION: Record<CheckDomain, string> = {
   INGREDIENT: 'ingredient-card-v4',
-  NUTRITION: 'final-check-v1',
+  // v2：新增「营养值必须与来源一致 / 来源口径必须是每 100g」两条阻断。
+  NUTRITION: 'final-check-v2',
 };
 
 /** 查重只回前 200 条就够：`contains` 已经收窄到 3 个字的前缀，再多也没意义。 */

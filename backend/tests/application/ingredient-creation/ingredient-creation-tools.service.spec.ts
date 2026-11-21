@@ -584,7 +584,10 @@ describe('IngredientCreationToolsService · writeNutrition', () => {
       id: 'rec-liver-cooked',
       status: 'ACTIVE',
       foodName: 'Chicken, liver, cooked',
-      normalizedNutrition: { meta: { sampleState: 'COOKED' } },
+      normalizedNutrition: {
+        meta: { sampleState: 'COOKED' },
+        macros: { crudeProtein: 25.1 },
+      },
     };
     const { tools, draftService } = createTools(
       [RAW_LIVER, cooked],

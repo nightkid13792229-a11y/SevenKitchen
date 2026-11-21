@@ -64,6 +64,8 @@ export type SupplementDraftIssueCode =
   | 'GROUP_NOT_APPROVED'
   | 'GROUP_SINGLETON'
   | 'GROUP_SKIPPED'
+  | 'GROUP_NUTRIENT_MISSING'
+  | 'GROUP_UNIT_MISMATCH'
   | 'SHOP_DISABLED'
   | 'EQUIVALENCE_DISABLED'
   | 'EVIDENCE_MISSING';
@@ -97,10 +99,23 @@ export interface SupplementDraftEquivalenceGroupContext {
 
 /** 两本目录（饲料原料/饲料添加剂）的规范名核对结果。 */
 export interface SupplementDraftCatalogContext {
-  exactAdditive: boolean;
-  exactMaterial: boolean;
-  /** 名称的子串候选，最多 5 条；只作建议，不改变级别 */
-  candidates: string[];
+  /** 所有标签名都能在两本目录里找到完全同名 → true；标签名为空也算 true */
+  allExact: boolean;
+  /** 找不到完全同名的标签名（已去重，保持标签顺序） */
+  missingNames: string[];
+  /** 缺失标签名 → 子串候选（最多 5 条）；只作建议，不改变级别 */
+  candidatesByName: Record<string, string[]>;
+}
+
+/**
+ * 草稿在所选等价组营养素上的浓度解析结果。
+ *
+ * 未选组 / 选了「暂不归组」时上下文为 null（不适用），不是「缺失」。
+ */
+export interface SupplementDraftConcentrationContext {
+  status: 'OK' | 'MISSING' | 'UNIT_MISMATCH';
+  /** 仅 UNIT_MISMATCH 有值：草稿档案里的实际单位 */
+  actualUnit?: string | null;
 }
 
 /**
@@ -116,6 +131,8 @@ export interface SupplementDraftValidationContext {
   equivalenceGroup: SupplementDraftEquivalenceGroupContext | null;
   config: { shopEnabled: boolean; equivalenceEnabled: boolean };
   catalog: SupplementDraftCatalogContext;
+  /** 所选等价组营养素上的草稿浓度；未选组/暂不归组为 null */
+  concentration: SupplementDraftConcentrationContext | null;
 }
 
 /** 物理形态 → 应有的基准单位（spec §7.2）。 */
@@ -229,6 +246,8 @@ export function validateSupplementDraftBasics(
         level: 'WARNING',
         message: '名称结尾带了剂型词，建议只写物质名（剂型在物理形态里选）',
         fieldPath: 'basic.name',
+        // 名称变了旧确认就失效（spec §7.3）
+        ackKey: `NAME_FORM_WORD:${name}`,
       });
     }
   }
@@ -521,7 +540,6 @@ export function validateSupplementDraftFeatures(
 ): SupplementDraftIssue[] {
   const issues: SupplementDraftIssue[] = [];
   const { basic, retail, diy, evidence, equivalence } = payload;
-  const name = basic.name.trim();
 
   // ① 重复建档（同名 + 同品牌 + 同规格）
   if (context.duplicate.exists) {
@@ -536,23 +554,28 @@ export function validateSupplementDraftFeatures(
     );
   }
 
-  // ② 标签规范名：两本目录完全同名 → 通过；否则给候选，由人确认。
-  if (
-    name &&
-    !context.catalog.exactAdditive &&
-    !context.catalog.exactMaterial
-  ) {
-    const candidates = context.catalog.candidates.slice(
-      0,
-      CATALOG_CANDIDATE_LIMIT,
-    );
+  // ② 标签规范名：校验的是「标签名称」（落 properties.label_names），
+  //    不是原料名称 basic.name —— 原料名可以自己起，标签名必须能在目录里查到。
+  const labelNames = payload.label.labelNames
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  if (labelNames.length > 0 && !context.catalog.allExact) {
+    const missing = [...context.catalog.missingNames].sort();
+    const detail = missing
+      .map((labelName) => {
+        const candidates = (
+          context.catalog.candidatesByName[labelName] ?? []
+        ).slice(0, CATALOG_CANDIDATE_LIMIT);
+        return candidates.length > 0
+          ? `${labelName}（相近写法：${candidates.join('、')}）`
+          : labelName;
+      })
+      .join('；');
     issues.push(
       warningIssue(
         'LABEL_NAME_UNVERIFIED',
-        `「${name}」在两本目录里都找不到完全同名的规范名${
-          candidates.length > 0 ? `，相近写法：${candidates.join('、')}` : ''
-        }；请人工确认标签名称`,
-        name,
+        `标签名称在目录里找不到完全同名的规范名：${detail}；请人工确认标签名称`,
+        missing.join('|'),
         'label.labelNames',
       ),
     );
@@ -709,6 +732,28 @@ export function validateSupplementDraftFeatures(
           ),
         );
       }
+      // 组本身可用，但草稿在这个营养素上解析不出浓度/单位对不上：
+      // 加入也不参与替换，审核屏必须提醒（Task 10 的写入前确认）。
+      if (context.concentration?.status === 'MISSING') {
+        issues.push(
+          warningIssue(
+            'GROUP_NUTRIENT_MISSING',
+            `等价组「${group.name}」要求的 ${group.nutrientLabel} 浓度缺失，加入也不参与替换`,
+            group.id,
+            'equivalence.groupId',
+          ),
+        );
+      } else if (context.concentration?.status === 'UNIT_MISMATCH') {
+        const actualUnit = context.concentration.actualUnit || '未知';
+        issues.push(
+          warningIssue(
+            'GROUP_UNIT_MISMATCH',
+            `等价组「${group.name}」要求 ${group.nutrientLabel}（${group.nutrientUnit}），草稿浓度单位是 ${actualUnit}，加入也不参与替换`,
+            group.id,
+            'equivalence.groupId',
+          ),
+        );
+      }
     }
   }
 
@@ -728,19 +773,23 @@ export function validateSupplementDraftFeatures(
   }
 
   // ⑩ 证据：建议留档，不阻断手填。
+  //     ackKey 带上「缺哪张图」：确认了缺正面图，不该顺带覆盖之后才缺的标签图。
   const missingEvidence: string[] = [];
   if (!evidence.frontImageUrl.trim()) {
-    missingEvidence.push('正面图');
+    missingEvidence.push('front');
   }
   if (!evidence.labelImageUrl.trim()) {
-    missingEvidence.push('标签图');
+    missingEvidence.push('label');
   }
   if (missingEvidence.length > 0) {
+    const missingLabels = missingEvidence.map((key) =>
+      key === 'front' ? '正面图' : '标签图',
+    );
     issues.push(
       warningIssue(
         'EVIDENCE_MISSING',
-        `缺少${missingEvidence.join('和')}，建议留档；没有也能手填，但事后无法回查`,
-        undefined,
+        `缺少${missingLabels.join('和')}，建议留档；没有也能手填，但事后无法回查`,
+        missingEvidence.sort().join('+'),
         'evidence',
       ),
     );

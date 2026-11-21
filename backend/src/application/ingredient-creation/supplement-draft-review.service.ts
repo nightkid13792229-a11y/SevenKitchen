@@ -236,7 +236,9 @@ export class SupplementDraftReviewService {
         shopEnabled: config?.enabled === true,
         equivalenceEnabled: config?.equivalenceEnabled === true,
       },
-      catalog: this.buildCatalogContext(name),
+      // 规范名核对的是「标签名称」，不是原料名称（原料名可以自己起）。
+      catalog: this.buildCatalogContext(payload.label.labelNames),
+      concentration,
     };
   }
 
@@ -375,24 +377,54 @@ export class SupplementDraftReviewService {
     };
   }
 
-  /** 两本目录：完全同名 + 合并去重后的子串候选（最多 5 条）。 */
-  private buildCatalogContext(name: string): SupplementDraftCatalogContext {
-    const exactAdditive = this.feedAdditive.get(name) !== null;
-    const exactMaterial = this.feedMaterial.get(name) !== null;
-
-    const candidates: string[] = [];
-    const matches = [
-      ...this.feedAdditive.lookup(name, 5),
-      ...this.feedMaterial.lookup(name, 5),
-    ];
-    for (const match of matches) {
-      if (candidates.length >= 5) break;
-      if (!candidates.includes(match.name)) {
-        candidates.push(match.name);
+  /**
+   * 标签名称 → 两本目录核对结果。
+   *
+   * 只查 `payload.label.labelNames`（落 `properties.label_names`）；原料名称
+   * `basic.name` 不参与核对 —— 原料名可以自己起，标签名必须能在目录里查到。
+   * 标签名为空时 allExact=true：缺标签名由基础校验报「标签名称至少 1 个」。
+   */
+  private buildCatalogContext(
+    labelNames: string[],
+  ): SupplementDraftCatalogContext {
+    const uniqueNames: string[] = [];
+    for (const raw of labelNames) {
+      const name = raw.trim();
+      if (name && !uniqueNames.includes(name)) {
+        uniqueNames.push(name);
       }
     }
 
-    return { exactAdditive, exactMaterial, candidates };
+    const missingNames: string[] = [];
+    const candidatesByName: Record<string, string[]> = {};
+
+    for (const name of uniqueNames) {
+      const exactAdditive = this.feedAdditive.get(name) !== null;
+      const exactMaterial = this.feedMaterial.get(name) !== null;
+      if (exactAdditive || exactMaterial) {
+        continue;
+      }
+
+      missingNames.push(name);
+      const candidates: string[] = [];
+      const matches = [
+        ...this.feedAdditive.lookup(name, 5),
+        ...this.feedMaterial.lookup(name, 5),
+      ];
+      for (const match of matches) {
+        if (candidates.length >= 5) break;
+        if (!candidates.includes(match.name)) {
+          candidates.push(match.name);
+        }
+      }
+      candidatesByName[name] = candidates;
+    }
+
+    return {
+      allExact: missingNames.length === 0,
+      missingNames,
+      candidatesByName,
+    };
   }
 
   /** 浓度解析结果 → 上架体检需要的三态（丢值、只留状态/实际单位）。 */

@@ -130,7 +130,8 @@ function validContext(
     duplicate: { exists: false },
     equivalenceGroup: null,
     config: { shopEnabled: true, equivalenceEnabled: true },
-    catalog: { exactAdditive: true, exactMaterial: false, candidates: [] },
+    catalog: { allExact: true, missingNames: [], candidatesByName: {} },
+    concentration: null,
     ...overrides,
   };
 }
@@ -194,31 +195,25 @@ describe('validateSupplementDraftFeatures', () => {
 
   /* ② 标签规范名 ---------------------------------------------------- */
 
-  it.each([
-    [
-      '添加剂目录完全命中',
-      { exactAdditive: true, exactMaterial: false },
-      false,
-    ],
-    ['原料目录完全命中', { exactAdditive: false, exactMaterial: true }, false],
-    ['两本目录都查不到', { exactAdditive: false, exactMaterial: false }, true],
-  ])('目录命中：%s → LABEL_NAME_UNVERIFIED=%s', (_title, catalog, expected) => {
+  it('所有标签名都在目录里完全命中 → 不报 LABEL_NAME_UNVERIFIED', () => {
     const issues = featureIssues(
-      {},
-      { catalog: { ...catalog, candidates: ['鱼油油'] } },
+      { label: { labelNames: ['鱼油'] } },
+      { catalog: { allExact: true, missingNames: [], candidatesByName: {} } },
     );
 
-    expect(Boolean(issueOf(issues, 'LABEL_NAME_UNVERIFIED'))).toBe(expected);
+    expect(issueOf(issues, 'LABEL_NAME_UNVERIFIED')).toBeUndefined();
   });
 
-  it('目录查不到是提醒项（不是阻断），带候选和稳定 ackKey', () => {
+  it('有标签名在目录里查不到 → LABEL_NAME_UNVERIFIED 提醒（不是阻断），带候选', () => {
     const issues = featureIssues(
-      {},
+      { label: { labelNames: ['目录里没有的名字'] } },
       {
         catalog: {
-          exactAdditive: false,
-          exactMaterial: false,
-          candidates: ['鱼油 A', '鱼油 B'],
+          allExact: false,
+          missingNames: ['目录里没有的名字'],
+          candidatesByName: {
+            目录里没有的名字: ['候选 A', '候选 B'],
+          },
         },
       },
     );
@@ -227,34 +222,73 @@ describe('validateSupplementDraftFeatures', () => {
     expect(issue).toMatchObject({
       code: 'LABEL_NAME_UNVERIFIED',
       level: 'WARNING',
-      ackKey: 'LABEL_NAME_UNVERIFIED:鱼油',
+      ackKey: 'LABEL_NAME_UNVERIFIED:目录里没有的名字',
     });
-    expect(issue?.message).toContain('鱼油 A');
-    expect(issue?.message).toContain('鱼油 B');
+    expect(issue?.message).toContain('目录里没有的名字');
+    expect(issue?.message).toContain('候选 A');
+    expect(issue?.message).toContain('候选 B');
   });
 
-  it('目录候选最多展示 5 条', () => {
+  it('标签名只核对 labelNames：原料名不在目录里也不影响', () => {
     const issues = featureIssues(
-      {},
+      {
+        basic: { name: '目录里没有的名字' },
+        label: { labelNames: ['鱼油'] },
+      },
+      { catalog: { allExact: true, missingNames: [], candidatesByName: {} } },
+    );
+
+    expect(issueOf(issues, 'LABEL_NAME_UNVERIFIED')).toBeUndefined();
+  });
+
+  it('原料名在目录里也不代表标签名通过：标签名缺失照样提醒', () => {
+    const issues = featureIssues(
+      {
+        basic: { name: '鱼油' },
+        label: { labelNames: ['目录里没有的名字'] },
+      },
       {
         catalog: {
-          exactAdditive: false,
-          exactMaterial: false,
-          candidates: ['候选1', '候选2', '候选3', '候选4', '候选5', '候选6'],
+          allExact: false,
+          missingNames: ['目录里没有的名字'],
+          candidatesByName: {},
         },
       },
     );
 
-    const message = issueOf(issues, 'LABEL_NAME_UNVERIFIED')?.message ?? '';
-    expect(message).toContain('候选5');
-    expect(message).not.toContain('候选6');
+    expect(issueOf(issues, 'LABEL_NAME_UNVERIFIED')?.level).toBe('WARNING');
   });
 
-  it('名称为空时不报 LABEL_NAME_UNVERIFIED（名称必填已由基础校验拦）', () => {
+  it('多个缺失标签名的 ackKey 排序后拼接，候选最多展示 5 条', () => {
     const issues = featureIssues(
-      { basic: { name: '   ' } },
+      { label: { labelNames: ['乙标签', '甲标签'] } },
       {
-        catalog: { exactAdditive: false, exactMaterial: false, candidates: [] },
+        catalog: {
+          allExact: false,
+          missingNames: ['乙标签', '甲标签'],
+          candidatesByName: {
+            甲标签: ['候选1', '候选2', '候选3', '候选4', '候选5', '候选6'],
+            乙标签: [],
+          },
+        },
+      },
+    );
+
+    const issue = issueOf(issues, 'LABEL_NAME_UNVERIFIED');
+    expect(issue?.ackKey).toBe('LABEL_NAME_UNVERIFIED:乙标签|甲标签');
+    expect(issue?.message).toContain('候选5');
+    expect(issue?.message).not.toContain('候选6');
+  });
+
+  it('标签名为空时不报 LABEL_NAME_UNVERIFIED（基础校验会报标签名必填）', () => {
+    const issues = featureIssues(
+      { label: { labelNames: [] } },
+      {
+        catalog: {
+          allExact: false,
+          missingNames: ['不该出现的名字'],
+          candidatesByName: {},
+        },
       },
     );
 
@@ -397,6 +431,19 @@ describe('validateSupplementDraftFeatures', () => {
     );
 
     expect(issueOf(issues, 'SHELF_LIFE_INVALID')).toBeUndefined();
+  });
+
+  it('上架=关时保质期填了非法值也要阻断（finalize 仍会落库）', () => {
+    const issues = featureIssues({
+      retail: {
+        enabled: false,
+        noSaleReason: 'UNDECIDED',
+        shelfLifeMonths: 0,
+      },
+    });
+
+    expect(issueOf(issues, 'SHELF_LIFE_INVALID')?.level).toBe('BLOCKER');
+    expect(issueOf(issues, 'NO_SALE_REASON_REQUIRED')).toBeUndefined();
   });
 
   /* ⑤ DIY ---------------------------------------------------------- */
@@ -567,6 +614,64 @@ describe('validateSupplementDraftFeatures', () => {
     expect(issues).toEqual([]);
   });
 
+  it('选了组但浓度缺失 → GROUP_NUTRIENT_MISSING 提醒，ackKey 带组 id', () => {
+    const issues = featureIssues(
+      { equivalence: { groupId: 'group-1' } },
+      {
+        equivalenceGroup: groupContext({ memberCount: 2 }),
+        concentration: { status: 'MISSING' },
+      },
+    );
+
+    expect(issueOf(issues, 'GROUP_NUTRIENT_MISSING')).toMatchObject({
+      code: 'GROUP_NUTRIENT_MISSING',
+      level: 'WARNING',
+      ackKey: 'GROUP_NUTRIENT_MISSING:group-1',
+    });
+    expect(issueOf(issues, 'GROUP_UNIT_MISMATCH')).toBeUndefined();
+  });
+
+  it('选了组但浓度单位不一致 → GROUP_UNIT_MISMATCH 提醒，message 带实际单位', () => {
+    const issues = featureIssues(
+      { equivalence: { groupId: 'group-1' } },
+      {
+        equivalenceGroup: groupContext({ memberCount: 2 }),
+        concentration: { status: 'UNIT_MISMATCH', actualUnit: 'g' },
+      },
+    );
+
+    const issue = issueOf(issues, 'GROUP_UNIT_MISMATCH');
+    expect(issue).toMatchObject({
+      code: 'GROUP_UNIT_MISMATCH',
+      level: 'WARNING',
+      ackKey: 'GROUP_UNIT_MISMATCH:group-1',
+    });
+    expect(issue?.message).toContain('g');
+    expect(issue?.message).toContain('mg');
+    expect(issueOf(issues, 'GROUP_NUTRIENT_MISSING')).toBeUndefined();
+  });
+
+  it('浓度 OK 或未选组/暂不归组时不报浓度相关提醒', () => {
+    const ok = featureIssues(
+      { equivalence: { groupId: 'group-1' } },
+      {
+        equivalenceGroup: groupContext({ memberCount: 2 }),
+        concentration: { status: 'OK' },
+      },
+    );
+    expect(issueOf(ok, 'GROUP_NUTRIENT_MISSING')).toBeUndefined();
+    expect(issueOf(ok, 'GROUP_UNIT_MISMATCH')).toBeUndefined();
+
+    const skipped = featureIssues(
+      { equivalence: { groupId: '__SKIP__' } },
+      {
+        concentration: { status: 'MISSING' },
+      },
+    );
+    expect(issueOf(skipped, 'GROUP_NUTRIENT_MISSING')).toBeUndefined();
+    expect(issueOf(skipped, 'GROUP_UNIT_MISMATCH')).toBeUndefined();
+  });
+
   /* ⑧ 总开关 -------------------------------------------------------- */
 
   it('商城总开关关闭 → SHOP_DISABLED 提醒', () => {
@@ -596,25 +701,30 @@ describe('validateSupplementDraftFeatures', () => {
   /* ⑨ 证据 ---------------------------------------------------------- */
 
   it.each([
-    ['缺正面图', { labelImageUrl: '' }],
-    ['缺标签图', { frontImageUrl: '' }],
-  ])('证据%s → EVIDENCE_MISSING 提醒', (_title, evidence) => {
-    const issues = featureIssues({ evidence });
+    ['缺正面图', { frontImageUrl: '' }, 'EVIDENCE_MISSING:front'],
+    ['缺标签图', { labelImageUrl: '' }, 'EVIDENCE_MISSING:label'],
+  ])(
+    '证据%s → EVIDENCE_MISSING 提醒，ackKey 带上缺哪张',
+    (_title, evidence, ackKey) => {
+      const issues = featureIssues({ evidence });
 
-    expect(issueOf(issues, 'EVIDENCE_MISSING')).toMatchObject({
-      level: 'WARNING',
-      ackKey: 'EVIDENCE_MISSING',
-    });
-  });
+      expect(issueOf(issues, 'EVIDENCE_MISSING')).toMatchObject({
+        level: 'WARNING',
+        ackKey,
+      });
+    },
+  );
 
-  it('两张图都缺也只报一条 EVIDENCE_MISSING', () => {
+  it('两张图都缺也只报一条 EVIDENCE_MISSING，ackKey 含两张', () => {
     const issues = featureIssues({
       evidence: { frontImageUrl: '', labelImageUrl: '' },
     });
 
-    expect(
-      issues.filter((issue) => issue.code === 'EVIDENCE_MISSING'),
-    ).toHaveLength(1);
+    const evidenceIssues = issues.filter(
+      (issue) => issue.code === 'EVIDENCE_MISSING',
+    );
+    expect(evidenceIssues).toHaveLength(1);
+    expect(evidenceIssues[0].ackKey).toBe('EVIDENCE_MISSING:front+label');
   });
 
   it('两张图都有 → 不报 EVIDENCE_MISSING', () => {
@@ -640,9 +750,9 @@ describe('validateSupplementDraftFeatures', () => {
       {
         duplicate: { exists: true, existingName: '鱼油（旧）' },
         catalog: {
-          exactAdditive: false,
-          exactMaterial: false,
-          candidates: ['鱼油油'],
+          allExact: false,
+          missingNames: ['鱼油油'],
+          candidatesByName: { 鱼油油: [] },
         },
         config: { shopEnabled: false, equivalenceEnabled: false },
       },
@@ -765,6 +875,7 @@ describe('SupplementDraftReviewService', () => {
     it('查重复/等价组/配置/目录，并用草稿营养档案解析组浓度', async () => {
       const payload = validDraft({
         basic: { name: '鱼油', brand: '  ', productModel: ' 120 粒 ' },
+        label: { labelNames: ['鱼油', '目录里没有的名字', '鱼油'] },
         equivalence: { groupId: 'group-1' },
       });
       prismaMock.ingredient.findFirst.mockResolvedValue({
@@ -785,7 +896,9 @@ describe('SupplementDraftReviewService', () => {
         enabled: false,
         equivalenceEnabled: false,
       });
-      additiveMock.get.mockReturnValue({ name: '鱼油' });
+      additiveMock.get.mockImplementation((name: string) =>
+        name === '鱼油' ? { name: '鱼油' } : null,
+      );
       additiveMock.lookup.mockReturnValue([{ name: '鱼油 A' }]);
       materialMock.lookup.mockReturnValue([
         { name: '鱼油 B' },
@@ -827,6 +940,7 @@ describe('SupplementDraftReviewService', () => {
         nutrientLabel: 'EPA',
         nutrientUnit: 'mg',
       });
+      expect(context.concentration).toEqual({ status: 'OK' });
 
       expect(prismaMock.supplementShopConfig.findUnique).toHaveBeenCalledWith({
         where: { id: 'singleton' },
@@ -837,14 +951,22 @@ describe('SupplementDraftReviewService', () => {
         equivalenceEnabled: false,
       });
 
+      // 标签名去重后再查目录：'鱼油' 命中，'目录里没有的名字' 给候选。
       expect(context.catalog).toEqual({
-        exactAdditive: true,
-        exactMaterial: false,
-        candidates: ['鱼油 A', '鱼油 B', '鱼油 C', '鱼油 D', '鱼油 E'],
+        allExact: false,
+        missingNames: ['目录里没有的名字'],
+        candidatesByName: {
+          目录里没有的名字: ['鱼油 A', '鱼油 B', '鱼油 C', '鱼油 D', '鱼油 E'],
+        },
       });
-
-      expect(additiveMock.get).toHaveBeenCalledWith('鱼油');
-      expect(materialMock.get).toHaveBeenCalledWith('鱼油');
+      expect(additiveMock.get.mock.calls.map((call) => call[0])).toEqual([
+        '鱼油',
+        '目录里没有的名字',
+      ]);
+      expect(materialMock.get.mock.calls.map((call) => call[0])).toEqual([
+        '鱼油',
+        '目录里没有的名字',
+      ]);
 
       expect(dosageMock.resolveConcentration).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -930,9 +1052,14 @@ describe('SupplementDraftReviewService', () => {
           (issue) => issue.code === 'EQUIVALENCE_UNIT_MISMATCH',
         )?.message,
       ).toContain('g');
+      // 组的浓度解析结果也进 context，供功能校验报「加入也不参与替换」。
+      expect(context.concentration).toEqual({
+        status: 'UNIT_MISMATCH',
+        actualUnit: 'g',
+      });
     });
 
-    it('暂不归组（__SKIP__）不查组，context.equivalenceGroup 为 null', async () => {
+    it('暂不归组（__SKIP__）不查组，context.equivalenceGroup 与浓度都为 null', async () => {
       const context = await service.buildContext(
         validDraft({ equivalence: { groupId: '__SKIP__' } }),
       );
@@ -941,6 +1068,7 @@ describe('SupplementDraftReviewService', () => {
         prismaMock.supplementEquivalenceGroup.findUnique,
       ).not.toHaveBeenCalled();
       expect(context.equivalenceGroup).toBeNull();
+      expect(context.concentration).toBeNull();
       expect(context.issues.map((issue) => issue.code)).toContain(
         'EQUIVALENCE_UNGROUPED',
       );
@@ -953,6 +1081,51 @@ describe('SupplementDraftReviewService', () => {
 
       expect(prismaMock.ingredient.findFirst).not.toHaveBeenCalled();
       expect(context.duplicate).toEqual({ exists: false });
+    });
+
+    it('目录核对用标签名：原料名有目录但标签名没有 → missing；反过来不 missing', async () => {
+      additiveMock.get.mockImplementation((name: string) =>
+        name === '鱼油' ? { name: '鱼油' } : null,
+      );
+      materialMock.get.mockReturnValue(null);
+
+      const labelMissing = await service.buildContext(
+        validDraft({
+          basic: { name: '鱼油' },
+          label: { labelNames: ['目录里没有的名字'] },
+        }),
+      );
+      expect(labelMissing.catalog).toEqual({
+        allExact: false,
+        missingNames: ['目录里没有的名字'],
+        candidatesByName: { 目录里没有的名字: [] },
+      });
+
+      const basicMissing = await service.buildContext(
+        validDraft({
+          basic: { name: '目录里没有的名字' },
+          label: { labelNames: ['鱼油'] },
+        }),
+      );
+      expect(basicMissing.catalog).toEqual({
+        allExact: true,
+        missingNames: [],
+        candidatesByName: {},
+      });
+    });
+
+    it('没有标签名时 allExact=true（缺标签名由基础校验负责）', async () => {
+      const context = await service.buildContext(
+        validDraft({ label: { labelNames: [] } }),
+      );
+
+      expect(context.catalog).toEqual({
+        allExact: true,
+        missingNames: [],
+        candidatesByName: {},
+      });
+      expect(additiveMock.get).not.toHaveBeenCalled();
+      expect(materialMock.get).not.toHaveBeenCalled();
     });
 
     it('配置不存在时两个开关都按关闭处理', async () => {
@@ -983,8 +1156,11 @@ describe('SupplementDraftReviewService', () => {
       );
 
       expect(context.issues).toEqual([]);
-      expect(context.catalog.exactAdditive).toBe(false);
-      expect(context.catalog.exactMaterial).toBe(false);
+      expect(context.catalog).toEqual({
+        allExact: false,
+        missingNames: ['鱼油'],
+        candidatesByName: { 鱼油: [] },
+      });
     });
   });
 
@@ -1034,6 +1210,71 @@ describe('SupplementDraftReviewService', () => {
 
       expect(result.blockers.map((issue) => issue.code)).toContain(
         'NAME_REQUIRED',
+      );
+    });
+
+    it('合并结果里每条提醒都有 ackKey、每条阻断都没有；NAME_FORM_WORD 也有 ackKey', async () => {
+      const payload = validDraft({
+        basic: { name: '鱼油胶囊' },
+        evidence: { frontImageUrl: '', labelImageUrl: '' },
+      });
+      draftServiceMock.get.mockResolvedValue(draftView(payload));
+      prismaMock.ingredient.findFirst.mockResolvedValue({
+        id: 'ing-1',
+        name: '鱼油（旧）',
+      });
+      prismaMock.supplementShopConfig.findUnique.mockResolvedValue({
+        enabled: false,
+        equivalenceEnabled: false,
+      });
+
+      const result = await service.validate('u1', 'draft-1');
+
+      const formWord = result.warnings.find(
+        (issue) => issue.code === 'NAME_FORM_WORD',
+      );
+      expect(formWord?.ackKey).toBe('NAME_FORM_WORD:鱼油胶囊');
+      expect(result.blockers.length).toBeGreaterThan(0);
+      expect(result.warnings.length).toBeGreaterThan(0);
+      for (const warning of result.warnings) {
+        expect(warning.ackKey).toBeTruthy();
+        expect(warning.ackKey?.startsWith(warning.code)).toBe(true);
+      }
+      for (const blocker of result.blockers) {
+        expect(blocker.ackKey).toBeUndefined();
+      }
+    });
+
+    it('标签核对只看 labelNames：原料名有目录、标签名没有 → 提醒；反过来不提醒', async () => {
+      additiveMock.get.mockImplementation((name: string) =>
+        name === '鱼油' ? { name: '鱼油' } : null,
+      );
+      materialMock.get.mockReturnValue(null);
+
+      draftServiceMock.get.mockResolvedValue(
+        draftView(
+          validDraft({
+            basic: { name: '鱼油' },
+            label: { labelNames: ['目录里没有的名字'] },
+          }),
+        ),
+      );
+      const labelMissing = await service.validate('u1', 'draft-1');
+      expect(labelMissing.warnings.map((issue) => issue.code)).toContain(
+        'LABEL_NAME_UNVERIFIED',
+      );
+
+      draftServiceMock.get.mockResolvedValue(
+        draftView(
+          validDraft({
+            basic: { name: '目录里没有的名字' },
+            label: { labelNames: ['鱼油'] },
+          }),
+        ),
+      );
+      const basicMissing = await service.validate('u1', 'draft-1');
+      expect(basicMissing.warnings.map((issue) => issue.code)).not.toContain(
+        'LABEL_NAME_UNVERIFIED',
       );
     });
   });

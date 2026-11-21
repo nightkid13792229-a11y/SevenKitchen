@@ -7,11 +7,17 @@
  * 这里只放纯判断，页面只负责把表单值喂进来、把结果发出去。
  */
 
-export type ClosingState = 'MISSING_PRICE' | 'MISSING_UNIT' | 'READY'
+export type ClosingState =
+  | 'MISSING_PRICE'
+  | 'MISSING_COUNT'
+  | 'MISSING_UNIT'
+  | 'READY'
 
 export interface ClosingInput {
   pricePerPackage: number | null | undefined
   netContent: number | null | undefined
+  /** 一箱/一袋里有几件；缺了就算不出倍率，后端也会拒。 */
+  packCount: number | null | undefined
   /**
    * 采购单位（袋 / 盒 / 箱）。后端会拒空单位（没有单位就没法折算采购数量），
    * 所以这里也算一道：不然点下去才被拒。
@@ -27,11 +33,15 @@ export interface ClosingInput {
 export function computeClosingState(input: ClosingInput): ClosingState {
   const price = Number(input.pricePerPackage)
   const net = Number(input.netContent)
+  const count = Number(input.packCount)
   if (!Number.isFinite(price) || price <= 0) {
     return 'MISSING_PRICE'
   }
   if (!Number.isFinite(net) || net <= 0) {
     return 'MISSING_PRICE'
+  }
+  if (!Number.isInteger(count) || count <= 0) {
+    return 'MISSING_COUNT'
   }
   if (!input.purchaseUnit || !input.purchaseUnit.trim()) {
     return 'MISSING_UNIT'
@@ -46,6 +56,8 @@ export interface ClosingForm {
   packCount: number
   netContentPerPack: number
   currentPurchasePrice: number | null
+  /** 规格原文（识别用，供订单截图匹配）。 */
+  productModel?: string
 }
 
 /**
@@ -63,17 +75,47 @@ export function buildCreateSkuPayload(form: ClosingForm) {
   }
 }
 
-/** 输入框下方的实时换算：让「一件 39.9 元」立刻变成「一克 0.0798 元」 */
+/**
+ * 输入框下方的实时换算：**整箱价 ÷（件数 × 每件净含量）**。
+ *
+ * 必须与后端 `buildCommitProcurementSku` 的 `purchaseToBaseRatio = packCount ×
+ * netContentPerPack` 同一式；只除单件净含量会把 24 件装的每克成本放大 24 倍，
+ * 反过来诱导人把正确的整箱价改小。
+ */
 export function formatCostPreview(
   pricePerPackage: number | null | undefined,
+  packCount: number | null | undefined,
   netContent: number | null | undefined,
   baseUnitLabel: string,
 ): string {
   const price = Number(pricePerPackage)
+  const count = Number(packCount)
   const net = Number(netContent)
   if (!Number.isFinite(price) || price <= 0) return ''
+  if (!Number.isInteger(count) || count <= 0) return ''
   if (!Number.isFinite(net) || net <= 0) return ''
-  return `≈ ¥${(price / net).toFixed(6)} / ${baseUnitLabel}`
+  return `≈ ¥${(price / (count * net)).toFixed(6)} / ${baseUnitLabel}`
+}
+
+/** 折合每件价：只给人核对货架价，不参与任何计算。 */
+export function formatPerItemPrice(
+  pricePerPackage: number | null | undefined,
+  packCount: number | null | undefined,
+): string {
+  const price = Number(pricePerPackage)
+  const count = Number(packCount)
+  if (!Number.isFinite(price) || price <= 0) return ''
+  if (!Number.isInteger(count) || count <= 1) return ''
+  return `≈ ¥${(price / count).toFixed(2)} / 件`
+}
+
+/** 基准单位的人话标签；按个计量的原料绝不能写成克。 */
+export function closingBaseUnitLabel(
+  baseUnit: 'G' | 'ML' | 'PCS' | null | undefined,
+): string {
+  if (baseUnit === 'ML') return 'ml'
+  if (baseUnit === 'PCS') return '个'
+  return 'g'
 }
 
 /** 数字去掉浮点尾巴：1000 → "1000"，7920.0 → "7920"，0.50 → "0.5" */
@@ -129,6 +171,7 @@ export type ClosingFieldKey =
   | 'name'
   | 'purchaseChannel'
   | 'purchaseUnit'
+  | 'productModel'
   | 'packCount'
   | 'netContentPerPack'
   | 'currentPurchasePrice'
@@ -138,6 +181,7 @@ export interface RecognizedApplyResult {
     name: string
     purchaseChannel: string
     purchaseUnit: string
+    productModel?: string
     packCount: number
     netContentPerPack: number | undefined
     currentPurchasePrice: number | undefined
@@ -165,6 +209,7 @@ export function applyRecognizedDraft(
     name: string
     purchaseChannel: string
     purchaseUnit: string
+    productModel?: string
     packCount: number
     netContentPerPack: number | undefined
     currentPurchasePrice: number | undefined
@@ -175,7 +220,7 @@ export function applyRecognizedDraft(
   const aiFilled: ClosingFieldKey[] = []
 
   const fillText = (
-    key: 'name' | 'purchaseChannel' | 'purchaseUnit',
+    key: 'name' | 'purchaseChannel' | 'purchaseUnit' | 'productModel',
     value: string | null,
   ) => {
     const current = (next[key] ?? '').trim()
@@ -188,6 +233,7 @@ export function applyRecognizedDraft(
   fillText('name', draft.name)
   fillText('purchaseChannel', draft.purchaseChannel)
   fillText('purchaseUnit', draft.purchaseUnit)
+  fillText('productModel', draft.productModel)
 
   if (
     draft.packCount !== null &&
@@ -238,6 +284,7 @@ export function buildClosingSkuInput(form: {
   name: string
   purchaseChannel: string
   purchaseUnit: string
+  productModel?: string | null
   packCount: number
   netContentPerPack: number | undefined
   currentPurchasePrice: number | undefined
@@ -247,6 +294,7 @@ export function buildClosingSkuInput(form: {
     name: form.name.trim() || undefined,
     purchaseChannel: form.purchaseChannel.trim() || undefined,
     purchaseUnit: form.purchaseUnit,
+    productModel: form.productModel?.trim() || undefined,
     packCount: form.packCount,
     netContentPerPack: form.netContentPerPack ?? 0,
     currentPurchasePrice: form.currentPurchasePrice ?? 0,

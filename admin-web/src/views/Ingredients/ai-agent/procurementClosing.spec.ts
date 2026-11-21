@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyRecognizedDraft,
+  buildClosingSkuInput,
   buildCreateSkuPayload,
+  closingBaseUnitLabel,
   computeClosingState,
   formatCostPreview,
+  formatPerItemPrice,
   formatRatioText,
   shouldShowProcurementCard,
   type RecognizedSkuDraft,
@@ -21,6 +24,7 @@ describe('AI 建档收尾 · 采购商品', () => {
       computeClosingState({
         pricePerPackage: null,
         netContent: 500,
+        packCount: 1,
         purchaseUnit: '袋'
       }),
     ).toBe('MISSING_PRICE')
@@ -31,6 +35,7 @@ describe('AI 建档收尾 · 采购商品', () => {
       computeClosingState({
         pricePerPackage: 39.9,
         netContent: 500,
+        packCount: 1,
         purchaseUnit: '袋'
       }),
     ).toBe('READY')
@@ -41,6 +46,7 @@ describe('AI 建档收尾 · 采购商品', () => {
       computeClosingState({
         pricePerPackage: 39.9,
         netContent: null,
+        packCount: 1,
         purchaseUnit: '袋'
       }),
     ).toBe('MISSING_PRICE')
@@ -68,10 +74,55 @@ describe('AI 建档收尾 · 采购商品', () => {
     expect(payload).not.toHaveProperty('purchaseToBaseRatio')
   })
 
-  it('换算预览按「一件多少钱 ÷ 净含量」显示', () => {
-    expect(formatCostPreview(39.9, 500, 'g')).toBe('≈ ¥0.079800 / g')
-    expect(formatCostPreview(null, 500, 'g')).toBe('')
-    expect(formatCostPreview(39.9, 0, 'g')).toBe('')
+  it('换算预览按「整箱价 ÷（件数×每件净含量）」显示', () => {
+    expect(formatCostPreview(39.9, 1, 500, 'g')).toBe('≈ ¥0.079800 / g')
+    expect(formatCostPreview(79.9, 24, 330, 'ml')).toBe('≈ ¥0.010088 / ml')
+    expect(formatCostPreview(null, 1, 500, 'g')).toBe('')
+    expect(formatCostPreview(39.9, 1, 0, 'g')).toBe('')
+  })
+
+  it('件数缺失/非正整数 → MISSING_COUNT，不能授权', () => {
+    expect(
+      computeClosingState({
+        pricePerPackage: 79.9,
+        netContent: 330,
+        packCount: null,
+        purchaseUnit: '箱',
+      }),
+    ).toBe('MISSING_COUNT')
+    expect(
+      computeClosingState({
+        pricePerPackage: 79.9,
+        netContent: 330,
+        packCount: 0,
+        purchaseUnit: '箱',
+      }),
+    ).toBe('MISSING_COUNT')
+  })
+
+  it('折合每件价只用于核对，件数为 1 时不显示', () => {
+    expect(formatPerItemPrice(79.9, 24)).toBe('≈ ¥3.33 / 件')
+    expect(formatPerItemPrice(79.9, 1)).toBe('')
+  })
+
+  it('按个计量的原料用「个」，不写克', () => {
+    expect(closingBaseUnitLabel('PCS')).toBe('个')
+    expect(closingBaseUnitLabel('G')).toBe('g')
+    expect(closingBaseUnitLabel('ML')).toBe('ml')
+  })
+
+  it('授权提交体带规格原文，供订单截图匹配', () => {
+    const payload = buildClosingSkuInput({
+      name: '山姆 糙米',
+      purchaseChannel: '山姆会员店',
+      purchaseUnit: '袋',
+      packCount: 1,
+      netContentPerPack: 500,
+      currentPurchasePrice: 39.9,
+      productModel: '500g/袋',
+    })
+    expect(payload.productModel).toBe('500g/袋')
+    expect(payload.purchaseUnit).toBe('袋')
   })
 })
 
@@ -88,7 +139,8 @@ describe('截图识别 · 自动填表', () => {
     purchaseUnit: '',
     packCount: 1 as number,
     netContentPerPack: undefined as number | undefined,
-    currentPurchasePrice: undefined as number | undefined
+    currentPurchasePrice: undefined as number | undefined,
+    productModel: '' as string | undefined
   })
 
   const fullDraft = (
@@ -117,8 +169,9 @@ describe('截图识别 · 自动填表', () => {
     expect(result.form.netContentPerPack).toBe(1000)
     expect(result.form.currentPurchasePrice).toBe(39.9)
     expect(result.form.purchaseChannel).toBe('沃尔玛')
+    expect(result.form.productModel).toBe('1kg/袋')
     expect(result.aiFilled.sort()).toEqual(
-      ['name', 'netContentPerPack', 'packCount', 'purchaseChannel', 'purchaseUnit', 'currentPurchasePrice'].sort()
+      ['name', 'netContentPerPack', 'packCount', 'purchaseChannel', 'purchaseUnit', 'productModel', 'currentPurchasePrice'].sort()
     )
   })
 
@@ -179,10 +232,10 @@ describe('截图识别 · 自动填表', () => {
 
   it('采购单位没选不算填完（后端会拒），提示还差单位', () => {
     expect(
-      computeClosingState({ pricePerPackage: 39.9, netContent: 500, purchaseUnit: '  ' }),
+      computeClosingState({ pricePerPackage: 39.9, netContent: 500, packCount: 1, purchaseUnit: '  ' }),
     ).toBe('MISSING_UNIT')
     expect(
-      computeClosingState({ pricePerPackage: 39.9, netContent: 500, purchaseUnit: '袋' }),
+      computeClosingState({ pricePerPackage: 39.9, netContent: 500, packCount: 1, purchaseUnit: '袋' }),
     ).toBe('READY')
   })
 })

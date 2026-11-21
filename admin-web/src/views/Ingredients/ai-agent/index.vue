@@ -1202,7 +1202,7 @@
           <el-form-item required>
             <template #label>
               <span class="closing-card__label">
-                一箱几件
+                一{{ closingForm.purchaseUnit || '箱' }}几件
                 <em v-if="isAiFilled('packCount')" class="closing-card__ai">AI 识别</em>
               </span>
             </template>
@@ -1238,7 +1238,7 @@
           <el-form-item required>
             <template #label>
               <span class="closing-card__label">
-                这一件多少钱
+                这一{{ closingForm.purchaseUnit || '箱/袋' }}多少钱
                 <em v-if="isAiFilled('currentPurchasePrice')" class="closing-card__ai">AI 识别</em>
               </span>
             </template>
@@ -1248,6 +1248,22 @@
               :precision="2"
               controls-position="right"
               class="closing-card__number"
+            />
+            <span class="closing-card__hint">
+              填整箱/整袋价，不是箱里单件的价；系统会按件数折算。
+            </span>
+          </el-form-item>
+
+          <el-form-item>
+            <template #label>
+              <span class="closing-card__label">
+                规格原文
+                <em v-if="isAiFilled('productModel')" class="closing-card__ai">AI 识别</em>
+              </span>
+            </template>
+            <el-input
+              v-model="closingForm.productModel"
+              placeholder="如 24×330ml / 30枚 1.59kg，可不填"
             />
           </el-form-item>
 
@@ -1269,15 +1285,20 @@
           </el-form-item>
         </el-form>
 
-        <!-- 换算汇总：倍率 + 每克单价放在同一行，不再挤在输入框右边 -->
-        <p v-if="closingRatioText || closingPreview" class="closing-card__summary">
+        <!-- 换算汇总：倍率 + 每基准单位成本 + 折合每件价，供人目视核对 -->
+        <p
+          v-if="closingRatioText || closingPreview || closingPerItemPrice"
+          class="closing-card__summary"
+        >
           <span v-if="closingRatioText">{{ closingRatioText }}</span>
           <span v-if="closingPreview">{{ closingPreview }}</span>
+          <span v-if="closingPerItemPrice">{{ closingPerItemPrice }}</span>
         </p>
 
         <p class="closing-card__hint">
           它会和原料一起写入，折算成「每{{ closingBaseUnitLabel }}多少钱」作为初始成本；
-          没有它，原料进食谱就是按 0 元算。
+          没有它，原料进食谱就是按 0 元算。价格按整{{ closingForm.purchaseUnit || '箱/袋' }}填，
+          不是箱内单件的价。
         </p>
       </section>
       </div>
@@ -1304,8 +1325,10 @@ import { ingredientApi } from '@/api/ingredients'
 import {
   applyRecognizedDraft,
   buildClosingSkuInput,
+  closingBaseUnitLabel as closingBaseUnitOf,
   computeClosingState,
   formatCostPreview,
+  formatPerItemPrice,
   formatRatioText,
   shouldShowProcurementCard,
   type ClosingFieldKey
@@ -1700,31 +1723,50 @@ const closingForm = reactive({
   purchaseUnit: '',
   packCount: 1,
   netContentPerPack: undefined as number | undefined,
-  currentPurchasePrice: undefined as number | undefined
+  currentPurchasePrice: undefined as number | undefined,
+  // 规格原文（识别用）：订单截图匹配靠它，不能只靠商品名。
+  productModel: ''
 })
 
-const closingBaseUnitLabel = computed(() => {
-  // 草稿里的原料卡带 baseUnit；取不到时按克处理（食材绝大多数是克）
-  const baseUnit = (draft.value?.payload as any)?.ingredient?.baseUnit
-  return baseUnit === 'ML' ? 'ml' : 'g'
-})
+const closingBaseUnitLabel = computed(() =>
+  closingBaseUnitOf(
+    ((draft.value?.payload as any)?.ingredient?.baseUnit ?? null) as
+      | 'G'
+      | 'ML'
+      | 'PCS'
+      | null
+  )
+)
 const closingState = computed(() =>
   computeClosingState({
     pricePerPackage: closingForm.currentPurchasePrice ?? null,
     netContent: closingForm.netContentPerPack ?? null,
+    packCount: closingForm.packCount,
     purchaseUnit: closingForm.purchaseUnit
   })
 )
 const closingStateLabel = computed(() => {
   if (closingState.value === 'READY') return '填好了，可以写入'
-  if (closingState.value === 'MISSING_UNIT') return '还差「采购单位」（袋 / 盒 / 箱）'
-  return '还差「每件净含量」和「这一件多少钱」'
+  if (closingState.value === 'MISSING_UNIT') {
+    return '还差「采购单位」（袋 / 盒 / 箱）'
+  }
+  if (closingState.value === 'MISSING_COUNT') {
+    return '还差「一箱几件」（只买 1 件就填 1）'
+  }
+  return '还差「每件净含量」和「整箱/整袋价」'
 })
 const closingPreview = computed(() =>
   formatCostPreview(
     closingForm.currentPurchasePrice,
+    closingForm.packCount,
     closingForm.netContentPerPack,
     closingBaseUnitLabel.value
+  )
+)
+const closingPerItemPrice = computed(() =>
+  formatPerItemPrice(
+    closingForm.currentPurchasePrice,
+    closingForm.packCount
   )
 )
 
@@ -1756,9 +1798,10 @@ const closingLowConfidence = ref<string[]>([])
 const SKU_FIELD_LABELS: Record<string, string> = {
   name: '商品名称',
   purchaseUnit: '采购单位',
+  productModel: '规格原文',
   packCount: '一箱几件',
   netContentPerPack: '每件净含量',
-  currentPurchasePrice: '这一件多少钱',
+  currentPurchasePrice: '整箱/整袋价',
   purchaseChannel: '采购渠道'
 }
 

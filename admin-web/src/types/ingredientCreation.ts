@@ -736,6 +736,8 @@ export interface SupplementAnalysisDto {
   baseUnit: 'PCS' | 'G' | 'ML' | null
   unitDisplayLabel: string | null
   physicalForm: SupplementPhysicalForm | null
+  /** 每瓶多少个基准单位（模型从正面图读） */
+  perBottleUnits: number | null
   servingUnitsPerDose: number | null
   nutrients: { fieldPath: string; value: number; unit: string }[]
   labelCategory: 'FEED_ADDITIVE' | 'FEED_MATERIAL' | null

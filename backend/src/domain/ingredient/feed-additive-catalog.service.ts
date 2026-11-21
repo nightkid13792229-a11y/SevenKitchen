@@ -78,6 +78,11 @@ export class FeedAdditiveCatalogService {
     return matches.slice(0, Math.max(1, limit));
   }
 
+  /** 全部规范名（给模型自己翻译、自己匹配用） */
+  listNames(): string[] {
+    return DATA.entries.map((entry) => entry.name);
+  }
+
   /** 精确取一条；没有就是没有。 */
   get(name: string): CatalogEntry | null {
     return DATA.entries.find((entry) => entry.name === name) ?? null;

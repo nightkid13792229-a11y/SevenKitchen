@@ -14,17 +14,17 @@ export type AnalysisBaseUnit = 'PCS' | 'G' | 'ML';
 export interface AnalysisContext {
   frontText: string;
   labelText: string;
-  /** 《饲料添加剂品种目录》里查到的规范名（可能为空） */
-  catalogNames: { name: string; dogAllowed: boolean }[];
-  /** 《饲料原料目录》里对上的条目（鱼油这类要走这本目录） */
-  materialNames: { name: string; category: string }[];
+  /** 《饲料添加剂品种目录》全量规范名（中文）——由模型自己翻译后匹配 */
+  additiveCatalog: string[];
+  /** 《饲料原料目录》全量规范名（中文） */
+  materialCatalog: string[];
   nutrientLabel: string | null;
   /** 从标签里认出的盐型（甘氨酸 / 硫酸 …） */
   saltNameZh: string | null;
   /** 正则解析出来的营养素，用来交叉核对 */
   parsedNutrients: { fieldPath: string; value: number; unit: string }[];
-  /** 允许的字段路径 */
-  allowedFieldPaths: string[];
+  /** 允许的字段路径 + 中文名 + 单位（模型要按这个单位给值） */
+  allowedFields: { fieldPath: string; label: string; unit: string }[];
   allowedTags: string[];
   allowedAddTimings: string[];
 }
@@ -38,6 +38,9 @@ export interface AnalysisResult {
   baseUnit: AnalysisBaseUnit | null;
   unitDisplayLabel: string | null;
   physicalForm: 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID' | null;
+  /** 每瓶多少个基准单位（粒 / 克 / 毫升）——由模型从正面图读 */
+  perBottleUnits: number | null;
+  /** 每份多少个基准单位（标签 Serving Size 换算到基准单位） */
   servingUnitsPerDose: number | null;
   nutrients: { fieldPath: string; value: number; unit: string }[];
   labelCategory: 'FEED_ADDITIVE' | 'FEED_MATERIAL' | null;
@@ -158,7 +161,7 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
     const entry = (item ?? {}) as Record<string, unknown>;
     const fieldPath = String(entry.fieldPath ?? '');
     const value = toNumber(entry.value);
-    if (!ctx.allowedFieldPaths.includes(fieldPath)) {
+    if (!ctx.allowedFields.some((field) => field.fieldPath === fieldPath)) {
       notes.push({ field: 'nutrients', reason: '不是允许的营养素字段，已忽略', value: fieldPath });
       continue;
     }
@@ -203,10 +206,7 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       : null;
 
   // 标签名称：目录有命中时只能从命中里选；没有命中时允许模型给，但标注来源靠人确认
-  const allCatalogNames = [
-    ...ctx.catalogNames.map((item) => item.name),
-    ...ctx.materialNames.map((item) => item.name)
-  ];
+  const allCatalogNames = [...ctx.additiveCatalog, ...ctx.materialCatalog];
   const catalogSet = new Set(allCatalogNames);
   const stripBrackets = (value: string) => value.replace(/[（(][^）)]*[）)]/g, '').trim();
   // 「甘氨酸铁络（螯）合物」这种名字本身就带括号，剥括号后要能回到目录里的**官方写法**
@@ -258,6 +258,10 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
       baseUnit,
       unitDisplayLabel,
       physicalForm,
+      perBottleUnits: (() => {
+        const value = toNumber(source.perBottleUnits);
+        return value !== null && value > 0 ? value : null;
+      })(),
       servingUnitsPerDose: servingUnits && servingUnits > 0 ? servingUnits : null,
       nutrients,
       labelCategory,
@@ -275,20 +279,12 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
  * 给模型的任务说明。要求：只输出 JSON，不确定就写 null，不要解释。
  */
 export function buildAnalysisPrompt(ctx: AnalysisContext): string {
-  const materialLines =
-    ctx.materialNames.length > 0
-      ? ctx.materialNames.map((item) => `- ${item.name}（${item.category}）`).join('\n')
-      : '（原料目录里没有对上条目）';
-
-  const catalogLines =
-    ctx.catalogNames.length > 0
-      ? ctx.catalogNames
-          .map((item) => `- ${item.name}（${item.dogAllowed ? '目录允许用于犬' : '目录未标允许用于犬'}）`)
-          .join('\n')
-      : '（目录里没有查到匹配条目）';
+  const fieldLines = ctx.allowedFields
+    .map((field) => `- ${field.fieldPath}（${field.label}，单位 ${field.unit}）`)
+    .join('\n');
 
   return [
-    '你在帮宠物食品工厂把一张补剂商品图整理成原料档案。下面是从两张图上抄下来的文字。',
+    '你在帮宠物食品工厂把补剂商品图整理成原料档案。下面是从两张图上抄下来的文字。',
     '',
     '【正面图文字】',
     ctx.frontText.slice(0, 3000),
@@ -296,36 +292,58 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     '【标签文字】',
     ctx.labelText.slice(0, 4000),
     '',
-    '【《饲料添加剂品种目录》里可能的规范名】',
-    catalogLines,
+    '【《饲料添加剂品种目录》全部规范名（中文）】',
+    ctx.additiveCatalog.join('、'),
     '',
-    '【《饲料原料目录》里可能的规范名】',
-    materialLines,
+    '【《饲料原料目录》全部规范名（中文）】',
+    ctx.materialCatalog.join('、'),
     '',
-    '按下面的规则判断，只输出 JSON（不要 markdown 代码块、不要解释）：',
-    '1. name：原料名要写**化学形态名**，不是营养素名。有盐/螯合形态时写成「盐名+营养素」，',
-    '   例如 ferrous bisglycinate → 甘氨酸亚铁、copper sulfate → 硫酸铜、zinc gluconate → 葡萄糖酸锌；',
-    '   二价铁写「亚铁」，三价写「铁」；认不出形态时才只写营养素名。',
-    '2. baseUnit：胶囊/片剂 → "PCS"；粉 → "G"；液体 → "ML"。unitDisplayLabel 对应 粒 / g / ml。',
-    '3. priceCny：正面图里出现的人民币价格（数字，不要带 ¥）；看不到就 null，不要估。',
-    '4. purchaseChannel：图上看得出是哪个渠道（如 iHerb 的中文站页面）就写渠道名；看不出来写 null。',
-    '5. labelCategory：填 "FEED_ADDITIVE" 或 "FEED_MATERIAL"（两本目录，别混）。',
-    '   命中《饲料添加剂品种目录》→ FEED_ADDITIVE；命中《饲料原料目录》或属于原料性质（鱼油、酵母、肉粉、骨粉、植物粉等）→ FEED_MATERIAL；',
-    '   两部目录都没对上、也判断不了就 null。宁可空着，不要硬塞成添加剂。',
-    '6. labelNames：**必须来自对应那本目录**的候选（添加剂从添加剂候选里选，原料从原料候选里选，可以多个）；',
-    '   只写原料名本身，不要把括号里的分类抄进来（写「鱼油」，不要写「鱼油（水生动物产品）」）；没有候选就空数组。',
-    `7. tagNames：从这些里选 ${ctx.allowedTags.join('、')}。`,
-    `8. addTiming：从这些里选 ${ctx.allowedAddTimings.join('、')}（制作中 / 开饭前）。`,
-    '9. nutrients：只填标签上明确写了含量的项，fieldPath 必须来自下面这个清单：',
-    `   ${ctx.allowedFieldPaths.join('、')}`,
-    '10. defaultTargetFields：这条补剂**主要补哪几个营养素**（fieldPath 数组），',
-    '    只能从 nutrients 里选；单一补剂就一个，B 族/鱼油可以多个。选不出来就空数组。',
-    '11. 任何一项不确定就写 null，不要编。',
+    '按下面的规则自己判断，只输出 JSON（不要 markdown 代码块、不要解释）：',
+    '',
+    '1. name：写**化学形态名**，不是营养素名。有盐/螯合形态写成「盐名+营养素」：',
+    '   ferrous bisglycinate → 甘氨酸亚铁，copper sulfate → 硫酸铜，zinc gluconate → 葡萄糖酸锌；',
+    '   二价铁写「亚铁」，三价写「铁」；认不出形态才只写营养素名。',
+    '',
+    '2. baseUnit：胶囊/片剂 → "PCS"；粉 → "G"；液体 → "ML"。',
+    '   unitDisplayLabel 与之一致：PCS 写「粒」，G 写「g」，ML 写「ml」。',
+    '',
+    '3. **perBottleUnits**：这一瓶有多少个基准单位。',
+    '   - 胶囊/片剂：一瓶多少粒（正面「180 CAPSULES」→ 180）；',
+    '   - 粉：净重多少克（「8 盎司（227 克）」→ 227；「500 g」→ 500）；',
+    '   - 液体：多少毫升。读不出来写 null，**不要估**。',
+    '',
+    '4. **servingUnitsPerDose**：一次服用几个基准单位。',
+    '   - 「Serving Size 1 Capsule」→ 1；「Serving Size 2 Softgels」→ 2；',
+    '   - 粉：「Serving Size 1/4 Teaspoon (approx. 0.9 g)」→ **0.9**（换成克）；',
+    '   - 液体：「Serving Size 5 ml」→ 5。读不出来写 null。',
+    '',
+    '5. priceCny：正面图里的人民币价格（只要数字）；没有写 null，不要估。',
+    '6. purchaseChannel：图上看得出渠道就写（例如「iHerb」）；看不出写 null。',
+    '',
+    '7. labelCategory / labelNames：**目录是中文的**。',
+    '   先把标签上的英文原料名翻成中文规范名（Taurine → 牛磺酸、Fish Oil → 鱼油、',
+    '   Zinc Methionine → 蛋氨酸锌），再去上面两本目录里找**完全同名**的条目：',
+    '   - 命中添加剂目录 → labelCategory="FEED_ADDITIVE"；',
+    '   - 命中原料目录 → "FEED_MATERIAL"；',
+    '   - 两本都没找到 → labelCategory=null、labelNames=[]，**不要自己造名字**。',
+    '   labelNames 只写目录里的原名，不要带括号分类。',
+    '',
+    `8. tagNames：从这些里选 ${ctx.allowedTags.join('、')}。`,
+    `9. addTiming：从这些里选 ${ctx.allowedAddTimings.join('、')}。`,
+    '',
+    '10. nutrients：按下面的字段和**它自己的单位**给值。',
+    '    标签单位不同要先换算（Taurine 875 mg 而字段单位是 g → 0.875）。',
+    '    只填标签上明确写了含量的项：',
+    fieldLines,
+    '',
+    '11. defaultTargetFields：这条补剂主要补哪几个营养素（fieldPath 数组），只能从 nutrients 里选。',
+    '12. 任何一项不确定就写 null，不要编。',
     '',
     'JSON 结构：',
     '{"name":string|null,"brand":string|null,"productModel":string|null,"priceCny":number|null,',
     ' "purchaseChannel":string|null,"baseUnit":"PCS"|"G"|"ML"|null,"unitDisplayLabel":string|null,',
-    ' "physicalForm":"CAPSULE"|"TABLET"|"POWDER"|"LIQUID"|null,"servingUnitsPerDose":number|null,',
+    ' "physicalForm":"CAPSULE"|"TABLET"|"POWDER"|"LIQUID"|null,',
+    ' "perBottleUnits":number|null,"servingUnitsPerDose":number|null,',
     ' "nutrients":[{"fieldPath":string,"value":number,"unit":string}],',
     ' "labelCategory":"FEED_ADDITIVE"|"FEED_MATERIAL"|null,"labelNames":string[],"tagNames":string[],',
     ' "addTiming":string|null,"defaultTargetFields":string[]}'

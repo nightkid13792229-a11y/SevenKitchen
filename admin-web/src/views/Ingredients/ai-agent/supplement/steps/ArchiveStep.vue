@@ -699,6 +699,10 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
   setIf('unitDisplayLabel', analysis.unitDisplayLabel)
   setIf('physicalForm', analysis.physicalForm)
   setIf('servingUnitsPerDose', analysis.servingUnitsPerDose)
+  // 换算倍数（1 瓶 = 多少基准单位）也用模型读到的数，不再让代码从标题里猜
+  if (analysis.perBottleUnits && !draft.purchaseToBaseRatio) {
+    draft.purchaseToBaseRatio = analysis.perBottleUnits
+  }
   // 规格用人看的写法（180粒/瓶，18mg铁/粒），不用模型抄的页面标题
   if (result.packSpec) {
     draft.productModel = result.packSpec

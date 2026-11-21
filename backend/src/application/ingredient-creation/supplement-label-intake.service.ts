@@ -131,6 +131,7 @@ const EMPTY_ANALYSIS: AnalysisOutcome['result'] = {
   baseUnit: null,
   unitDisplayLabel: null,
   physicalForm: null,
+  perBottleUnits: null,
   servingUnitsPerDose: null,
   nutrients: [],
   labelCategory: null,
@@ -184,10 +185,7 @@ export class SupplementLabelIntakeService {
       ? nutrientChineseLabel(parsed.nutrients[0].fieldPath)
       : null;
 
-    // 目录只用来查规范名：有盐名就「盐名+营养素」，没有就只查营养素；
-    // 只有「精确同名」或「唯一命中」才给建议，其它只给候选，绝不猜近似名。
-    const catalogQuery = buildCatalogQuery(suggestedName ?? '', labelText);
-    const catalogMatches = suggestedName ? this.catalog.lookup(catalogQuery, 8) : [];
+    const catalogMatches = suggestedName ? this.catalog.lookup(suggestedName, 8) : [];
     const catalogSuggestion =
       catalogMatches.find((entry) => entry.exact) ??
       (catalogMatches.length === 1 ? catalogMatches[0] : null);
@@ -197,48 +195,38 @@ export class SupplementLabelIntakeService {
         `serving=${servingUnitsPerDose ?? 'none'}`,
     );
 
-    const materialMatches = [
-      ...this.materialCatalog.findMentioned(`${frontText}\n${labelText}`, 5),
-      ...(suggestedName ? this.materialCatalog.lookup(suggestedName, 5) : []),
-    ].filter((entry, index, list) => list.findIndex((item) => item.name === entry.name) === index);
-
-    // 模型判断：名称要写化学形态、基准单位看剂型、渠道/价格从图上找、
-    // 标签类型（添加剂 vs 原料）按目录性质定。失败就退回人工，不影响识别结果。
-    const allowedFieldPaths = listSupplementTargetFields().map((field) => field.fieldPath);
+    // 两本目录**全量**给模型：翻译、匹配都让它自己做，代码不再维护中文名映射
     const analysis = await this.judge({
       frontText,
       labelText,
-      catalogNames: catalogMatches.map((entry) => ({
-        name: entry.name,
-        dogAllowed: entry.dogAllowed,
-      })),
-      // 原料目录：先在原文里找已有条目（「鱼油」这种），再按营养素名查一轮
-      materialNames: materialMatches.map((entry) => ({
-        name: entry.name,
-        category: entry.category,
+      additiveCatalog: this.catalog.listNames(),
+      materialCatalog: this.materialCatalog.listNames(),
+      allowedFields: listSupplementTargetFields().map((field) => ({
+        fieldPath: field.fieldPath,
+        label: field.label,
+        unit: field.unit,
       })),
       nutrientLabel: suggestedName,
       saltNameZh: detectSaltNameZh(labelText),
       parsedNutrients: parsed.nutrients,
-      allowedFieldPaths,
       // 标签分组与前端 `supplementNutrientGroups` 的标题一一对应
       allowedTags: ['矿物质', '维生素', '脂肪酸', '氨基酸', '基础营养'],
       allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
     });
 
-    // —— 能算的不让模型猜 ——
-    const nutrientForSpec = parsed.nutrients[0]
+    // 规格只做**字符串拼装**，数字全用模型读出来的
+    const nutrientForSpec = analysis?.result.nutrients[0]
       ? {
-          label: nutrientChineseLabel(parsed.nutrients[0].fieldPath),
-          amount: parsed.nutrients[0].value,
-          unit: parsed.nutrients[0].unit,
+          label: nutrientChineseLabel(analysis.result.nutrients[0].fieldPath),
+          amount: analysis.result.nutrients[0].value,
+          unit: analysis.result.nutrients[0].unit,
         }
       : null;
     const unitLabel =
       analysis?.result.unitDisplayLabel ??
       (frontFields.physicalForm === 'POWDER' ? 'g' : frontFields.physicalForm === 'LIQUID' ? 'ml' : '粒');
     const packSpec = buildPackSpec({
-      perBottleUnits: parseCountFromTitle(frontFields.productModel),
+      perBottleUnits: analysis?.result.perBottleUnits ?? null,
       unitLabel,
       nutrients: nutrientForSpec ? [nutrientForSpec] : [],
     });
@@ -249,7 +237,7 @@ export class SupplementLabelIntakeService {
     const labelCategory = inferLabelCategory({
       modelSaid: analysis?.result.labelCategory ?? null,
       additiveMatched: catalogMatches.length > 0,
-      materialMatched: materialMatches.length > 0,
+      materialMatched: analysis?.result.labelCategory === 'FEED_MATERIAL',
     });
 
     const notes: string[] = [];
@@ -297,7 +285,7 @@ export class SupplementLabelIntakeService {
       perBottleUnits: parseCountFromTitle(frontFields.productModel),
       saltNameZh: detectSaltNameZh(labelText),
       catalog: {
-        query: catalogQuery,
+        query: suggestedName ?? '',
         matches: catalogMatches,
         suggestion: catalogSuggestion,
       },

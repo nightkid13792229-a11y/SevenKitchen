@@ -9,12 +9,12 @@ function ctx(overrides: Partial<AnalysisContext> = {}): AnalysisContext {
   return {
     frontText: 'SWANSON\nAlbion Ferrochel Iron\n¥77.02\n180 CAPSULES\niHerb',
     labelText: 'Supplement Facts\nServing Size 1 Capsule\nIron 18 mg 100%',
-    catalogNames: [{ name: '甘氨酸铁络（螯）合物', dogAllowed: false }],
-    materialNames: [],
+    additiveCatalog: ['甘氨酸铁络（螯）合物', '牛磺酸'],
+    materialCatalog: ['鱼油'],
     nutrientLabel: '铁',
     saltNameZh: '甘氨酸',
     parsedNutrients: [{ fieldPath: 'minerals.iron', value: 18, unit: 'mg' }],
-    allowedFieldPaths: ['minerals.iron'],
+    allowedFields: [{ fieldPath: 'minerals.iron', label: '铁', unit: 'mg' }],
     allowedTags: ['矿物质', '维生素'],
     allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
     ...overrides,
@@ -103,12 +103,12 @@ describe('validateAnalysis', () => {
 describe('validateAnalysis · 原料目录', () => {
   it('鱼油可以标成饲料原料，并从原料目录取名', () => {
     const fishCtx = ctx({
-      catalogNames: [],
-      materialNames: [{ name: '鱼油', category: '鱼、其它水生生物及其副产品' }],
+      additiveCatalog: [],
+      materialCatalog: ['鱼油'],
       nutrientLabel: '鱼油',
       saltNameZh: null,
       parsedNutrients: [],
-      allowedFieldPaths: ['fattyAcids.epa'],
+      allowedFields: [{ fieldPath: 'fattyAcids.epa', label: 'EPA', unit: 'mg' }],
       frontText: 'NOW Foods 鱼油 ¥168.00'
     });
     const { result } = validateAnalysis(
@@ -124,12 +124,12 @@ describe('validateAnalysis · 原料目录', () => {
 describe('validateAnalysis · 标签名清洗', () => {
   it('「鱼油（分类）」这种抄法会剥掉括号再对目录', () => {
     const fishCtx = ctx({
-      catalogNames: [],
-      materialNames: [{ name: '鱼油', category: '鱼、其它水生生物及其副产品' }],
+      additiveCatalog: [],
+      materialCatalog: ['鱼油'],
       nutrientLabel: '鱼油',
       saltNameZh: null,
       parsedNutrients: [],
-      allowedFieldPaths: []
+      allowedFields: []
     });
     const { result, dropped } = validateAnalysis(
       { name: '鱼油', labelCategory: 'FEED_MATERIAL', labelNames: ['鱼油（鱼、其它水生生物及其副产品）'] },

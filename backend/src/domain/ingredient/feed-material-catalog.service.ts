@@ -74,6 +74,11 @@ export class FeedMaterialCatalogService {
     return hits.sort((a, b) => b.name.length - a.name.length).slice(0, Math.max(1, limit));
   }
 
+  /** 全部规范名（给模型自己翻译、自己匹配用） */
+  listNames(): string[] {
+    return DATA.entries.map((entry) => entry.name);
+  }
+
   get(name: string): MaterialEntry | null {
     return DATA.entries.find((entry) => entry.name === name) ?? null;
   }

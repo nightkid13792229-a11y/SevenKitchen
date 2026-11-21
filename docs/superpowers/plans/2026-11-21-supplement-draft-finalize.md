@@ -767,7 +767,7 @@ bash scripts/session.sh commit -m "refactor(supplement): 建档事务复用与�
 - [ ] **Step 1: Write failing pure tests**
 
 - `buildFinalizeInput` maps every payload field to the create input, including `properties` (`add_timing`, `production_loss_rate`, `label_category`, `label_names`, `label_name_source`, `tags`, `no_sale_reason`, `purchase_link`, `image_url`), and sends no `perUnitNutrients`.
-- `buildDirectVerification` covers every row in spec §9.1; test at least shelf life, retail, DIY link, serving size, and a match for the rest.
+- `buildDirectVerification` covers every row in spec §9.1; test at least shelf life, opened shelf life, retail, DIY link, serving size, and a match for the rest. Add a divergence test where `ingredient.nutritionProfile` matches but `nutrition_food.nutritionData` differs → must fail.
 - `finalize`:
   - blockers → 400, no transaction.
   - warnings not acknowledged → 400.
@@ -795,15 +795,16 @@ Expected: FAIL — modules missing.
   - AI warnings are informational only: finalize checks only `SupplementDraftIssue` warnings from the validation service (fixed codes/ackKeys), never AI-invented warning codes.
   - If blockers or unacknowledged warnings → `BadRequestException({ message, blockers, warnings })`.
     - Build the acknowledged set from `payload.review.acknowledgedWarnings` as `${code}:${paramsHash}` (or `code` when `paramsHash` is empty) and compare with each warning's `ackKey`; any missing → 400.
-  - Duplicate preflight.
+  - Duplicate preflight **before** the blocker gate: if a same name/brand/model supplement exists, return 409 with `{ ingredientId, name }` (do not let the `DUPLICATE_INGREDIENT` validation blocker turn it into 400); the validation blocker remains for the review UI.
   - `$transaction`:
     - `createInTransaction(tx, input)`.
     - `tx.ingredient.update` for launch fields/properties if not already set by the create input.
     - Group assignment: if `equivalence.groupId` is not `__SKIP__`, call `equivalence.assignInTransaction(tx, [ingredientId], groupId, user, { reapprove: payload.equivalence.reapproveGroup !== false })`. Do not call `assign()` (it opens its own transaction).
     - `draftService.markFinalized(tx, ...)`.
     - `ingredientCreationAudit.create` with `proposals=aiSnapshot`, `changes=manualFields+values`.
-    - Read back ingredient/nutrition/mapping/evidence/tags/group; `buildDirectVerification`; throw on mismatch.
+    - Read back ingredient/nutrition/mapping/evidence/tags/group; `buildDirectVerification`; throw on mismatch. **Actual nutrient values come from `nutrition_food.nutrition_data`** (the recipe designer's source of truth), not only `ingredient.nutrition_profile`; verify both sinks.
   - Catch Prisma `P2002` from the transaction and convert to `ConflictException` with the existing record message.
+  - After commit, `saveVerification` must be wrapped in try/catch + log: a verification-persistence failure must not make a successful write look like a failed write; return the report and let `reverify` heal it.
   - Return ids + direct verification; feature verification is added in Task 11 (call a placeholder `features: []` until then, then wire it).
 
 - [ ] **Step 3b: Add transaction-safe equivalence assignment**

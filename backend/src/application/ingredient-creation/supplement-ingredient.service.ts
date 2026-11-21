@@ -71,7 +71,8 @@ export interface CreateSupplementIngredientInput {
 export interface CreateSupplementIngredientResult {
   ingredientId: string;
   nutritionFoodId: string;
-  nutritionFoodStatus: 'PENDING';
+  /** 建档即确认可用，写入后就是 VERIFIED */
+  nutritionFoodStatus: 'VERIFIED' | 'PENDING';
   evidenceId: string;
 }
 
@@ -216,9 +217,12 @@ export class SupplementIngredientService {
             nutritionData: profile as unknown as Prisma.InputJsonValue,
             defaultSupplementTargets:
               defaultSupplementTargets as unknown as Prisma.InputJsonValue,
-            notes: '补剂标签折算，待人工确认',
+            notes: '补剂标签折算；建档时已逐项核对，随建档确认可用',
             createdBy: input.createdBy,
-            status: 'PENDING'
+            // 建档这一步就是人工核对：填完并写入即视为确认可用，不再多一道"确认可用"
+            status: 'VERIFIED',
+            verifiedBy: input.createdBy,
+            verifiedAt: new Date()
           }
         });
 
@@ -259,7 +263,8 @@ export class SupplementIngredientService {
         return {
           ingredientId: ingredient.id,
           nutritionFoodId: nutritionFood.id,
-          nutritionFoodStatus: 'PENDING' as const,
+          // 建档即确认：营养档案随写入一起变成「已验证」
+          nutritionFoodStatus: 'VERIFIED' as const,
           evidenceId: evidence.id
         };
       });

@@ -388,7 +388,7 @@
     </footer>
 
     <div v-if="saved" class="archive-step__saved">
-      <span>{{ confirmed ? '已确认可用，配方里现在能选到这条补剂' : '已写入，营养档案是「待验证」，配方里还选不到' }}</span>
+      <span>{{ confirmed ? '已写入并确认可用，配方里现在能选到这条补剂' : '已写入，但营养档案仍是「待验证」' }}</span>
       <el-button v-if="!confirmed" type="primary" size="small" :loading="confirming" @click="confirm">
         确认可用
       </el-button>
@@ -885,8 +885,10 @@ async function submit(): Promise<void> {
   try {
     const result = await ingredientCreationApi.createSupplement(payload)
     saved.value = result
+    // 建档即确认：后端写入时已把营养档案置为「已验证」，不再单独点一次
+    confirmed.value = result.nutritionFoodStatus !== 'PENDING'
     emit('saved', { ...result, name: draft.name.trim() })
-    ElMessage.success('已写入，等确认可用')
+    ElMessage.success('已写入，配方里现在能选到这条补剂')
   } catch (error) {
     errorText.value = apiErrorMessage(error, '写入失败，请稍后重试')
   } finally {

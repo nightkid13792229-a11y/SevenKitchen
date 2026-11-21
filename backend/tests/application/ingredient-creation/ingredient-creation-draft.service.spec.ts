@@ -1,4 +1,8 @@
-import { NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
 import type {
@@ -473,5 +477,67 @@ describe('IngredientCreationDraftService', () => {
       expect(sql).toContain('LIMIT');
       expect(params).toEqual(['u1', 20]);
     });
+  });
+});
+
+
+describe('IngredientCreationDraftService · remove（放弃草稿）', () => {
+  function makeService(row: Record<string, unknown>) {
+    const prisma: any = {
+      ingredientCreationDraft: {
+        findUnique: jest.fn(async () => row),
+        delete: jest.fn(async () => row),
+      },
+      ingredientCheckRun: {
+        deleteMany: jest.fn(async () => ({ count: 1 })),
+      },
+      $transaction: jest.fn(async (fn: (tx: any) => Promise<unknown>) =>
+        fn(prisma),
+      ),
+    };
+    return { service: new IngredientCreationDraftService(prisma), prisma };
+  }
+
+  const row = {
+    id: 'draft-1',
+    name: '鸡肝',
+    type: 'FOOD',
+    step: 'PROFILE',
+    payload: {},
+    createdBy: 'admin-1',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  it('删除自己的未提交草稿，并清掉它的核验报告', async () => {
+    const { service, prisma } = makeService(row);
+
+    await service.remove('draft-1', 'admin-1');
+
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+    expect(prisma.ingredientCheckRun.deleteMany).toHaveBeenCalledWith({
+      where: { draftId: 'draft-1' },
+    });
+    expect(prisma.ingredientCreationDraft.delete).toHaveBeenCalledWith({
+      where: { id: 'draft-1' },
+    });
+  });
+
+  it('别人的草稿不能删', async () => {
+    const { service, prisma } = makeService(row);
+
+    await expect(service.remove('draft-1', 'other')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('已提交草稿不能删（追溯依据）', async () => {
+    const { service, prisma } = makeService({ ...row, step: 'COMMIT' });
+
+    await expect(service.remove('draft-1', 'admin-1')).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(prisma.$transaction).not.toHaveBeenCalled();
   });
 });

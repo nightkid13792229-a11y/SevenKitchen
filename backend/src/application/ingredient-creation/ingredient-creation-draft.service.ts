@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type {
   IngredientCreationDraft as PrismaIngredientCreationDraft,
   IngredientType,
@@ -115,6 +120,27 @@ export class IngredientCreationDraftService {
     }
 
     return this.toView(draft);
+  }
+
+  /**
+   * 放弃一份未完成草稿（2026-11-21）。
+   *
+   * 只能删自己的、未提交的草稿；核验报告一起删，避免留下无主行。
+   * 已提交草稿是正式数据的追溯依据，不允许删。
+   */
+  async remove(id: string, userId: string): Promise<void> {
+    const draft = await this.get(id);
+    if (draft.createdBy !== userId) {
+      throw new ForbiddenException('只能删除自己创建的草稿');
+    }
+    if (draft.step === 'COMMIT') {
+      throw new ConflictException('已提交的草稿不能删除');
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ingredientCheckRun.deleteMany({ where: { draftId: id } });
+      await tx.ingredientCreationDraft.delete({ where: { id } });
+    });
   }
 
   /**

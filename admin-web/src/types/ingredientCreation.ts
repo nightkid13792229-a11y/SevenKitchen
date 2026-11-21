@@ -371,6 +371,8 @@ export interface IngredientCreationDraftPayload {
    * 下一次带同一 draftId 的 run 会消费它并置 null。
    */
   pendingQuestion?: PendingQuestion | null
+  /** 检索方案；PENDING 时页面要恢复方案卡（2026-11-21）。 */
+  searchPlan?: SearchPlan | null
 }
 
 /** 草稿记录。 */
@@ -383,6 +385,15 @@ export interface IngredientCreationDraft {
   createdBy: string
   createdAt: string
   updatedAt: string
+}
+
+/** 「我的未完成草稿」列表项（后端只回摘要，不含整份 payload）。 */
+export interface IngredientCreationDraftSummary {
+  draftId: string
+  name: string
+  step: CreationStep
+  updatedAt: string
+  intake: { nameEn: string } | null
 }
 
 /** `POST drafts/:id/commit` 的入参。 */

@@ -30,6 +30,35 @@
       </div>
     </header>
 
+    <el-card
+      v-if="!state.draftId && draftOptions.length > 0 && !draftLoading"
+      class="draft-resume-card"
+      shadow="never"
+    >
+      <div class="draft-resume">
+        <div class="draft-resume__text">
+          <b>有 {{ draftOptions.length }} 份未完成草稿</b>
+          <p>选一份继续，或放弃不再需要的；未写入的内容只在草稿里。</p>
+        </div>
+        <el-select
+          v-model="selectedResumeId"
+          class="draft-resume__select"
+          :loading="draftOptionsLoading"
+        >
+          <el-option
+            v-for="item in draftOptions"
+            :key="item.draftId"
+            :value="item.draftId"
+            :label="`${item.name} · ${formatDraftUpdatedAt(item.updatedAt)}`"
+          />
+        </el-select>
+        <el-button type="primary" :loading="draftLoading" @click="resumeDraft">
+          继续
+        </el-button>
+        <el-button @click="discardSelectedDraft">放弃</el-button>
+      </div>
+    </el-card>
+
     <div v-if="!line" class="line-gate">
       <el-card shadow="never">
         <h3 class="line-gate__title">这次添加的是哪一类原料</h3>
@@ -520,7 +549,7 @@
           <el-input
             ref="composerRef"
             v-model="inputText"
-            :disabled="state.running || saving || Boolean(commitResult)"
+            :disabled="state.running || saving || Boolean(commitResult) || draftCommitted"
             maxlength="500"
             placeholder="例如：帮我加鸡肝，按生档案补粗蛋白 19.5 g"
             @keyup.enter="handleRun"
@@ -554,18 +583,24 @@
           <div class="review-stats">
             <el-tag
               size="small"
-              :type="commitResult || gate.ready ? 'success' : 'info'"
+              :type="commitResult || draftCommitted || gate.ready ? 'success' : 'info'"
               effect="plain"
               :title="
                 commitResult
                   ? '已经写入正式库'
-                  : gate.ready
+                  : draftCommitted
+                    ? '已经写入并确认可用'
+                    : gate.ready
                     ? '两页核验都已通过，可以授权'
                     : gate.reasons[0]
               "
             >
               授权：{{
-                commitResult ? '已写入' : gate.ready ? '可写入' : '还差条件'
+                commitResult || draftCommitted
+                  ? '已写入'
+                  : gate.ready
+                    ? '可写入'
+                    : '还差条件'
               }}
             </el-tag>
           </div>
@@ -1049,6 +1084,18 @@
                 授权时间 {{ formatCheckedAt(commitResult.authorizedAt) }}
               </p>
             </el-alert>
+
+            <el-alert
+              v-if="draftCommitted && !commitResult"
+              type="success"
+              :closable="false"
+              show-icon
+              title="这份草稿已写入并确认可用，不能重复提交"
+            >
+              <p class="review-commit-result">
+                请到原料库查看这条原料；需要补数据时另开一份草稿。
+              </p>
+            </el-alert>
           </div>
 
           <footer class="review-footer">
@@ -1340,6 +1387,7 @@ import type {
   ExceptionRecord,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientCreationDraftSummary,
   IngredientDraftChecksView,
   ProfileDraft,
   SearchPlan
@@ -1371,6 +1419,12 @@ import {
   isReviewLocked,
   shouldBlockRunForPendingPlan
 } from './reviewLock'
+import {
+  formatDraftUpdatedAt,
+  pickLatestDraft,
+  readDraftIdFromQuery,
+  readPendingPlan
+} from './draftResume'
 import CheckReportDialog from './components/CheckReportDialog.vue'
 import {
   buildIngredientCardCells,
@@ -1644,6 +1698,11 @@ onUnmounted(stopClock)
 const draft = ref<IngredientCreationDraft | null>(null)
 const draftLoading = ref(false)
 const draftError = ref('')
+/** 我的未完成草稿：进页面时给一个「继续/放弃」入口。 */
+const draftOptions = ref<IngredientCreationDraftSummary[]>([])
+const selectedResumeId = ref('')
+const draftOptionsLoading = ref(false)
+const draftCommitted = computed(() => draft.value?.step === 'COMMIT')
 const activeTab = ref<'ingredient' | 'profiles'>('ingredient')
 /** 营养档案筛子：全局一个模式，切换生 / 熟档案时计数跟着当前组走。 */
 const profileFilterMode = ref<ProfileFilterMode>('ALL')
@@ -1990,6 +2049,7 @@ const canRun = computed(
     !state.running &&
     !saving.value &&
     !commitResult.value &&
+    !draftCommitted.value &&
     inputText.value.trim().length > 0
 )
 
@@ -2186,6 +2246,9 @@ const authorizeHint = computed(() => {
   if (commitResult.value) {
     return '已写入并确认可用，配方里现在能选到这些档案。'
   }
+  if (draftCommitted.value) {
+    return '这份草稿已写入并确认可用，不能重复提交；请到原料库查看。'
+  }
   // 旧页面先拦：这条不解决，点下去只会拿到一句跟页面无关的后端拒绝理由。
   if (staleBundle.value) {
     return '这个页面是旧版本，先刷新（⌘R / Ctrl+R）再写入。'
@@ -2296,6 +2359,12 @@ function handleBeforeUnload(event: BeforeUnloadEvent) {
 onMounted(() => {
   void scrollToBottom()
   void loadIngredientTags()
+  const queryDraftId = readDraftIdFromQuery(route.query.draftId)
+  if (queryDraftId) {
+    void loadDraft(queryDraftId)
+  } else {
+    void loadDraftOptions()
+  }
   window.addEventListener('beforeunload', handleBeforeUnload)
 
   // 记下本页加载的入口脚本，并在回到标签页时看一眼是不是已经被新版顶掉。
@@ -2442,18 +2511,83 @@ async function loadDraft(draftId: string) {
   draftTouched.value = false
   try {
     const updated = await ingredientCreationApi.getDraft(draftId)
+    if (updated.type !== 'FOOD') {
+      draftError.value = '这份草稿不是食材线，不能在本页继续'
+      return
+    }
     applyDraft(updated, { resetForm: true })
     // 非流式路径：刷新 / 直接读草稿时，payload.pendingQuestion 也要恢复成
     // 「等你回答」，否则页面会像什么都没问过一样。
     state.draftId = updated.id
+    // 草稿一旦存在，线路就定了：页面直接进食材线。
+    Object.assign(
+      entryState,
+      applyLineAction(entryState, { type: 'LOCK', line: 'FOOD' })
+    )
     state.pendingQuestion = readPendingQuestion(
       updated.payload.pendingQuestion
     )
+    state.pendingPlan = readPendingPlan(updated.payload)
+    if (readDraftIdFromQuery(route.query.draftId) !== updated.id) {
+      void router.replace({ query: { ...route.query, draftId: updated.id } })
+    }
     await refreshChecks(draftId)
   } catch (error) {
     draftError.value = getApiErrorMessage(error, '草稿加载失败，请稍后重试')
   } finally {
     draftLoading.value = false
+  }
+}
+
+/** 读「我的未完成草稿」；默认选最近编辑的一条。 */
+async function loadDraftOptions() {
+  draftOptionsLoading.value = true
+  try {
+    draftOptions.value = await ingredientCreationApi.listDrafts()
+    const latest = pickLatestDraft(draftOptions.value)
+    selectedResumeId.value =
+      latest?.draftId ?? draftOptions.value[0]?.draftId ?? ''
+  } catch {
+    draftOptions.value = []
+    selectedResumeId.value = ''
+  } finally {
+    draftOptionsLoading.value = false
+  }
+}
+
+/** 继续上次没写完的草稿。 */
+async function resumeDraft() {
+  const draftId = selectedResumeId.value
+  if (!draftId) return
+  await loadDraft(draftId)
+}
+
+/** 放弃选中的草稿：确认后由服务端删除，界面同步移除。 */
+async function discardSelectedDraft() {
+  const draftId = selectedResumeId.value
+  if (!draftId) return
+  const target = draftOptions.value.find((item) => item.draftId === draftId)
+  try {
+    await ElMessageBox.confirm(
+      `放弃草稿「${target?.name ?? draftId}」吗？未写入的内容会一起删除，不能恢复。`,
+      '放弃草稿',
+      { type: 'warning', confirmButtonText: '放弃', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    await ingredientCreationApi.discardDraft(draftId)
+    draftOptions.value = draftOptions.value.filter(
+      (item) => item.draftId !== draftId
+    )
+    const latest = pickLatestDraft(draftOptions.value)
+    selectedResumeId.value =
+      latest?.draftId ?? draftOptions.value[0]?.draftId ?? ''
+    ElMessage.success('已放弃这份草稿')
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error, '放弃失败，请稍后重试'))
   }
 }
 
@@ -3547,6 +3681,36 @@ function goBackToList() {
 </script>
 
 <style scoped>
+.draft-resume-card {
+  margin-bottom: 16px;
+}
+
+.draft-resume {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.draft-resume__text {
+  flex: 1 1 240px;
+  min-width: 220px;
+}
+
+.draft-resume__text p {
+  margin: 4px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.draft-resume__select {
+  width: min(280px, 100%);
+}
+
+.review-ack {
+  margin-right: 12px;
+}
+
 .ai-agent-page {
   max-width: 1440px;
   margin: 0 auto;

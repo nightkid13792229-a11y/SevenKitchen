@@ -402,6 +402,16 @@ export class IngredientCreationController {
     return new ApiResponseDto(0, 'Success', draft);
   }
 
+  @Delete('drafts/:id')
+  @ApiOperation({ summary: '放弃自己的未完成草稿（已提交草稿不能删）' })
+  async discardDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<null>> {
+    await this.draftService.remove(id, user.userId);
+    return new ApiResponseDto(0, 'Success', null);
+  }
+
   @Patch('drafts/:id')
   @ApiOperation({ summary: '推进站点并浅合并本站 payload' })
   async updateDraft(

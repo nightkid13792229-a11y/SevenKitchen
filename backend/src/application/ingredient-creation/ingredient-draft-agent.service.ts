@@ -351,7 +351,13 @@ export type IngredientAgentStreamEvent =
       report?: AgentRunReport;
     }
   | { type: 'done'; report?: AgentRunReport }
-  | { type: 'error'; message: string; report?: AgentRunReport };
+  | {
+      type: 'error';
+      message: string;
+      report?: AgentRunReport;
+      /** 失败前已经建出的草稿；页面据此恢复现场（2026-11-21）。 */
+      draftId?: string;
+    };
 
 export interface RunIngredientAgentInput {
   draftId?: string;
@@ -422,6 +428,7 @@ class AgentRunFailedError extends Error {
   constructor(
     readonly causeError: unknown,
     readonly report: AgentRunReport,
+    readonly draftId?: string,
   ) {
     super(
       causeError instanceof Error ? causeError.message : String(causeError),
@@ -1744,6 +1751,7 @@ export class IngredientDraftAgentService {
         type: 'error',
         message: readStreamErrorMessage(cause),
         ...(failure ? { report: failure.report } : {}),
+        ...(failure?.draftId ? { draftId: failure.draftId } : {}),
       });
       throw cause;
     }
@@ -2405,7 +2413,7 @@ export class IngredientDraftAgentService {
           `steps=${steps} toolCalls=${toolCallCount} durationMs=${report.durationMs}: ` +
           (error instanceof Error ? error.message : String(error)),
       );
-      throw new AgentRunFailedError(error, report);
+      throw new AgentRunFailedError(error, report, draft.id);
     }
   }
 

@@ -900,12 +900,15 @@ export function reduceAgentEvents(
         report: readAgentRunReport(event.report) ?? state.report
       }
 
-    case 'error':
+    case 'error': {
+      const draftId = readText(event.draftId)
       return {
         ...state,
         error: readText(event.message) || '运行失败，请稍后重试。',
+        ...(draftId ? { draftId } : {}),
         report: readAgentRunReport(event.report) ?? state.report
       }
+    }
 
     default:
       return state

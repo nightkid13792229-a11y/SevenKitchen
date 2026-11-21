@@ -24,6 +24,7 @@ import type {
   IngredientAgentRunResult,
   IngredientCreationDraft,
   IngredientCreationDraftPayload,
+  IngredientCreationDraftSummary,
   IngredientDraftChecksView,
   RunIngredientAgentInput,
   ConfirmSearchPlanInput,
@@ -100,6 +101,14 @@ export const ingredientCreationApi = {
   /** 读取草稿（刷新后按 draftId 恢复现场） */
   getDraft: (id: string): Promise<IngredientCreationDraft> =>
     api.get(`${BASE}/drafts/${id}`),
+
+  /** 我的未完成草稿（按最近编辑倒序，最多 20 条）。 */
+  listDrafts: (): Promise<IngredientCreationDraftSummary[]> =>
+    api.get(`${BASE}/drafts`),
+
+  /** 放弃自己的未完成草稿；已提交草稿后端会拒绝。 */
+  discardDraft: (id: string): Promise<null> =>
+    api.delete(`${BASE}/drafts/${id}`),
 
   /** 保存草稿 payload（浅合并；不传 proposalHistory） */
   patchDraft: (

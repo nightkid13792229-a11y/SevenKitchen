@@ -76,9 +76,9 @@
 1. 新建后进入草稿编辑页。
 2. 传正面图、标签图（可先传一张，先传哪张都行），贴商品链接/选品依据（可空）。
 3. 点“让 AI 起草”（或首次满足条件后自动触发一次）。
-   - **AI 完整起草需要：标签图 + （正面图 或 商品链接）**。标签图负责营养，正面图/链接负责名称、规格、剂型、价格。
-   - 只有一张图时可以先存草稿、手填；AI 按钮提示补另一张图或商品链接，不强行跑。
-   - 不修改共享的 `read-label-images` 两张图契约；新编排层在调用前自己判断“够不够起草”。
+   - **AI 完整起草需要：正面图 + 标签图**。标签图负责营养，正面图负责名称、规格、剂型；商品链接可选，用来补价格/品牌/DIY 链接。
+   - 只有一张图时可以先存草稿、手填；AI 按钮提示补另一张图，不强行跑。
+   - 不修改共享的 `read-label-images` 两张图契约；新编排层直接复用。
    - 起草中按钮转圈，草稿自动保存；关掉页面不会丢已保存内容。
 4. AI 填完后，页面按区块展示：已填、没找到、AI 的判断和理由。
 5. 人从任意区块开始核对/修改；所有修改自动存草稿。
@@ -87,7 +87,7 @@
 ### 4.3 草稿编辑页的区块
 
 1. **商品与基本信息**
-   - 原料名称、品牌、产品规格、采购渠道、商品链接
+   - 原料名称、品牌、产品规格、采购渠道
    - 基准单位、展示单位、物理形态
    - 每份多少、采购单位、1 个采购单位 = 多少基准单位
    - 当前采购价、生产损耗率
@@ -224,7 +224,6 @@ interface SupplementDraftPayload {
     brand: string
     productModel: string
     purchaseChannel: string
-    productUrl: string
     baseUnit: 'PCS' | 'G' | 'ML'
     unitDisplayLabel: string
     physicalForm: 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID' | null
@@ -249,6 +248,8 @@ interface SupplementDraftPayload {
   retail: {
     enabled: boolean
     shelfLifeMonths: number | null
+    /** 开盖后保质期（天）；标签写了才填 */
+    openedShelfLifeDays: number | null
     storageCondition: string
     isOilBased: boolean
     noSaleReason: string | null
@@ -299,8 +300,8 @@ interface SupplementDraftPayload {
 
 ### 6.1 输入
 
-- 正面图、标签图（URL）
-- 商品链接（可选）
+- 正面图、标签图（URL，两者都要）
+- 商品链接（可选；用于补价格/品牌/DIY 链接/主图）
 - 选品依据（可选，人从 DSH 选品 Skill 粘过来）
 - 当前草稿（重跑时）
 - 允许值：营养字段目录、单位、物理形态、添加时机、标签词表、不上架原因、平台
@@ -319,6 +320,8 @@ interface SupplementAiDraft {
     reason: string
   }>
   decisions: {
+    /** AI 是否建议建档；false 只展示理由，不自动丢弃草稿 */
+    recommendCreate: { value: boolean; reason: string }
     retail: { enabled: boolean; reason: string }
     noSaleReason: string | null
     diy: { enabled: boolean; linkUrl: string; imageUrl: string; reason: string }
@@ -397,7 +400,7 @@ interface SupplementAiDraft {
 | 采购 | 生产损耗率 1–2 | 阻断 | |
 | 标签 | 标签分类必选 | 阻断 | 合规字段 |
 | 标签 | 标签名称至少 1 个 | 阻断 | |
-| 标签 | 标签名称在目录内 | 阻断/提醒 | 完全一致/规范化后一致 → 通过；目录有明确候选但不在其中 → 阻断，必须选候选；目录完全没有候选 → 提醒 + 人确认；**不判断适用性** |
+| 标签 | 标签名称在目录内 | 提醒 | 完全一致/规范化后一致 → 通过；找不到 → 列候选，人确认后可用；**不判断适用性** |
 | 标签 | 目录候选 | 提醒 | 只把“完全相同/规范化后相同”算候选；子串匹配只作建议，不能因为“有几百条子串”就判阻断 |
 | 标签 | 添加时机必须是允许值 | 阻断 | |
 | 上架 | 上架=开 时，保质期必填 | 阻断 | |
@@ -418,7 +421,7 @@ interface SupplementAiDraft {
 | 等价组 | 等价组总开关关闭 | 提醒 | 功能不生效 |
 | 配方 | 营养档案写入后必须 VERIFIED + 主映射 | 阻断 | 写入时保证 |
 | 配方 | 默认目标写入后必须非空 | 阻断 | 写入时保证 |
-| 证据 | 正面图/标签图 | 提醒 | 建议留档；没有也能手填，但事后无法回查 |
+| 证据 | 正面图/标签图 | 提醒 | 建议留档；没有也能手填，但事后无法回查。AI 完整起草要求两张都在 |
 | 重复 | 同名+同品牌+同规格已存在 | 阻断 | 提示已有记录；改名/改规格或去已有记录 |
 | 包材 | 没有匹配的袋型规则 | 提醒 | 写入后分装汇总会标红；给包材页入口 |
 
@@ -474,7 +477,8 @@ interface SupplementAiDraft {
      - 现有 `buildProfile` 统一写 `PER_SERVING`；粉/液体在补剂浓度解析里会因为没有 `servingWeightG` 被判定 `MISSING_SERVING_WEIGHT`，等价组/用量都可能用不了。这次一并修正。
    - `properties`：
      - `category_type: 'OTHER'`
-     - 上架=开时 `no_sale_reason` 必须为 null；上架=关时必须有值（写入前校验）
+     - `openedShelfLifeDays` 有值就写（可选）
+   - 上架=开时 `no_sale_reason` 必须为 null；上架=关时必须有值（写入前校验）
      - DIY 关闭时保留 `purchase_link`/`image_url`（方便以后打开），只把 `diy_enabled` 写 false
      - `display_unit` / `serving_unit_label`：展示单位
      - `serving_units_per_dose`

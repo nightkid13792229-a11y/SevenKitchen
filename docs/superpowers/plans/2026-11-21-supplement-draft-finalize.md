@@ -438,7 +438,7 @@ bash scripts/session.sh commit -m "feat(supplement): 营养档案基准与基础
   - `SupplementDraftView` (fields from spec §5.1 + `completeness`).
   - `SupplementDraftSummary { id; name; updatedAt; completeness }`.
   - `UpdateSupplementDraftInput { name?; payload?; manualFields?; expectedUpdatedAt?; aiSnapshot? }`.
-  - `SupplementDraftService.create/list/get/update/discard/markFinalized/saveVerification`.
+  - `SupplementDraftService.create(createdBy, { name? })`, `list(createdBy)`, `get(id, createdBy)`, `update(id, createdBy, input)`, `discard(id, createdBy)`, `markFinalized(tx, id, result)`, `saveVerification(id, createdBy, verification)`.
 
 - [ ] **Step 1: Write failing service tests**
 
@@ -528,7 +528,7 @@ Expected: FAIL — function/service missing.
   - Query `supplementShopConfig`.
   - Catalog exact via `feedAdditive.get(name)`/`feedMaterial.get(name)`; candidates via `lookup(name, 5)`.
   - Issue list via `evaluateSupplementIssues`.
-- `validate` loads the draft via `SupplementDraftService`, calls basics + features, merges.
+- `validate` loads the draft via `draftService.get(draftId, userId)`, calls basics + features, merges.
 - `recommendGroups` builds a synthetic ingredient from the draft and lists groups (same query as `SupplementEquivalenceRecommendService`), resolves each candidate with `dosage.resolveConcentration`, then uses `sortRecommendations` + `describeRecommendation`; returns candidates even when the ingredient doesn't exist yet.
 - Set `ackKey` on warnings that depend on params: group warnings (`:${groupId}`), DIY `:${platform}`, retail `:${noSaleReason}`; other warnings can use `code` alone.
 
@@ -625,7 +625,7 @@ bash scripts/session.sh commit -m "feat(supplement): AI 起草结果解析与提
 - Calls `intake.read` with both URLs; calls link preview only when a URL is present.
 - Builds a provisional payload from facts; calls `review.buildContext`; calls `vision.analyze`; parses.
 - Merges AI fields but skips paths in `manualFields` (assert `name` unchanged).
-- Writes `aiSnapshot` and `manualFields` through `draftService.update`; `recommendCreate=false` is stored in the snapshot but does not change draft status or discard it.
+- Writes `aiSnapshot` and `manualFields` through `draftService.update(draftId, userId, ...)`; `recommendCreate=false` is stored in the snapshot but does not change draft status or discard it.
 - If `vision.analyze` returns null, still saves facts and `aiSnapshot.status='PARTIAL'`.
 - Does not write any ingredient/nutrition/evidence.
 
@@ -649,7 +649,7 @@ Expected: FAIL — service missing.
 - Merge precedence: `manualFields` (never overwrite) > parser/link deterministic facts (nutrients, serving, price, brand, model, image) > `intake.analysis` first-pass facts > decision-call result > missing.
   - AI fills decisions and fields without facts.
   - Skip any path in `manualFields`.
-- Save via `draftService.update` with `aiSnapshot: { status, fields, decisions, missing, warnings, reasons }`; set draft name to `basic.name` if non-empty.
+- Save via `draftService.update(draftId, userId, { aiSnapshot: { status, fields, decisions, missing, warnings, reasons } })`; set draft name to `basic.name` if non-empty.
 - In-memory `Set<string>` guard: if `draftId` is already running, throw 409.
 
 - [ ] **Step 4: Run tests**
@@ -854,7 +854,7 @@ Expected: FAIL — service missing.
 - Use `PrismaService`, `SupplementDosageService`, `SupplementCatalogService` (or `supplementShopApi` equivalent query), `SupplementEquivalenceGroup` query.
 - `verifyFeatures` queries by ingredient id; builds `VerificationFeature[]` with `ok`, `detail`, `action` (path strings for the UI).
 - `getVerification` loads a FINALIZED draft owned by the user and returns its stored `verification` (or null).
-- `reverify` loads a FINALIZED draft owned by the user, re-runs features, calls `draftService.saveVerification`, returns it.
+- `reverify` loads a FINALIZED draft owned by the user, re-runs features, calls `draftService.saveVerification(draftId, userId, verification)`, returns it.
 - Update `finalize` to call `verifyFeatures` after commit; `verification.ok` is false only when a `severity='ERROR'` feature fails (or a direct field mismatches). A packaging `WARN` is shown but does not fail the report; the write is already committed, so do not throw.
 
 - [ ] **Step 4: Run tests**

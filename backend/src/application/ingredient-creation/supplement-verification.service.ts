@@ -46,10 +46,10 @@ const PACKAGING_ACTION: VerificationFeatureAction = {
  * 缺少写入时直接字段报告时的补位项。
  *
  * 报告形状的 code 联合在 Task 10 只列了七个功能码；这一条不是「功能」，
- * 而是「没有直接字段证据」的硬失败，按扩展 code 输出，页面据 code 展示。
+ * 而是「没有直接字段证据」的硬失败，页面据 code 展示。
  */
-const DIRECT_FIELDS_MISSING_CODE =
-  'DIRECT_FIELDS_MISSING' as unknown as VerificationFeatureCode;
+const DIRECT_FIELDS_MISSING_CODE: VerificationFeatureCode =
+  'DIRECT_FIELDS_MISSING';
 
 /** 功能核验只需要这三个正式记录 id。 */
 export interface SupplementFeatureVerificationIds {

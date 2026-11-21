@@ -43,7 +43,12 @@ export interface VerificationField {
   ok: boolean;
 }
 
-/** 功能核验项（Task 11 填充；Task 10 只产出直接字段）。 */
+/**
+ * 功能核验项 code。
+ *
+ * `DIRECT_FIELDS_MISSING` 不是某种功能，而是「缺少写入时直接字段报告」的补位项，
+ * 只在 reverify 发现草稿已写入但报告缺失时出现（此时不能判「全部成功」）。
+ */
 export type VerificationFeatureCode =
   | 'RETAIL'
   | 'RECIPE'
@@ -51,7 +56,8 @@ export type VerificationFeatureCode =
   | 'PROCUREMENT'
   | 'EQUIVALENCE'
   | 'PACKAGING'
-  | 'DUPLICATE';
+  | 'DUPLICATE'
+  | 'DIRECT_FIELDS_MISSING';
 
 export type VerificationFeatureSeverity = 'INFO' | 'WARN' | 'ERROR';
 

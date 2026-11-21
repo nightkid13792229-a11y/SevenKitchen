@@ -18,7 +18,6 @@ import {
 } from '../../../src/application/ingredient-creation/supplement-draft.types';
 import type {
   VerificationFeature,
-  VerificationFeatureCode,
   VerificationField,
   SupplementWriteVerification,
 } from '../../../src/application/ingredient-creation/supplement-verification';

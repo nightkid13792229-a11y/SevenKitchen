@@ -63,8 +63,13 @@ import {
   type AgentNutritionPlan,
   type AgentSelection,
 } from './propose-plan';
+import type { AgentSupplementProposal } from './propose-supplement';
 import { matchSelectionToLibrary } from './selection-match';
 import { assessmentGapSignature } from './assessment-progress';
+import {
+  auditPlanCitations,
+  collectKnowledgeCitationIds,
+} from './citation-audit';
 import { loadSkillsForPhase } from './skill-loader';
 import {
   buildSessionStateMessages,
@@ -204,6 +209,7 @@ export class RecipeAgentService implements OnModuleInit {
         sessionId = session.id;
       }
 
+      await this.createRunSnapshot(sessionId, input.draftId, input.actor);
       if (!input.silent) {
         await this.appendMessage(sessionId, 'USER', input.message);
       }
@@ -226,7 +232,10 @@ export class RecipeAgentService implements OnModuleInit {
 
   /** 会话视图：会话 + 全部消息（给抽屉展示）。 */
   async getSession(draftId: string, actor: RecipeAgentActor) {
-    await this.designer.getDraft(draftId, this.accessFor(actor));
+    const draft = await this.designer.getDraft(
+      draftId,
+      this.accessFor(actor),
+    );
     const session = await this.prisma.recipeDesignAgentSession.findFirst({
       where: { designRecipeId: draftId },
       orderBy: { startedAt: 'desc' },
@@ -236,7 +245,184 @@ export class RecipeAgentService implements OnModuleInit {
       where: { sessionId: session.id },
       orderBy: { seq: 'asc' },
     });
-    return { session, messages };
+    return {
+      session,
+      messages,
+      canRevert: await this.canRevertRun(session.id, session.status, draft.contentRevision),
+    };
+  }
+
+  /**
+   * C4：每次 run 开始存一份草稿快照。
+   * 快照失败不阻断设计，只记日志；回滚入口会自然不存在。
+   */
+  private async createRunSnapshot(
+    sessionId: string,
+    draftId: string,
+    actor: RecipeAgentActor,
+  ): Promise<void> {
+    try {
+      const draft = await this.designer.getDraft(
+        draftId,
+        this.accessFor(actor),
+      );
+      const snapshot = {
+        version: 1,
+        runStartRevision: draft.contentRevision,
+        runEndRevision: null,
+        draft: JSON.parse(JSON.stringify(draft)),
+      };
+      await this.prisma.recipeDesignAgentSnapshot.create({
+        data: {
+          designRecipeId: draftId,
+          sessionId,
+          contentRevision: draft.contentRevision,
+          snapshot: snapshot as never,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[agent] 草稿 ${draftId} 运行快照创建失败：${(error as Error)?.message ?? String(error)}`,
+      );
+    }
+  }
+
+  /** run 结束后记录“AI 改到的版本”，回滚时用它判断之后有没有人工再改。 */
+  private async finalizeRunSnapshot(
+    sessionId: string,
+    draftId: string,
+    actor: RecipeAgentActor,
+  ): Promise<void> {
+    try {
+      const record = await this.prisma.recipeDesignAgentSnapshot.findFirst({
+        where: { sessionId },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!record) return;
+      const payload =
+        typeof record.snapshot === 'object' &&
+        record.snapshot !== null &&
+        !Array.isArray(record.snapshot)
+          ? (record.snapshot as Record<string, unknown>)
+          : null;
+      if (!payload || payload.version !== 1 || !payload.draft) return;
+      const draft = await this.designer.getDraft(
+        draftId,
+        this.accessFor(actor),
+      );
+      await this.prisma.recipeDesignAgentSnapshot.update({
+        where: { id: record.id },
+        data: {
+          snapshot: {
+            ...payload,
+            runEndRevision: draft.contentRevision,
+            runEndAt: new Date().toISOString(),
+          } as never,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[agent] 会话 ${sessionId} 运行快照收尾失败：${(error as Error)?.message ?? String(error)}`,
+      );
+    }
+  }
+
+  private async canRevertRun(
+    sessionId: string,
+    status: string,
+    currentRevision: number,
+  ): Promise<boolean> {
+    if (status === 'RUNNING') return false;
+    try {
+      const record = await this.prisma.recipeDesignAgentSnapshot.findFirst({
+        where: { sessionId },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (!record) return false;
+      const payload =
+        typeof record.snapshot === 'object' &&
+        record.snapshot !== null &&
+        !Array.isArray(record.snapshot)
+          ? (record.snapshot as Record<string, unknown>)
+          : null;
+      if (!payload?.draft) return false;
+      const start = Number(payload.runStartRevision);
+      const hasEnd =
+        payload.runEndRevision !== null &&
+        payload.runEndRevision !== undefined;
+      const end = hasEnd ? Number(payload.runEndRevision) : NaN;
+      return Number.isInteger(end)
+        ? currentRevision === end
+        : currentRevision === start;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * C4：撤销本次 AI 运行。
+   * 只允许在 AI 跑完、且草稿之后没被人工改过时回滚。
+   */
+  async revertRun(
+    sessionId: string,
+    actor: RecipeAgentActor,
+  ): Promise<{ reverted: boolean; contentRevision: number }> {
+    const session = await this.prisma.recipeDesignAgentSession.findUnique({
+      where: { id: sessionId },
+    });
+    if (!session) throw new NotFoundException('会话不存在');
+    if (session.status === 'RUNNING') {
+      throw new BadRequestException('运行中不能撤销');
+    }
+    const access = this.accessFor(actor);
+    const draft = await this.designer.getDraft(session.designRecipeId, access);
+    const record = await this.prisma.recipeDesignAgentSnapshot.findFirst({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
+    });
+    const payload =
+      record &&
+      typeof record.snapshot === 'object' &&
+      record.snapshot !== null &&
+      !Array.isArray(record.snapshot)
+        ? (record.snapshot as Record<string, any>)
+        : null;
+    if (!payload?.draft) {
+      throw new BadRequestException('这次运行没有可撤销的快照');
+    }
+    const start = Number(payload.runStartRevision);
+    const hasEnd =
+      payload.runEndRevision !== null &&
+      payload.runEndRevision !== undefined;
+    const end = hasEnd ? Number(payload.runEndRevision) : NaN;
+    const allowed = Number.isInteger(end)
+      ? draft.contentRevision === end
+      : draft.contentRevision === start;
+    if (!allowed) {
+      throw new BadRequestException(
+        '草稿在 AI 运行后又被修改过，不能撤销；请手动调整',
+      );
+    }
+    const restored = await this.designer.restoreFromAgentSnapshot(
+      session.designRecipeId,
+      payload.draft,
+      access,
+    );
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: sessionId },
+      data: {
+        supplementProposal: Prisma.DbNull,
+        citationAudit: Prisma.DbNull,
+        status: 'WAITING_USER',
+        endedAt: new Date(),
+      },
+    });
+    await this.appendMessage(
+      sessionId,
+      'ASSISTANT',
+      '已撤销本次 AI 运行，配方恢复到运行前；请重新评估。',
+    );
+    return { reverted: true, contentRevision: restored.contentRevision };
   }
 
   /**
@@ -291,6 +477,128 @@ export class RecipeAgentService implements OnModuleInit {
       data: { selection: matched as never },
     });
     return matched;
+  }
+
+  /**
+   * 选材卡逐项勾选：只保留用户勾中的食材，不推进阶段。
+   * 空清单拒绝；已确认后不能再改。
+   */
+  async updateSelectionItems(
+    draftId: string,
+    actor: RecipeAgentActor,
+    itemNames: string[],
+  ): Promise<AgentSelection> {
+    await this.designer.getDraft(draftId, this.accessFor(actor));
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId: draftId },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!session) throw new NotFoundException('会话不存在');
+    if (session.phase !== 'SELECT' || session.selectionConfirmedAt) {
+      throw new BadRequestException('当前不在选材确认阶段，不能修改选材清单');
+    }
+    if (!session.selection) {
+      throw new BadRequestException('还没有提交选材候选');
+    }
+    const wanted = new Set(
+      (Array.isArray(itemNames) ? itemNames : [])
+        .map((name) => String(name).trim())
+        .filter(Boolean),
+    );
+    if (wanted.size === 0) {
+      throw new BadRequestException('至少要保留一条选材');
+    }
+    const selection = session.selection as unknown as AgentSelection;
+    const items = (selection.items ?? []).filter((item) =>
+      wanted.has(item.name),
+    );
+    if (items.length === 0) {
+      throw new BadRequestException('选中的食材不在当前清单里');
+    }
+    const updated: AgentSelection = {
+      ...selection,
+      items,
+      confirmed: false,
+    };
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: session.id },
+      data: { selection: updated as never },
+    });
+    return updated;
+  }
+
+  /**
+   * 补剂提案的人工决定：ACCEPT 才写入配方，DECLINE 只清掉提案。
+   * 提案本身不写草稿，避免 AI 自行加补剂。
+   */
+  async decideSupplementProposal(
+    draftId: string,
+    actor: RecipeAgentActor,
+    decision: 'ACCEPT' | 'DECLINE',
+  ): Promise<{ accepted: number }> {
+    const access = this.accessFor(actor);
+    await this.designer.getDraft(draftId, access);
+    const session = await this.prisma.recipeDesignAgentSession.findFirst({
+      where: { designRecipeId: draftId },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!session) throw new NotFoundException('会话不存在');
+    if (!session.supplementProposal) {
+      throw new BadRequestException('没有待确认的补剂提案');
+    }
+    if (session.phase !== 'DESIGN') {
+      throw new BadRequestException('补剂提案只能在配方编辑阶段处理');
+    }
+    const proposal =
+      session.supplementProposal as unknown as AgentSupplementProposal;
+    if (decision === 'DECLINE') {
+      await this.prisma.recipeDesignAgentSession.update({
+        where: { id: session.id },
+        data: {
+          supplementProposal: Prisma.DbNull,
+          status: 'WAITING_USER',
+          endedAt: new Date(),
+        },
+      });
+      await this.appendMessage(session.id, 'ASSISTANT', '已忽略补剂提案。');
+      return { accepted: 0 };
+    }
+    if (!Array.isArray(proposal.items) || proposal.items.length === 0) {
+      throw new BadRequestException('补剂提案为空');
+    }
+    let accepted = 0;
+    for (const item of proposal.items) {
+      await this.designer.addItem(
+        draftId,
+        {
+          nutritionFoodId: item.nutritionFoodId,
+          ingredientId: item.ingredientId,
+          weightG: item.weightG,
+          supplementTargets: [
+            {
+              fieldPath: item.fieldPath,
+              ...(item.unit ? { unit: item.unit } : {}),
+            },
+          ],
+        } as any,
+        access,
+      );
+      accepted += 1;
+    }
+    await this.prisma.recipeDesignAgentSession.update({
+      where: { id: session.id },
+      data: {
+        supplementProposal: Prisma.DbNull,
+        status: 'WAITING_USER',
+        endedAt: new Date(),
+      },
+    });
+    await this.appendMessage(
+      session.id,
+      'ASSISTANT',
+      `已按补剂提案加入 ${accepted} 项；请重新评估。`,
+    );
+    return { accepted };
   }
 
   private async confirmStage(
@@ -437,7 +745,8 @@ export class RecipeAgentService implements OnModuleInit {
           })
           .catch(() => undefined);
       })
-      .finally(() => {
+      .finally(async () => {
+        await this.finalizeRunSnapshot(sessionId, draftId, actor);
         this.active.delete(draftId);
         this.stopped.delete(sessionId);
         const pending = this.pendingStageStart.get(draftId);
@@ -517,6 +826,7 @@ export class RecipeAgentService implements OnModuleInit {
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
     let lastAssessHadGaps = false;
+    const verifiedCitationIds = new Set<string>();
     /**
      * 每次运行的第一轮强制读设计上下文。
      *
@@ -773,6 +1083,18 @@ export class RecipeAgentService implements OnModuleInit {
           outcome = result.outcome;
           images = result.images;
           contextImages = result.contextImages;
+          if (
+            outcome.ok &&
+            (call.function.name === 'kb_find' ||
+              call.function.name === 'kb_read')
+          ) {
+            for (const id of collectKnowledgeCitationIds(
+              call.function.name,
+              outcome.data,
+            )) {
+              verifiedCitationIds.add(id);
+            }
+          }
           if (call.function.name === 'assess') {
             editsSinceAssess = 0;
           } else if (call.function.name === 'edit_recipe' && outcome.ok) {
@@ -876,7 +1198,13 @@ export class RecipeAgentService implements OnModuleInit {
           currentPlan = outcome.data as AgentNutritionPlan;
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
-            data: planRevisionUpdate(currentPlan),
+            data: {
+              ...planRevisionUpdate(currentPlan),
+              citationAudit: auditPlanCitations(
+                currentPlan,
+                verifiedCitationIds,
+              ) as never,
+            },
           });
           await this.appendMessage(
             sessionId,
@@ -889,10 +1217,16 @@ export class RecipeAgentService implements OnModuleInit {
 
         // 方案/选材提交：落库 + 暂停等用户确认。
         if (call.function.name === 'propose_plan' && outcome.ok) {
+          const plan = outcome.data as AgentNutritionPlan;
+          const citationAudit = auditPlanCitations(
+            plan,
+            verifiedCitationIds,
+          );
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
             data: {
-              plan: outcome.data as never,
+              plan: plan as never,
+              citationAudit: citationAudit as never,
               status: 'WAITING_USER',
               endedAt: new Date(),
             },
@@ -905,6 +1239,18 @@ export class RecipeAgentService implements OnModuleInit {
           await this.prisma.recipeDesignAgentSession.update({
             where: { id: sessionId },
             data: selectionSubmissionUpdate(selection),
+          });
+          return;
+        }
+
+        if (call.function.name === 'propose_supplement' && outcome.ok) {
+          await this.prisma.recipeDesignAgentSession.update({
+            where: { id: sessionId },
+            data: {
+              supplementProposal: outcome.data as never,
+              status: 'WAITING_USER',
+              endedAt: new Date(),
+            },
           });
           return;
         }
@@ -1243,6 +1589,7 @@ export class RecipeAgentService implements OnModuleInit {
         planConfirmedAt: true,
         selection: true,
         selectionConfirmedAt: true,
+        supplementProposal: true,
       },
     });
     messages.push(
@@ -1251,6 +1598,9 @@ export class RecipeAgentService implements OnModuleInit {
         planConfirmedAt: sessionState?.planConfirmedAt ?? null,
         selection: (sessionState?.selection as unknown as AgentSelection) ?? null,
         selectionConfirmedAt: sessionState?.selectionConfirmedAt ?? null,
+        supplementProposal:
+          (sessionState?.supplementProposal as unknown as AgentSupplementProposal) ??
+          null,
       }),
     );
     for (const row of historyRows) {

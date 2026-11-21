@@ -476,8 +476,16 @@ export const recipeDesignerApi = {
     api.post(`/recipe-designer/drafts/${draftId}/agent/runs`, { message }),
   getAgentSession: (
     draftId: string,
-  ): Promise<{ session: AgentSession; messages: AgentMessage[] } | null> =>
+  ): Promise<{
+    session: AgentSession;
+    messages: AgentMessage[];
+    canRevert?: boolean;
+  } | null> =>
     api.get(`/recipe-designer/drafts/${draftId}/agent/session`),
+  revertAgentRun: (
+    sessionId: string,
+  ): Promise<{ reverted: boolean; contentRevision: number }> =>
+    api.post(`/recipe-designer/agent/runs/${sessionId}/revert`),
   stopAgentRun: (sessionId: string): Promise<void> =>
     api.post(`/recipe-designer/agent/runs/${sessionId}/stop`),
   confirmAgentPlan: (
@@ -496,6 +504,20 @@ export const recipeDesignerApi = {
     }),
   rematchAgentSelection: (draftId: string): Promise<AgentSelection> =>
     api.post(`/recipe-designer/drafts/${draftId}/agent/selection/rematch`),
+  updateAgentSelectionItems: (
+    draftId: string,
+    itemNames: string[],
+  ): Promise<AgentSelection> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/selection/items`, {
+      itemNames,
+    }),
+  decideAgentSupplement: (
+    draftId: string,
+    decision: "ACCEPT" | "DECLINE",
+  ): Promise<{ accepted: number }> =>
+    api.post(`/recipe-designer/drafts/${draftId}/agent/supplement/decision`, {
+      decision,
+    }),
 };
 
 /** AI 食谱设计会话（2026-10-31 极简版；2026-11-20 增加三阶段） */
@@ -547,6 +569,22 @@ export interface AgentSelection {
   notes?: string;
 }
 
+export interface AgentSupplementProposalItem {
+  nutritionFoodId: string;
+  ingredientId?: string;
+  name: string;
+  weightG: number;
+  fieldPath: string;
+  label?: string;
+  unit?: string;
+  reason: string;
+}
+
+export interface AgentSupplementProposal {
+  summary?: string;
+  items: AgentSupplementProposalItem[];
+}
+
 export interface AgentSession {
   id: string;
   designRecipeId: string;
@@ -560,6 +598,13 @@ export interface AgentSession {
   phase: AgentPhase;
   plan?: AgentNutritionPlan | null;
   planConfirmedAt?: string | null;
+  supplementProposal?: AgentSupplementProposal | null;
+  citationAudit?: {
+    citedCount: number;
+    verified: string[];
+    unverified: string[];
+    checkedAt?: string;
+  } | null;
   selection?: AgentSelection | null;
   selectionConfirmedAt?: string | null;
   stepCount: number;

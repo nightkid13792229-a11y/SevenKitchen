@@ -27,6 +27,10 @@ import {
   summarizePlan,
   summarizeSelection,
 } from './propose-plan';
+import {
+  PROPOSE_SUPPLEMENT_TOOL,
+  normalizeSupplementProposal,
+} from './propose-supplement';
 import { matchSelectionToLibrary } from './selection-match';
 import type { AgentNutritionPlan } from './propose-plan';
 import {
@@ -287,6 +291,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   },
   PROPOSE_PLAN_TOOL,
   PROPOSE_SELECTION_TOOL,
+  PROPOSE_SUPPLEMENT_TOOL,
   REVISE_PLAN_TOOL,
   REOPEN_SELECTION_TOOL,
   ...KNOWLEDGE_TOOL_DEFINITIONS,
@@ -315,6 +320,14 @@ export async function executeTool(
       case 'read_design_context': {
         const designContext = await context.port.readDesignContext();
         return ok(designContext, summarizeDesignContext(designContext));
+      }
+
+      case 'propose_supplement': {
+        const proposal = normalizeSupplementProposal(args);
+        return ok(
+          proposal,
+          `补剂提案 ${proposal.items.length} 项，等待人工确认`,
+        );
       }
 
       case 'propose_plan':

@@ -42,4 +42,5 @@
 - 不给药物剂量；不把药物写进方案。
 
 ## 引用
-- 引用用短标签，如 `SACN5-67 p5`、`FEDIAF Table III-3a`；不要贴长文档 id。
+- 人读的短标签放 `basis` / `source`，如 `SACN5-67 p5`、`FEDIAF Table III-3a`。
+- `citationId` 只填本次 kb_find / kb_read 真正返回过的 `documentId:pageNo` 或 `anchor`；没查到就留空，不要编。

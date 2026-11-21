@@ -12,6 +12,7 @@
  */
 import type { DeepSeekToolsMessage } from '../deepseek-tools-chat';
 import type { AgentNutritionPlan, AgentSelection } from './propose-plan';
+import type { AgentSupplementProposal } from './propose-supplement';
 
 /** 方案/选材 JSON 的上下文上限，避免把整份长清单塞爆。 */
 const MAX_STATE_JSON_LENGTH = 20000;
@@ -21,6 +22,7 @@ export interface AgentSessionState {
   planConfirmedAt: Date | string | null;
   selection: AgentSelection | null;
   selectionConfirmedAt: Date | string | null;
+  supplementProposal?: AgentSupplementProposal | null;
 }
 
 function stringifyState(value: unknown): string {

@@ -45,22 +45,16 @@ describe('编辑器 · 管理员加入本单待提交', () => {
     expect(source).toContain('ADMIN_ONLY_TIP')
   })
 
-  it('点击先保存未落盘的修改，再调用 ready 接口', () => {
-    const start = source.indexOf('async function stageOrderDesign')
-    expect(start).toBeGreaterThan(-1)
-    const block = source.slice(start, source.indexOf('/**', start) > start ? source.indexOf('/**', start) : start + 3000)
-
-    expect(block).toContain('await flushNow()')
-    expect(block).toContain('orderRecipeDesignApi.markReady(orderId, designId)')
-    expect(block.indexOf('await flushNow()')).toBeLessThan(
-      block.indexOf('orderRecipeDesignApi.markReady'),
-    )
+  it('编辑器不再保留旧的加入待提交死代码', () => {
+    expect(source).not.toContain('async function stageOrderDesign')
+    const readinessDrawer = clean(drawer)
+    expect(readinessDrawer).toContain('orderRecipeDesignApi.markReady')
   })
 
   it('加入成功后回到本单工作台，让员工看到进度更新', () => {
     expect(source).toContain('返回本单工作台')
     expect(source).toContain("router.push(`/order-design/${encodeURIComponent(orderId)}`)")
-    expect(source).toContain('已加入本单待提交')
+    expect(clean(drawer)).toContain('已加入本单待提交')
   })
 
   it('本单设计模式不提供目录发布入口，避免绕过待提交', () => {

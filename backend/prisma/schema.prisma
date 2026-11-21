@@ -5760,6 +5760,8 @@ model RecipeDesignAgentSession {
   /// 已提交的食材/补剂候选
   selection        Json?
   selectionConfirmedAt DateTime?             @map("selection_confirmed_at")
+  /// 待人工确认的补剂提案；确认前不写入配方
+  supplementProposal Json?                  @map("supplement_proposal")
   skillName        String                    @map("skill_name") @db.VarChar(80)
   skillVersion     String                    @map("skill_version") @db.VarChar(40)
   stepCount        Int                       @default(0) @map("step_count")

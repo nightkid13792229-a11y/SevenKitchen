@@ -15,6 +15,8 @@ import { StaffGuard } from '../guards/role.guard';
 
 type AgentMessageBody = { message?: string };
 type AgentDecisionBody = { decision?: string };
+type AgentSelectionItemsBody = { itemNames?: string[] };
+type AgentSupplementDecisionBody = { decision?: string };
 
 /**
  * AI 食谱设计 Agent 的内部员工入口（2026-10-31 重建）。
@@ -89,6 +91,28 @@ export class RecipeAgentController {
     );
   }
 
+  @Post('drafts/:draftId/agent/selection/items')
+  @UseGuards(StaffGuard)
+  @ApiOperation({
+    summary: 'Save the per-item checked list of the current selection',
+  })
+  async updateSelectionItems(
+    @Param('draftId') draftId: string,
+    @Body() body: AgentSelectionItemsBody,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    if (!Array.isArray(body?.itemNames)) {
+      throw new BadRequestException('itemNames 必须是数组');
+    }
+    return ApiResponseDto.success(
+      await this.agentService.updateSelectionItems(
+        draftId,
+        toActor(user),
+        body.itemNames,
+      ),
+    );
+  }
+
   @Post('drafts/:draftId/agent/selection/decision')
   @UseGuards(StaffGuard)
   @ApiOperation({
@@ -105,6 +129,35 @@ export class RecipeAgentController {
         toActor(user),
         requireDecision(body),
       ),
+    );
+  }
+
+  @Post('drafts/:draftId/agent/supplement/decision')
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: 'Accept or decline the pending supplement proposal' })
+  async decideSupplement(
+    @Param('draftId') draftId: string,
+    @Body() body: AgentSupplementDecisionBody,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<{ accepted: number }>> {
+    return ApiResponseDto.success(
+      await this.agentService.decideSupplementProposal(
+        draftId,
+        toActor(user),
+        requireSupplementDecision(body),
+      ),
+    );
+  }
+
+  @Post('agent/runs/:sessionId/revert')
+  @UseGuards(StaffGuard)
+  @ApiOperation({ summary: 'Revert the draft to the snapshot taken before this run' })
+  async revert(
+    @Param('sessionId') sessionId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<{ reverted: boolean; contentRevision: number }>> {
+    return ApiResponseDto.success(
+      await this.agentService.revertRun(sessionId, toActor(user)),
     );
   }
 
@@ -134,6 +187,16 @@ function requireDecision(
   const decision = body?.decision;
   if (decision !== 'APPROVE' && decision !== 'CONTINUE') {
     throw new BadRequestException('decision 只能是 APPROVE 或 CONTINUE');
+  }
+  return decision;
+}
+
+function requireSupplementDecision(
+  body: AgentSupplementDecisionBody | undefined,
+): 'ACCEPT' | 'DECLINE' {
+  const decision = body?.decision;
+  if (decision !== 'ACCEPT' && decision !== 'DECLINE') {
+    throw new BadRequestException('decision 只能是 ACCEPT 或 DECLINE');
   }
   return decision;
 }

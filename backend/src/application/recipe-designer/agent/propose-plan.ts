@@ -128,7 +128,11 @@ export const PROPOSE_PLAN_TOOL: DeepSeekToolDefinition = {
                   '该营养素在评估标准中的计量单位，如 g / mg / ug / IU；不填按目标单位',
               },
               source: { type: 'string', description: '如 FEDIAF 2025 / SACN5' },
-              citationId: { type: 'string' },
+              citationId: {
+                type: 'string',
+                description:
+                  '只填 kb_find/kb_read 返回过的 documentId:pageNo 或 anchor；没有就留空。短标签放 basis/source。',
+              },
               hard: { type: 'boolean' },
             },
             required: ['key', 'label', 'unit', 'source'],

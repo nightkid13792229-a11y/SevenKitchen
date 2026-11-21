@@ -17,6 +17,14 @@
         <el-tag v-if="session" size="small" effect="plain">
           {{ phaseLabel }}
         </el-tag>
+        <el-button
+          v-if="canRevert && session && !running"
+          size="small"
+          text
+          :loading="reverting"
+          @click="revertRun"
+          >撤销本次 AI 运行</el-button
+        >
       </div>
     </template>
 
@@ -75,6 +83,16 @@
                 <td>{{ item.unit }}</td>
                 <td>
                   {{ item.source }}{{ item.basis ? ` · ${item.basis}` : "" }}
+                  <el-tag
+                    v-if="
+                      item.citationId &&
+                      unverifiedCitations.has(item.citationId)
+                    "
+                    size="small"
+                    type="warning"
+                    effect="plain"
+                    >未核验</el-tag
+                  >
                 </td>
               </tr>
             </tbody>
@@ -82,6 +100,13 @@
           <div class="agent-plan__table-note">
             仅列疾病特异性、或比 FEDIAF 2025
             默认评估更严的约束；通用项以营养评估为准。
+          </div>
+          <div
+            v-if="unverifiedCitations.size"
+            class="agent-plan__table-note agent-plan__table-note--warn"
+          >
+            有 {{ unverifiedCitations.size }} 条引用未在本次知识库检索结果中核验；
+            只提示，不阻断。
           </div>
           <div v-if="planRationale" class="agent-plan__rationale">
             <div class="agent-plan__rationale-title">理由与建议</div>
@@ -143,6 +168,7 @@
           <table class="agent-plan__table">
             <thead>
               <tr>
+                <th>选中</th>
                 <th>食材类型</th>
                 <th>名称</th>
                 <th>理由</th>
@@ -151,6 +177,13 @@
             </thead>
             <tbody>
               <tr v-for="(item, index) in selectionFoodItems" :key="index">
+                <td>
+                  <el-checkbox
+                    :model-value="selectionChecked.includes(item.name)"
+                    :disabled="Boolean(session.selectionConfirmedAt)"
+                    @change="toggleSelectionChecked(item.name, $event)"
+                  />
+                </td>
                 <td>{{ item.foodCategory || "未分类" }}</td>
                 <td>{{ item.name }}</td>
                 <td>{{ item.reason }}</td>
@@ -164,6 +197,14 @@
                       type="primary"
                       @click="openIngredientCreation(item)"
                       >新增原料</el-button
+                    >
+                    <el-button
+                      v-if="item.dataStatus === 'NEEDS_PROFILE'"
+                      size="small"
+                      text
+                      type="primary"
+                      @click="openIngredientProfile(item)"
+                      >去补档案</el-button
                     >
                   </div>
                 </td>
@@ -196,8 +237,19 @@
           >
             <el-button
               size="small"
+              :loading="savingSelection"
+              :disabled="selectionChecked.length === 0"
+              @click="saveSelectionItems"
+              >保存选中清单</el-button
+            >
+            <span v-if="selectionDirty" class="agent-plan__hint"
+              >有未保存的勾选</span
+            >
+            <el-button
+              size="small"
               type="primary"
               :loading="deciding"
+              :disabled="selectionDirty"
               @click="decideSelection('APPROVE')"
               >确认选材，开始设计</el-button
             >
@@ -214,6 +266,72 @@
                 ? "选材已确认；可在对话里继续调整配方。"
                 : "确认后进入配方编辑阶段。"
             }}
+          </div>
+        </div>
+
+        <div
+          v-if="session?.supplementProposal?.items?.length"
+          class="agent-plan agent-supplement"
+        >
+          <div class="agent-plan__title">补剂提案（待确认）</div>
+          <div
+            v-if="session.supplementProposal.summary"
+            class="agent-plan__summary"
+          >
+            {{ session.supplementProposal.summary }}
+          </div>
+          <table class="agent-plan__table">
+            <thead>
+              <tr>
+                <th>补剂</th>
+                <th>克数</th>
+                <th>补什么</th>
+                <th>理由</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="(item, index) in session.supplementProposal.items"
+                :key="index"
+              >
+                <td>{{ item.name }}</td>
+                <td>{{ item.weightG }} g</td>
+                <td>{{ item.label || item.fieldPath }}</td>
+                <td>{{ item.reason }}</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="agent-plan__actions">
+            <el-button
+              size="small"
+              type="primary"
+              :loading="decidingSupplement"
+              @click="decideSupplement('ACCEPT')"
+              >加入配方</el-button
+            >
+            <el-button
+              size="small"
+              :loading="decidingSupplement"
+              @click="decideSupplement('DECLINE')"
+              >不加</el-button
+            >
+          </div>
+          <div class="agent-plan__hint">
+            加入后才会写入配方；不点不会改变配方。
+          </div>
+        </div>
+
+        <div v-if="pendingAsk" class="agent-plan agent-ask">
+          <div class="agent-plan__title">AI 在等你的选择</div>
+          <div class="agent-plan__summary">{{ pendingAsk.question }}</div>
+          <div class="agent-plan__actions">
+            <el-button
+              v-for="option in pendingAsk.options"
+              :key="option"
+              size="small"
+              @click="sendAskOption(option)"
+              >{{ option }}</el-button
+            >
           </div>
         </div>
 
@@ -325,6 +443,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { ElMessage, ElMessageBox } from "element-plus";
 import {
   recipeDesignerApi,
   type AgentMessage,
@@ -356,6 +475,51 @@ const selectionFoodItems = computed(() =>
 const hasOutsideSelection = computed(() =>
   selectionFoodItems.value.some((item) => item.dataStatus === "MISSING"),
 );
+const selectionChecked = ref<string[]>([]);
+const savingSelection = ref(false);
+const selectionDirty = computed(() => {
+  const current = [...selectionChecked.value].sort();
+  const all = selectionFoodItems.value.map((item) => item.name).sort();
+  return current.length !== all.length || current.some((name, i) => name !== all[i]);
+});
+
+watch(
+  () => session.value?.selection,
+  (selection) => {
+    selectionChecked.value = (selection?.items ?? [])
+      .filter((item) => item.kind !== "SUPPLEMENT")
+      .map((item) => item.name);
+  },
+  { immediate: true },
+);
+
+function toggleSelectionChecked(name: string, checked: unknown) {
+  const set = new Set(selectionChecked.value);
+  if (Boolean(checked)) set.add(name);
+  else set.delete(name);
+  selectionChecked.value = [...set];
+}
+
+async function saveSelectionItems() {
+  if (!session.value || savingSelection.value) return;
+  if (selectionChecked.value.length === 0) {
+    ElMessage.warning("至少要保留一条选材");
+    return;
+  }
+  savingSelection.value = true;
+  try {
+    const selection = await recipeDesignerApi.updateAgentSelectionItems(
+      props.draftId,
+      selectionChecked.value,
+    );
+    session.value = { ...session.value, selection };
+    ElMessage.success("已保存选中清单");
+  } catch {
+    // API 拦截器提示
+  } finally {
+    savingSelection.value = false;
+  }
+}
 const MEDICATION_PATTERN =
   /用药|药物|处方|服药|口服|注射|抗生素|止痛药|激素/i;
 
@@ -373,6 +537,9 @@ const planSummary = computed(() =>
 const planRationale = computed(() =>
   stripMedicationText(session.value?.plan?.rationale ?? ""),
 );
+const unverifiedCitations = computed(
+  () => new Set(session.value?.citationAudit?.unverified ?? []),
+);
 const visiblePlanNonNutrient = computed(() =>
   (session.value?.plan?.nonNutrient ?? []).filter(
     (item) =>
@@ -382,14 +549,26 @@ const visiblePlanNonNutrient = computed(() =>
   ),
 );
 
+function normalizeCfctCategory(value?: string | null): string | null {
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const exact = CFCT_CLASS_OPTIONS.find((category) => category === text);
+  if (exact) return exact;
+  return (
+    CFCT_CLASS_OPTIONS.find(
+      (category) => text.includes(category) || category.includes(text),
+    ) ?? null
+  );
+}
+
 const cfctCoverage = computed(() =>
   CFCT_CLASS_OPTIONS.map((category) => {
     const confirmed = Boolean(session.value?.selectionConfirmedAt);
     const count = selectionFoodItems.value.filter(
-      (item) => item.foodCategory === category,
+      (item) => normalizeCfctCategory(item.foodCategory) === category,
     ).length;
     const skipped = session.value?.selection?.skippedCategories?.find(
-      (item) => item.category === category,
+      (item) => normalizeCfctCategory(item.category) === category,
     )?.reason;
     return {
       category,
@@ -495,6 +674,39 @@ const visibleMessages = computed(() =>
 const input = ref("");
 const sending = ref(false);
 const deciding = ref(false);
+const decidingSupplement = ref(false);
+const canRevert = ref(false);
+const reverting = ref(false);
+
+const pendingAsk = computed<{ question: string; options: string[] } | null>(
+  () => {
+    if (running.value) return null;
+    let lastUserIndex = -1;
+    messages.value.forEach((message, index) => {
+      if (message.role === "USER") lastUserIndex = index;
+    });
+    const after = messages.value.slice(lastUserIndex + 1);
+    const ask = after
+      .filter((message) => message.role === "TOOL" && message.toolName === "ask")
+      .pop();
+    if (!ask) return null;
+    try {
+      const data = JSON.parse(ask.content)?.data;
+      const options = Array.isArray(data?.options)
+        ? data.options.map((option: unknown) => String(option)).filter(Boolean)
+        : [];
+      if (options.length === 0) return null;
+      return { question: String(data?.question ?? ""), options };
+    } catch {
+      return null;
+    }
+  },
+);
+
+function sendAskOption(option: string) {
+  input.value = option;
+  void send();
+}
 const rematching = ref(false);
 const loading = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
@@ -578,8 +790,9 @@ async function send() {
   if (!text || sending.value || running.value) return;
   sending.value = true;
   // 先乐观显示用户消息；接口慢或刷新失败时，至少不会“发了没反应”。
+  const optimisticId = `temp-${Date.now()}`;
   messages.value.push({
-    id: `temp-${Date.now()}`,
+    id: optimisticId,
     seq: Number.MAX_SAFE_INTEGER,
     role: "USER",
     content: text,
@@ -591,6 +804,12 @@ async function send() {
   try {
     await recipeDesignerApi.startAgentRun(props.draftId, text);
     await loadSession();
+  } catch {
+    // 发送失败：撤回乐观消息，把文字放回输入框，用户不用重打。
+    messages.value = messages.value.filter(
+      (message) => message.id !== optimisticId,
+    );
+    input.value = text;
   } finally {
     sending.value = false;
   }
@@ -611,6 +830,11 @@ function dataStatusLabel(status: string): string {
 
 function openIngredientCreation(item: { name: string }) {
   const url = `/ingredients/ai-agent?line=FOOD&name=${encodeURIComponent(item.name)}`;
+  window.open(url, "_blank", "noopener");
+}
+
+function openIngredientProfile(item: { name: string }) {
+  const url = `/ingredients?keyword=${encodeURIComponent(item.name)}`;
   window.open(url, "_blank", "noopener");
 }
 
@@ -638,8 +862,62 @@ async function decidePlan(decision: "APPROVE" | "CONTINUE") {
   }
 }
 
+async function revertRun() {
+  if (!session.value || reverting.value) return;
+  try {
+    await ElMessageBox.confirm(
+      "撤销本次 AI 运行？配方会回到这次运行前的状态；运行后你手动改过的内容不会被覆盖。",
+      "撤销本次 AI 运行",
+      {
+        type: "warning",
+        confirmButtonText: "撤销",
+        cancelButtonText: "取消",
+      },
+    );
+  } catch {
+    return;
+  }
+  reverting.value = true;
+  try {
+    await recipeDesignerApi.revertAgentRun(session.value.id);
+    ElMessage.success("已撤销本次 AI 运行");
+    emit("draft-changed");
+    await loadSession();
+  } catch {
+    // API 拦截器提示
+  } finally {
+    reverting.value = false;
+  }
+}
+
+async function decideSupplement(decision: "ACCEPT" | "DECLINE") {
+  if (!session.value || decidingSupplement.value) return;
+  decidingSupplement.value = true;
+  try {
+    const result = await recipeDesignerApi.decideAgentSupplement(
+      props.draftId,
+      decision,
+    );
+    if (decision === "ACCEPT") {
+      ElMessage.success(`已加入 ${result.accepted} 项补剂`);
+      emit("draft-changed");
+    } else {
+      ElMessage.success("已忽略补剂提案");
+    }
+    await loadSession();
+  } catch {
+    // API 拦截器提示
+  } finally {
+    decidingSupplement.value = false;
+  }
+}
+
 async function decideSelection(decision: "APPROVE" | "CONTINUE") {
   if (!session.value || deciding.value) return;
+  if (decision === "APPROVE" && selectionDirty.value) {
+    ElMessage.warning("请先保存选中清单");
+    return;
+  }
   deciding.value = true;
   try {
     await recipeDesignerApi.confirmAgentSelection(props.draftId, decision);
@@ -781,6 +1059,17 @@ watch(
 .agent-complete {
   border-color: #b3e19d;
   background: #f0f9eb;
+}
+.agent-plan__table-note--warn {
+  color: #e6a23c;
+}
+.agent-supplement {
+  border-color: #a0cfff;
+  background: #ecf5ff;
+}
+.agent-ask {
+  border-color: #d3d4d6;
+  background: #f4f4f5;
 }
 .agent-prep__row {
   display: flex;

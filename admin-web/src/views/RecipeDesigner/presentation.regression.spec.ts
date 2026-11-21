@@ -61,9 +61,8 @@ describe('产品展示 · API 与类型契约', () => {
     for (const code of [
       'COVER_IMAGE_REQUIRED',
       'COVER_TITLE_REQUIRED',
-      'DESCRIPTION_REQUIRED',
+      'INGREDIENT_COST_MISSING',
       'SELLING_POINT_REQUIRED',
-      'APPLICABLE_LIFE_STAGES_REQUIRED',
       'ORDER_ID_REQUIRED',
       'ORDER_QUANTITY_INVALID',
       'CUSTOMER_DOG_REQUIRED',

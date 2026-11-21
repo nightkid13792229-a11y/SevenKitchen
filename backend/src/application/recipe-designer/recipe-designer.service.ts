@@ -6031,6 +6031,76 @@ export class RecipeDesignerService {
   }
 
   /**
+   * C4：把 Agent 运行前的快照恢复到草稿。
+   *
+   * 只恢复草稿内容字段与明细；评估字段不动，靠 contentRevision 变化标成过期。
+   * 调用方（Agent）已经做过“运行后有没有人工再改”的检查。
+   */
+  async restoreFromAgentSnapshot(
+    id: string,
+    snapshot: any,
+    access: RecipeDesignerAccessInput,
+  ): Promise<{ contentRevision: number }> {
+    await this.getDraft(id, access);
+    const items = Array.isArray(snapshot?.items) ? snapshot.items : [];
+    const productionStepsJson =
+      snapshot?.productionStepsJson === undefined
+        ? undefined
+        : snapshot.productionStepsJson === null
+          ? Prisma.DbNull
+          : (snapshot.productionStepsJson as Prisma.InputJsonValue);
+    return this.prisma.$transaction(async (tx) => {
+      await tx.designRecipeItem.deleteMany({
+        where: { designRecipeId: id },
+      });
+      const updated = await tx.designRecipe.update({
+        where: { id },
+        data: {
+          name: snapshot?.name,
+          fediafDogScenario: snapshot?.fediafDogScenario,
+          nutritionStandard: snapshot?.nutritionStandard,
+          energyDensityKcalPerKg: snapshot?.energyDensityKcalPerKg,
+          totalWeightG: snapshot?.totalWeightG,
+          targetHealthTags: snapshot?.targetHealthTags ?? [],
+          applicableLifeStages: snapshot?.applicableLifeStages ?? [],
+          notes: snapshot?.notes ?? null,
+          coverImageUrl: snapshot?.coverImageUrl ?? null,
+          coverTitle: snapshot?.coverTitle ?? null,
+          description: snapshot?.description ?? null,
+          sellingPoint: snapshot?.sellingPoint ?? null,
+          detailImages: snapshot?.detailImages ?? [],
+          videoUrl: snapshot?.videoUrl ?? null,
+          ...(productionStepsJson !== undefined
+            ? { productionStepsJson }
+            : {}),
+          contentRevision: { increment: 1 },
+          ...(items.length > 0
+            ? {
+                items: {
+                  create: items.map((item: any, index: number) => ({
+                    nutritionFoodId: item.nutritionFoodId,
+                    ingredientId: item.ingredientId ?? null,
+                    weightG: item.weightG,
+                    includeInAssessment: item.includeInAssessment ?? true,
+                    ratioPercent: item.ratioPercent ?? null,
+                    preparationMethod: item.preparationMethod ?? null,
+                    nutrientTargetKey: item.nutrientTargetKey ?? null,
+                    nutrientTargetValue: item.nutrientTargetValue ?? null,
+                    supplementTargets:
+                      item.supplementTargets ?? undefined,
+                    sortOrder: item.sortOrder ?? index,
+                  })),
+                },
+              }
+            : {}),
+        },
+        select: { contentRevision: true },
+      });
+      return { contentRevision: updated.contentRevision };
+    });
+  }
+
+  /**
    * 发布 / 加入待提交前的统一门槛预览。
    *
    * 权限与草稿详情完全一致（复用 `getDraft`），后台编辑器可以在保存后刷新

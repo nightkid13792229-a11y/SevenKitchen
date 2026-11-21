@@ -223,7 +223,7 @@ describe('上线检查 · 问题归属与分组', () => {
       [
         { code: 'NAME_REQUIRED', message: '名称', scope: 'COMMON' },
         { code: 'COVER_IMAGE_REQUIRED', message: '封面', scope: 'PRESENTATION' },
-        { code: 'DESCRIPTION_REQUIRED', message: '描述', scope: 'CATALOG' },
+        { code: 'SELLING_POINT_REQUIRED', message: '卖点', scope: 'CATALOG' },
         { code: 'ORDER_ID_REQUIRED', message: '订单', scope: 'ORDER' },
         { code: 'LEGACY_CODE', message: '旧问题' }
       ],
@@ -265,7 +265,7 @@ describe('上线检查 · 已通过清单', () => {
       readinessFixture({
         blockers: [
           { code: 'COVER_IMAGE_REQUIRED', message: '封面', scope: 'PRESENTATION' },
-          { code: 'DESCRIPTION_REQUIRED', message: '描述', scope: 'CATALOG' }
+          { code: 'SELLING_POINT_REQUIRED', message: '卖点', scope: 'CATALOG' }
         ],
         warnings: [
           {
@@ -279,15 +279,14 @@ describe('上线检查 · 已通过清单', () => {
     const codes = checks.map((check) => check.code)
 
     expect(checks.find((check) => check.code === 'COVER_IMAGE_REQUIRED')).toBeUndefined()
-    expect(checks.find((check) => check.code === 'DESCRIPTION_REQUIRED')).toBeUndefined()
+    expect(checks.find((check) => check.code === 'SELLING_POINT_REQUIRED')).toBeUndefined()
     expect(
       checks.find((check) => check.code === 'TARGET_HEALTH_TAGS_MISSING')
     ).toBeUndefined()
     expect(codes).toEqual(
       expect.arrayContaining([
         'COVER_TITLE_REQUIRED',
-        'SELLING_POINT_REQUIRED',
-        'APPLICABLE_LIFE_STAGES_REQUIRED'
+        'INGREDIENT_COST_MISSING'
       ])
     )
     expect(codes).not.toEqual(
@@ -320,7 +319,7 @@ describe('上线检查 · 已通过清单', () => {
       ])
     )
     expect(codes).not.toContain('ORDER_QUANTITY_INVALID')
-    expect(codes).not.toContain('DESCRIPTION_REQUIRED')
+    expect(codes).not.toContain('SELLING_POINT_REQUIRED')
     expect(codes).not.toContain('TARGET_HEALTH_TAGS_MISSING')
   })
 })

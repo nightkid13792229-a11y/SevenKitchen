@@ -161,18 +161,13 @@ const LAUNCH_PASSED_CHECK_DEFINITIONS: Array<
     scope: 'PRESENTATION'
   },
   {
-    code: 'DESCRIPTION_REQUIRED',
-    label: '详情描述已填写',
-    scope: 'CATALOG'
+    code: 'INGREDIENT_COST_MISSING',
+    label: '原料成本已具备',
+    scope: 'COMMON'
   },
   {
     code: 'SELLING_POINT_REQUIRED',
     label: '一句话卖点已填写',
-    scope: 'CATALOG'
-  },
-  {
-    code: 'APPLICABLE_LIFE_STAGES_REQUIRED',
-    label: '适用生命阶段已选择',
     scope: 'CATALOG'
   },
   {

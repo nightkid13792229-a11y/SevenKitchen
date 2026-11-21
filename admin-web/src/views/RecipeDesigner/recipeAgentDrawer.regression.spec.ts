@@ -49,3 +49,42 @@ describe('AI 设计对话 · 完成交接', () => {
     expect(drawerSource).toContain('onBeforeUnmount')
   })
 })
+
+describe('AI 设计对话 · 第三阶段', () => {
+  it('选材卡可以逐条勾选并保存', () => {
+    expect(drawerSource).toContain('selectionChecked')
+    expect(drawerSource).toContain('保存选中清单')
+    expect(drawerSource).toContain('updateAgentSelectionItems')
+    expect(drawerSource).toContain('selectionDirty')
+  })
+
+  it('补剂先提案，人工点加入才写入', () => {
+    expect(drawerSource).toContain('补剂提案（待确认）')
+    expect(drawerSource).toContain('decideAgentSupplement')
+    expect(drawerSource).toContain('加入配方')
+    expect(drawerSource).toContain('不加')
+  })
+
+  it('引用未核验有提示', () => {
+    expect(drawerSource).toContain('unverifiedCitations')
+    expect(drawerSource).toContain('未核验')
+  })
+
+  it('支持撤销本次 AI 运行', () => {
+    expect(drawerSource).toContain('撤销本次 AI 运行')
+    expect(drawerSource).toContain('revertAgentRun')
+  })
+
+  it('ask 选项变成按钮，发送失败不丢输入', () => {
+    expect(drawerSource).toContain('pendingAsk')
+    expect(drawerSource).toContain('sendAskOption')
+    expect(drawerSource).toContain('optimisticId')
+    expect(drawerSource).toContain('input.value = text')
+  })
+
+  it('NEEDS_PROFILE 有补档案入口，CFCT 类别会归一化', () => {
+    expect(drawerSource).toContain('去补档案')
+    expect(drawerSource).toContain('openIngredientProfile')
+    expect(drawerSource).toContain('normalizeCfctCategory')
+  })
+})

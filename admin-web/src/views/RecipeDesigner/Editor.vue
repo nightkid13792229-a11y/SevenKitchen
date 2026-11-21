@@ -526,7 +526,6 @@ const orderId = String(route.query.orderId || '').trim()
 const designId = String(route.query.designId || '').trim()
 const isAdmin = useIsAdmin()
 const orderDesignWorkspace = ref<OrderDesignWorkspace | null>(null)
-const stagingReady = ref(false)
 
 const currentOrderSlot = computed<OrderDesignWorkspaceSlot | null>(() => {
   if (!designId || !orderDesignWorkspace.value) return null
@@ -1925,60 +1924,6 @@ async function handleReorder() {
     sortOrder: index
   }))
   enqueue({ kind: 'batchOrder', order })
-}
-
-/**
- * 把当前草稿「加入本单待提交」（仅管理员）。
- *
- * 先把保存队列里还没落盘的权重/排序刷完：ready 接口读的是服务器上的草稿，
- * 本地还没保存的修改不会跟着进去。
- */
-async function stageOrderDesign() {
-  if (!isAdmin.value) {
-    ElMessage.warning(ADMIN_ONLY_TIP)
-    return
-  }
-  if (!orderId || !designId) {
-    ElMessage.warning('请从本单设计工作台打开这份设计后再加入待提交')
-    return
-  }
-  if (!draft.value) return
-
-  try {
-    await ElMessageBox.confirm(
-      `确认把「${seriesDisplayName.value}」加入本单待提交吗？\n加入后顾客还看不到；管理员最终提交时才会一次性交付。`,
-      '加入本单待提交',
-      {
-        type: 'warning',
-        confirmButtonText: '加入待提交',
-        cancelButtonText: '取消'
-      }
-    )
-  } catch {
-    return
-  }
-
-  stagingReady.value = true
-  try {
-    await flushNow()
-    if (hasPending() || saveStatus.value === 'error') {
-      ElMessage.warning('还有改动尚未保存成功，请稍候再试')
-      return
-    }
-    const result = await orderRecipeDesignApi.markReady(orderId, designId)
-    const total = orderDesignWorkspace.value?.quantity ?? 0
-    ElMessage.success(
-      total > 0
-        ? `已加入本单待提交（${result.readyCount} / ${total} 份）`
-        : '已加入本单待提交'
-    )
-    await loadOrderDesignWorkspace()
-    await router.push(`/order-design/${encodeURIComponent(orderId)}`)
-  } catch {
-    // 错误提示由 API 拦截器统一处理
-  } finally {
-    stagingReady.value = false
-  }
 }
 
 /**

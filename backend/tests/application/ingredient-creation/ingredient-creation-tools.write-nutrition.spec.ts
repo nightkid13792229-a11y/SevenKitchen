@@ -295,6 +295,48 @@ describe('writeNutrition · 来源数值与人工值保护', () => {
     expect(draftService.patch).not.toHaveBeenCalled();
   });
 
+  it('人工值优先：即使 AI 写的数与来源不一致，也先跳过而不是报错', async () => {
+    const manualEntry = {
+      fieldPath: 'macros.crudeProtein',
+      finalValue: 21.2,
+      unit: 'g',
+      status: 'MANUAL',
+      sourceRecordId: 'rec-1',
+      sourceValue: 21.2,
+      sourceUnit: 'g',
+      formula: null,
+      confirmedBy: 'HUMAN_REVIEW',
+      confirmedAt: '2026-11-21T00:00:00.000Z',
+    };
+    const { tools } = createHarness({
+      profiles: [
+        {
+          preparationState: 'RAW',
+          sourceRecordId: 'rec-1',
+          entries: [manualEntry],
+          notes: '',
+        },
+      ],
+    });
+
+    const result = await write(tools, {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 12,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(String(result.content)).skipped).toEqual([
+      { fieldPath: 'macros.crudeProtein', reason: 'MANUAL' },
+    ]);
+  });
+
   it('写入成功时把来源值写进证据行', async () => {
     const { tools, draftService } = createHarness(
       {},

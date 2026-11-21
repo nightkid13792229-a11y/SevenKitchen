@@ -2880,6 +2880,28 @@ export class IngredientCreationToolsService {
       };
     }
 
+    // 人工值优先：先判人工核对，再判来源数值；否则人工格写了不同值会报
+    // 「与来源不一致」，而不是按约定跳过。
+    const currentProfile =
+      profileIndex < profiles.length ? profiles[profileIndex] : null;
+    const existingEntry =
+      currentProfile?.entries.find((entry) => entry.fieldPath === fieldPath) ??
+      null;
+    if (
+      existingEntry &&
+      (existingEntry.status === 'MANUAL' ||
+        (typeof existingEntry.confirmedBy === 'string' &&
+          existingEntry.confirmedBy.trim() !== ''))
+    ) {
+      return {
+        ok: true,
+        profiles,
+        preparationState: currentProfile!.preparationState,
+        changed: false,
+        skipped: 'MANUAL',
+      };
+    }
+
     const sourceValue = readCatalogFieldValue(
       sourceRecord.normalizedNutrition,
       fieldPath,

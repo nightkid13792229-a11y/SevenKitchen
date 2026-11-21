@@ -146,6 +146,14 @@ interface AuditChanges {
    * 就用这份清单把「哪些格子是人改的」带进审计。
    */
   ingredientFields: IngredientCardField[];
+  /**
+   * 2026-11-21 起授权写入即确认：审计要能回答「谁在什么时候确认可用」。
+   */
+  confirmation: {
+    mode: 'AUTHORIZE_WRITES_VERIFIED';
+    verifiedAt: string;
+    verifiedBy: string;
+  };
 }
 
 /** AI 提案（缝合方案）里，一个字段的原始值与状态。 */
@@ -389,6 +397,7 @@ function readIngredientManualFields(
 function buildAuditChanges(
   draft: IngredientCreationDraft,
   profiles: ProfileDraft[],
+  confirmation: { verifiedAt: string; verifiedBy: string },
 ): AuditChanges {
   const fields: AuditFieldChange[] = [];
 
@@ -469,6 +478,11 @@ function buildAuditChanges(
     fields,
     exceptions: Array.isArray(exceptions) ? exceptions : [],
     ingredientFields: readIngredientManualFields(draft),
+    confirmation: {
+      mode: 'AUTHORIZE_WRITES_VERIFIED',
+      verifiedAt: confirmation.verifiedAt,
+      verifiedBy: confirmation.verifiedBy,
+    },
   };
 }
 
@@ -589,7 +603,12 @@ export class IngredientCreationCommitService {
     const proposals = Array.isArray(draft.payload.proposalHistory)
       ? draft.payload.proposalHistory
       : [];
-    const changes = buildAuditChanges(draft, input.profiles);
+    // 写入即确认：本次授权的时刻就是这些档案的 verifiedAt。
+    const verifiedAt = new Date();
+    const changes = buildAuditChanges(draft, input.profiles, {
+      verifiedAt: verifiedAt.toISOString(),
+      verifiedBy: input.userId,
+    });
     const primaryNutritionData =
       preparedProfiles[primaryProfileIndex].nutritionData;
 
@@ -748,6 +767,7 @@ export class IngredientCreationCommitService {
               input.draftId,
               input.userId,
               stateCounts,
+              verifiedAt,
             ),
           });
         } catch (error) {
@@ -1116,6 +1136,7 @@ export class IngredientCreationCommitService {
     draftId: string,
     createdBy: string,
     stateCounts: Map<string, number>,
+    verifiedAt: Date,
   ): Prisma.NutritionFoodUncheckedCreateInput {
     const label = PREPARATION_STATE_LABELS[prepared.profile.preparationState];
     // 同状态只有一份时保持「原料名（生）」；多份时带来源，避免同名撞唯一键。
@@ -1142,8 +1163,10 @@ export class IngredientCreationCommitService {
       // 来源身份写进列上，档案能直接追回哪条来源记录。
       dataSource: prepared.sourceRecord.sourceType,
       externalId,
-      // 一律待验证：变成 VERIFIED 必须由人点「确认可用」，不在这里写。
-      status: 'PENDING',
+      // 2026-11-21：授权写入即确认可用（与补剂线一致），配方立即可选。
+      status: 'VERIFIED',
+      verifiedBy: createdBy,
+      verifiedAt,
       preparationState: prepared.profile.preparationState,
       preparationStateLabel: label,
       nutritionData: prepared.nutritionData as unknown as Prisma.InputJsonValue,

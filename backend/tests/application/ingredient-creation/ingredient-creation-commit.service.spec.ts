@@ -6,7 +6,6 @@ import {
 import { Test, type TestingModule } from '@nestjs/testing';
 import { IngredientCreationCommitService } from '../../../src/application/ingredient-creation/ingredient-creation-commit.service';
 import { IngredientCreationDraftService } from '../../../src/application/ingredient-creation/ingredient-creation-draft.service';
-import { NutritionFoodService } from '../../../src/application/nutrition-food/nutrition-food.service';
 import type {
   IngredientCreationDraftPayload,
   IngredientDraft,
@@ -553,7 +552,7 @@ const baseInput = {
 };
 
 describe('IngredientCreationCommitService', () => {
-  it('一次事务里建原料、两份 PENDING 档案、主映射与审计', async () => {
+  it('一次事务里建原料、两份 VERIFIED 档案、主映射与审计', async () => {
     const { service, prisma, store, txQueryRaw, queryRawLog } =
       await createHarness();
 
@@ -612,31 +611,33 @@ describe('IngredientCreationCommitService', () => {
       ingredientCreationDraftId: 'draft-1',
     });
 
-    // 两份档案都必须是 PENDING，且绝不能带 verifiedBy / verifiedAt
+    // 2026-11-21 起授权写入即确认：两份档案直接 VERIFIED，并记录确认人/时间
     const rawFoodData = prisma.nutritionFood.create.mock.calls[0][0].data;
     expect(rawFoodData).toMatchObject({
       name: '鸡肝（生）',
       category: 'OTHER',
       dataSource: 'USDA',
       externalId: 'USDA:05025',
-      status: 'PENDING',
+      status: 'VERIFIED',
       preparationState: 'RAW',
       preparationStateLabel: '生',
       createdBy: 'admin-1',
+      verifiedBy: 'admin-1',
     });
-    expect(rawFoodData.verifiedBy).toBeUndefined();
-    expect(rawFoodData.verifiedAt).toBeUndefined();
+    expect(rawFoodData.verifiedAt).toEqual(expect.any(Date));
 
     const cookedFoodData = prisma.nutritionFood.create.mock.calls[1][0].data;
     expect(cookedFoodData).toMatchObject({
       name: '鸡肝（熟）',
       dataSource: 'NZFCD',
       externalId: 'NZFCD:CHICKEN-LIVER-COOKED',
-      status: 'PENDING',
+      status: 'VERIFIED',
       preparationState: 'COOKED',
       preparationStateLabel: '熟',
       createdBy: 'admin-1',
+      verifiedBy: 'admin-1',
     });
+    expect(cookedFoodData.verifiedAt).toEqual(expect.any(Date));
 
     // 原料自己的 nutritionProfile 跟主档案一致（与既有主映射写入路径一致）
     expect(ingredientData.nutritionProfile).toEqual(rawFoodData.nutritionData);
@@ -684,8 +685,8 @@ describe('IngredientCreationCommitService', () => {
     ]);
 
     expect(store.nutritionFoods.map((row) => row.status)).toEqual([
-      'PENDING',
-      'PENDING',
+      'VERIFIED',
+      'VERIFIED',
     ]);
     expect(store.audits).toHaveLength(1);
   });
@@ -1524,58 +1525,20 @@ describe('IngredientCreationCommitService', () => {
     expect(store.audits).toHaveLength(0);
   });
 
-  it('提交返回的每个 nutritionFoodId 都能被「确认可用」写成 VERIFIED', async () => {
+  it('提交返回的每个 nutritionFoodId 在写入时就已确认可用', async () => {
     const { service, store } = await createHarness();
 
     const committed = await service.commit(baseInput);
 
-    // 提交只负责落 PENDING；「确认可用」是另一个动作，逐份验证。
     expect(committed.nutritionFoodIds).toHaveLength(2);
-    expect(
-      store.nutritionFoods.every((food) => food.status === 'PENDING'),
-    ).toBe(true);
-
-    const verifyPrisma = {
-      nutritionFood: {
-        findUnique: jest.fn(async ({ where }: { where: { id: string } }) => {
-          return (
-            store.nutritionFoods.find((food) => food.id === where.id) ?? null
-          );
-        }),
-        update: jest.fn(
-          async ({
-            where,
-            data,
-          }: {
-            where: { id: string };
-            data: Record<string, unknown>;
-          }) => {
-            const food = store.nutritionFoods.find(
-              (row) => row.id === where.id,
-            )!;
-            Object.assign(food, data);
-            return { ...food, mappings: [] };
-          },
-        ),
-      },
-    } as any;
-    const nutritionFoodService = new NutritionFoodService(verifyPrisma);
-
-    for (const nutritionFoodId of committed.nutritionFoodIds) {
-      const verified = await nutritionFoodService.verify(
-        nutritionFoodId,
-        'admin-1',
-      );
-      expect(verified.status).toBe('VERIFIED');
-    }
-
-    expect(verifyPrisma.nutritionFood.update).toHaveBeenCalledTimes(2);
     expect(
       store.nutritionFoods.every(
         (food) =>
           food.status === 'VERIFIED' &&
           food.verifiedBy === 'admin-1' &&
-          food.verifiedAt instanceof Date,
+          // 假 store 走 JSON 克隆，Date 会变成 ISO 字符串；真实 Prisma 收到的是 Date。
+          typeof food.verifiedAt === 'string' &&
+          !Number.isNaN(Date.parse(food.verifiedAt)),
       ),
     ).toBe(true);
   });

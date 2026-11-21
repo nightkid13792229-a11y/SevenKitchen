@@ -407,7 +407,7 @@ interface SupplementAiDraft {
 | 上架 | 上架=开 时，物理形态不能是液体 | 阻断 | 液体暂不支持分装 |
 | 上架 | 上架=开 时，不能有 ERROR 体检项 | 阻断 | 复用 catalog issues |
 | 上架 | 上架=关 时，不上架原因必选 | 阻断 | 四选一 |
-| 上架 | 储存条件 | 提醒 | 不影响打印/上架；空着时补剂分装标签用默认「避光、密封、阴凉干燥处保存」，有特殊要求需补充 |
+| 上架 | 储存条件 | 不提醒（选填） | 空着时补剂分装标签用默认「避光、密封、阴凉干燥处保存」；有特殊要求可填，不影响打印/上架 |
 | 上架 | 开盖后保质期（天） | 提醒 | 选填；标签写了就填，生产落点 `ingredient.opened_shelf_life_days` |
 | 上架 | 商城总开关关闭 | 提醒 | 写入后顾客看不到，需去设置开 |
 | DIY | DIY=开 时，购买平台必填且合法；购买链接选填 | 阻断仅平台 | 没链接不影响建档；有链接才能抓商品图/品牌 |
@@ -725,7 +725,7 @@ interface SupplementWriteVerification {
 |---|---|---|---|---|
 | 是否上架 | 是 | 是 | `ingredient.supplement_retail_enabled` | 上架=开时保质期/形态/单位/价格/无 ERROR |
 | 原厂保质期 | 是 | 上架=开时是 | `ingredient.shelf_life_months` | >0 |
-| 储存条件 | 是 | 提醒 | `ingredient.storage_condition` | ≤200；空着时订单标签用默认值 |
+| 储存条件 | 是 | 否（选填） | `ingredient.storage_condition` | ≤200；空着时订单标签用默认值，不产生提醒 |
 | 开盖后保质期（天） | 是 | 提醒 | `ingredient.opened_shelf_life_days` | 标签写了才填 |
 | 内容物油性 | 是 | 是 | `ingredient.is_oil_based` | 布尔 |
 | 不上架原因 | 是 | 上架=关时是 | `ingredient.properties.no_sale_reason` | 四选一 |
@@ -742,7 +742,7 @@ interface SupplementWriteVerification {
 | 商品图片 | 是 | 提醒 | `ingredient.properties.image_url` | 可空 |
 | 推荐商品 | 否 | — | `recommended_product`（仅 FOOD） | 补剂不适用；DIY 用 properties 兜底 |
 
-补剂分装标签（40×60mm，`backend/src/label/supplement-label.service.ts`）固定有「储存注意事项：」一行，值来自 `storageCondition`；订单服务在值为空时回退到默认「避光、密封、阴凉干燥处保存」。所以缺储存条件不是“印不出来”，而是“使用默认值、可能不适合特殊商品”。
+补剂分装标签（40×60mm，`backend/src/label/supplement-label.service.ts`）固定有「储存注意事项：」一行，值来自 `storageCondition`；订单服务在值为空时回退到默认「避光、密封、阴凉干燥处保存」。所以缺储存条件不是“印不出来”：默认值可接受，不产生审核提醒；只有特殊商品才需要填。
 
 ### 12.6 采购/生产
 

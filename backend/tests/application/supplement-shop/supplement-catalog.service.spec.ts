@@ -150,7 +150,7 @@ describe('SupplementCatalogService', () => {
     expect(psyllium.propertiesDisplayUnit).toBe('瓶');
   });
 
-  it('体检能识别：单位口径不一致、缺价、缺形态、缺保质期、缺储存条件', async () => {
+  it('体检能识别：单位口径不一致、缺价、缺形态、缺保质期', async () => {
     const { items } = await service.listCatalog();
 
     const psyllium = items.find((item) => item.id === 'psyllium')!;
@@ -163,7 +163,6 @@ describe('SupplementCatalogService', () => {
     expect(noPriceCodes).toContain('NO_PRICE');
     expect(noPriceCodes).toContain('FORM_MISSING');
     expect(noPriceCodes).toContain('SHELF_LIFE_MISSING');
-    expect(noPriceCodes).toContain('STORAGE_MISSING');
     expect(noPrice.unitCost).toBeNull();
   });
 

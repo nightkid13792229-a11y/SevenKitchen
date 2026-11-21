@@ -143,14 +143,6 @@ export function evaluateSupplementIssues(
     });
   }
 
-  if (!storageCondition) {
-    issues.push({
-      code: 'STORAGE_MISSING',
-      level: 'WARN',
-      message: '未填写储存条件，标签会用默认「避光、密封、阴凉干燥处保存」；如有特殊储存要求请补充',
-    });
-  }
-
   if (
     propertiesDisplayUnit &&
     unitDisplayLabel &&

@@ -357,9 +357,9 @@ describe('validateSupplementDraftFeatures', () => {
       {
         issues: [
           {
-            code: 'STORAGE_MISSING',
+            code: 'UNIT_INCONSISTENT',
             level: 'WARN',
-            message: '未填写储存条件，标签会用默认「避光、密封、阴凉干燥处保存」；如有特殊储存要求请补充',
+            message: '单位口径不一致',
           },
         ],
       },
@@ -369,9 +369,9 @@ describe('validateSupplementDraftFeatures', () => {
     expect(issue).toMatchObject({
       code: 'CATALOG_WARNING',
       level: 'WARNING',
-      ackKey: 'CATALOG_WARNING:STORAGE_MISSING',
+      ackKey: 'CATALOG_WARNING:UNIT_INCONSISTENT',
     });
-    expect(issue?.message).toContain('未填写储存条件');
+    expect(issue?.message).toContain('单位口径不一致');
   });
 
   it('上架=关时不报上架体检问题', () => {
@@ -1101,7 +1101,6 @@ describe('SupplementDraftReviewService', () => {
           'NO_PRICE',
           'UNIT_INCOMPATIBLE',
           'SHELF_LIFE_MISSING',
-          'STORAGE_MISSING',
           'DUPLICATE_NAME',
           'EQUIVALENCE_GROUP_NOT_APPROVED',
           'EQUIVALENCE_GROUP_SINGLETON',

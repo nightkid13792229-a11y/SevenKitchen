@@ -102,7 +102,7 @@
 
         <label class="draft-field">
           <span class="draft-field__label">
-            <span>储存条件</span>
+            <span>储存条件（选填）</span>
             <AiFieldTag :tag="aiTag('retail.storageCondition')" />
             <span
               v-if="isManual('retail.storageCondition')"
@@ -114,12 +114,12 @@
           </span>
           <el-input
             :model-value="retail.storageCondition"
-            placeholder="如 阴凉干燥处，开封后冷藏"
+            placeholder="不填默认：避光、密封、阴凉干燥处保存"
             maxlength="200"
             @update:model-value="(value: string) => update('storageCondition', value)"
           />
-          <em v-if="!retail.storageCondition.trim() && missingReason('retail.storageCondition')" class="draft-field__missing" :title="missingReason('retail.storageCondition')">
-            AI 没找到，请补
+          <em class="draft-field__hint">
+            不填时订单标签用默认「避光、密封、阴凉干燥处保存」；有特殊要求再填。
           </em>
         </label>
 

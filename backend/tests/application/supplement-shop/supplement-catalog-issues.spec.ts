@@ -101,19 +101,13 @@ describe('evaluateSupplementIssues', () => {
     ]);
   });
 
-  it('STORAGE_MISSING：缺储存条件只是提醒项', () => {
+  it('缺储存条件不再提醒：订单标签会用默认值', () => {
     const issues = evaluateSupplementIssues({
       ...healthy,
       storageCondition: null,
     });
 
-    expect(issues).toEqual([
-      {
-        code: 'STORAGE_MISSING',
-        level: 'WARN',
-        message: '未填写储存条件，标签会用默认「避光、密封、阴凉干燥处保存」；如有特殊储存要求请补充',
-      },
-    ]);
+    expect(issues).toEqual([]);
   });
 
   it('UNIT_INCONSISTENT：展示单位写了两份且不一致', () => {
@@ -307,11 +301,6 @@ describe('evaluateSupplementIssues', () => {
         code: 'SHELF_LIFE_MISSING',
         level: 'ERROR',
         message: '未填写原厂保质期，无法计算分装后有效期',
-      },
-      {
-        code: 'STORAGE_MISSING',
-        level: 'WARN',
-        message: '未填写储存条件，标签会用默认「避光、密封、阴凉干燥处保存」；如有特殊储存要求请补充',
       },
       {
         code: 'UNIT_INCONSISTENT',

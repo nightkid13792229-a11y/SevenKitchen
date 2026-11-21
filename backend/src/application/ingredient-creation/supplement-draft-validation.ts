@@ -723,21 +723,25 @@ export function validateSupplementDraftFeatures(
         ),
       );
     } else {
-      if (group.status !== 'APPROVED') {
+      // 默认「本次一并审核通过」时，写入会在同一事务里把组审到 APPROVED；
+      // 这里不能再拿写入前的旧状态吓人。只有取消自动审核才提醒。
+      if (group.status !== 'APPROVED' && equivalence.reapproveGroup === false) {
         issues.push(
           warningIssue(
             'GROUP_NOT_APPROVED',
-            `等价组「${group.name}」还未审核通过，加入后不参与替换`,
+            `等价组「${group.name}」还未审核通过；本次未勾选一并审核，写入后仍不参与替换`,
             group.id,
             'equivalence.groupId',
           ),
         );
       }
-      if (group.memberCount <= 1) {
+      // 这份新补剂写入后会成为 1 个成员：现有 1 个 → 写入后 2 个，已可替换；
+      // 只有现有 0 个时，写入后仍只有 1 个，才提醒。
+      if (group.memberCount <= 0) {
         issues.push(
           warningIssue(
             'GROUP_SINGLETON',
-            `等价组「${group.name}」只有 1 个成员，等于不能替换`,
+            `等价组「${group.name}」还没有成员；加入后仍只有 1 个，不能替换`,
             group.id,
             'equivalence.groupId',
           ),

@@ -111,7 +111,7 @@ describe('evaluateSupplementIssues', () => {
       {
         code: 'STORAGE_MISSING',
         level: 'WARN',
-        message: '未填写储存条件，标签无法印刷',
+        message: '未填写储存条件，标签上的「储存注意事项」会留空',
       },
     ]);
   });
@@ -311,7 +311,7 @@ describe('evaluateSupplementIssues', () => {
       {
         code: 'STORAGE_MISSING',
         level: 'WARN',
-        message: '未填写储存条件，标签无法印刷',
+        message: '未填写储存条件，标签上的「储存注意事项」会留空',
       },
       {
         code: 'UNIT_INCONSISTENT',

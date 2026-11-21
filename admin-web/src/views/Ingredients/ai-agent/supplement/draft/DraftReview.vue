@@ -116,7 +116,7 @@
           <div class="draft-review__issue-body">
             <span class="draft-review__issue-message">{{ issue.message }}</span>
             <span v-if="issue.fieldPath" class="draft-review__issue-field">
-              字段：<code>{{ issue.fieldPath }}</code>
+              字段：{{ fieldLabelOf(issue.fieldPath) }}
             </span>
           </div>
         </li>
@@ -151,10 +151,7 @@
             </el-checkbox>
             <div class="draft-review__issue-meta">
               <span v-if="issue.fieldPath" class="draft-review__issue-field">
-                字段：<code>{{ issue.fieldPath }}</code>
-              </span>
-              <span class="draft-review__issue-field">
-                确认键：<code>{{ ackKeyOf(issue) }}</code>
+                字段：{{ fieldLabelOf(issue.fieldPath) }}
               </span>
             </div>
           </li>
@@ -775,11 +772,13 @@ const readiness = computed<ReadinessItem[]>(() => {
     items.push({
       key: 'equivalence',
       label: '等价组',
-      status: 'warn',
-      detail: `已选等价组 ${groupId}；组状态/成员数无法在审核屏确认`,
+      status: reapprove ? 'ready' : 'warn',
+      detail: reapprove
+        ? '已选等价组；写入时同事务自动审核，并加入这条新补剂'
+        : '已选等价组；本次不自动审核，写入后仍不参与替换',
       note: reapprove
-        ? '默认勾选一并审核：写入时同事务自动审到已审核（已审核组先打回待审核再重审）；写入后核验组状态/成员数/浓度'
-        : '已取消一并审核：组保持当前/草稿状态，需去等价组页提交审核，缺货替换暂不生效'
+        ? '已审核组会先打回待审核再重审；写入后核验组状态/成员数/浓度'
+        : '需要去等价组页提交审核；写入后核验组状态/成员数/浓度'
     })
   }
 

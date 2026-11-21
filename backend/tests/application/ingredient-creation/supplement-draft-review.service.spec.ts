@@ -359,7 +359,7 @@ describe('validateSupplementDraftFeatures', () => {
           {
             code: 'STORAGE_MISSING',
             level: 'WARN',
-            message: '未填写储存条件，标签无法印刷',
+            message: '未填写储存条件，标签上的「储存注意事项」会留空',
           },
         ],
       },
@@ -612,9 +612,28 @@ describe('validateSupplementDraftFeatures', () => {
     expect(issueOf(issues, 'GROUP_SINGLETON')).toBeUndefined();
   });
 
-  it('组未审核 → GROUP_NOT_APPROVED 提醒，ackKey 带组 id', () => {
+  it('组未审核但本次一并审核 → 不再提醒旧状态', () => {
     const issues = featureIssues(
       { equivalence: { groupId: 'group-1' } },
+      {
+        equivalenceGroup: groupContext({
+          status: 'PENDING_REVIEW',
+          memberCount: 3,
+        }),
+      },
+    );
+
+    expect(issueOf(issues, 'GROUP_NOT_APPROVED')).toBeUndefined();
+  });
+
+  it('组未审核且取消一并审核 → GROUP_NOT_APPROVED 提醒，ackKey 带组 id', () => {
+    const issues = featureIssues(
+      {
+        equivalence: {
+          groupId: 'group-1',
+          reapproveGroup: false,
+        },
+      },
       {
         equivalenceGroup: groupContext({
           status: 'PENDING_REVIEW',
@@ -630,10 +649,19 @@ describe('validateSupplementDraftFeatures', () => {
     expect(issueOf(issues, 'GROUP_SINGLETON')).toBeUndefined();
   });
 
-  it('组只有 1 个成员 → GROUP_SINGLETON 提醒，ackKey 带组 id', () => {
+  it('组里已有 1 个成员 → 加入后是 2 个，不再提醒单成员', () => {
     const issues = featureIssues(
       { equivalence: { groupId: 'group-1' } },
       { equivalenceGroup: groupContext({ memberCount: 1 }) },
+    );
+
+    expect(issueOf(issues, 'GROUP_SINGLETON')).toBeUndefined();
+  });
+
+  it('组里 0 个成员 → 加入后仍只有 1 个，提醒不能替换', () => {
+    const issues = featureIssues(
+      { equivalence: { groupId: 'group-1' } },
+      { equivalenceGroup: groupContext({ memberCount: 0 }) },
     );
 
     expect(issueOf(issues, 'GROUP_SINGLETON')).toMatchObject({

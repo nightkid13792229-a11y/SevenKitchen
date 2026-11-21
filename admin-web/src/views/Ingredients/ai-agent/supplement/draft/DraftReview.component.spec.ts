@@ -298,7 +298,7 @@ describe('补剂草稿最终审核页', () => {
 
     expect(wrapper.text()).toContain('功能就绪')
     expect(wrapper.text()).toContain('按草稿意向估算')
-    expect(wrapper.find('[data-readiness-count]').text()).toContain('4/6')
+    expect(wrapper.find('[data-readiness-count]').text()).toContain('5/6')
 
     const retail = wrapper.find('[data-readiness-item="retail"]')
     expect(retail.attributes('data-status')).toBe('off')
@@ -312,7 +312,7 @@ describe('补剂草稿最终审核页', () => {
     expect(procurement.attributes('data-status')).toBe('ready')
 
     const equivalence = wrapper.find('[data-readiness-item="equivalence"]')
-    expect(equivalence.attributes('data-status')).toBe('warn')
+    expect(equivalence.attributes('data-status')).toBe('ready')
     expect(equivalence.text()).toContain('打回待审核')
     expect(equivalence.text()).toContain('写入后核验')
 

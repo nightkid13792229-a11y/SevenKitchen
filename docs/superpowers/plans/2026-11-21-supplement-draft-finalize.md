@@ -505,6 +505,8 @@ bash scripts/session.sh commit -m "feat(supplement): 服务端草稿 CRUD" \
 
 Cover: duplicate; catalog exact → pass, non-exact labelNames → warning with candidates (not basic.name); retail on with ERROR; retail off without reason; shelfLifeMonths present but invalid (0/negative/decimal, including retail off); noSaleReason not in the four-value whitelist; DIY on without platform; DIY on with empty linkUrl → no blocker; DIY platform not in the allowed whitelist; storageCondition >200; purchaseUnit >50; group not approved/singleton/skip; group concentration MISSING/UNIT_MISMATCH → warning; global shop/equivalence off warnings; missing evidence images → warning with per-image ackKey (not blocker). Assert levels and codes.
 
+- Group pre-write warnings must reflect the post-write state: when `reapproveGroup` is true, do **not** emit `GROUP_NOT_APPROVED`; `GROUP_SINGLETON` only when the group has 0 members (adding this draft makes 1, still singleton). Emit them only when auto-approval is off / the group stays singleton.
+
 - [ ] **Step 2: Run and confirm failure**
 
 Run: `cd backend && npx jest tests/application/ingredient-creation/supplement-draft-review.service.spec.ts --runInBand`

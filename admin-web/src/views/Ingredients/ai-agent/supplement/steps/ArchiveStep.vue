@@ -416,7 +416,10 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:selectionNote', value: string): void
-  (event: 'saved', value: { ingredientId: string; nutritionFoodId: string; evidenceId: string }): void
+  (
+    event: 'saved',
+    value: { ingredientId: string; nutritionFoodId: string; evidenceId: string; name?: string },
+  ): void
   (event: 'go-launch'): void
 }>()
 
@@ -842,7 +845,7 @@ async function submit(): Promise<void> {
   try {
     const result = await ingredientCreationApi.createSupplement(payload)
     saved.value = result
-    emit('saved', result)
+    emit('saved', { ...result, name: draft.name.trim() })
     ElMessage.success('已写入，等确认可用')
   } catch (error) {
     errorText.value = apiErrorMessage(error, '写入失败，请稍后重试')

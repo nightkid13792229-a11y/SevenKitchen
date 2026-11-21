@@ -275,4 +275,61 @@ describe('草稿流程导航守卫', () => {
     expect(wrapper.find('[data-action="reload"]').exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it('重新加载返回 404 时退回列表，不把 404 误当成普通错误', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+
+    await wrapper.find('.draft-editor__name input').setValue('铜（改）')
+    await flushPromises()
+    api.update.mockRejectedValueOnce({ response: { status: 409 } })
+    await wrapper.find('[data-action="back"]').trigger('click')
+    await flushPromises()
+
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValueOnce('confirm' as never)
+    api.get.mockRejectedValueOnce({ response: { status: 404 } })
+
+    await wrapper.find('[data-action="reload"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-action="back"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('还没有草稿')
+    wrapper.unmount()
+  })
+
+  it('重新加载失败（非 404）保留冲突与本地内容，可继续重试', async () => {
+    const draft = draftView()
+    api.list.mockResolvedValue([])
+    api.create.mockResolvedValue(draft)
+    api.get.mockResolvedValue(draft)
+
+    const wrapper = mount(SupplementDraftFlow, {
+      global: { plugins: [ElementPlus] }
+    })
+    await openEditor(wrapper)
+
+    await wrapper.find('.draft-editor__name input').setValue('铜（改）')
+    await flushPromises()
+    api.update.mockRejectedValueOnce({ response: { status: 409 } })
+    await wrapper.find('[data-action="back"]').trigger('click')
+    await flushPromises()
+
+    vi.spyOn(ElMessageBox, 'confirm').mockResolvedValueOnce('confirm' as never)
+    api.get.mockRejectedValueOnce({ response: { status: 500 } })
+
+    await wrapper.find('[data-action="reload"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-action="back"]').exists()).toBe(true)
+    expect(wrapper.find('[data-action="reload"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('加载草稿失败')
+    wrapper.unmount()
+  })
 })

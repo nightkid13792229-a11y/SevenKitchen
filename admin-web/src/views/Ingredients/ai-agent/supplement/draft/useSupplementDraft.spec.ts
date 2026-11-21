@@ -243,6 +243,32 @@ describe('草稿保存状态', () => {
     scope.stop()
   })
 
+  it('409 后暂停自动保存，手动保存成功后恢复', async () => {
+    api.get.mockResolvedValueOnce(draftView('draft-a'))
+    const { state, scope } = setup('draft-a')
+    await state.load()
+
+    state.draft.value!.payload.basic.name = '铜（改）'
+    await nextTick()
+    api.update.mockRejectedValueOnce({ response: { status: 409 } })
+    await state.save()
+
+    expect(state.autosavePaused.value).toBe(true)
+    expect(api.update).toHaveBeenCalledTimes(1)
+
+    // 暂停期间继续改，也不会再自己发 PATCH 制造连环 409。
+    state.draft.value!.payload.basic.name = '铜（再改）'
+    await nextTick()
+    expect(api.update).toHaveBeenCalledTimes(1)
+
+    api.update.mockResolvedValueOnce(
+      draftView('draft-a', { name: '铜（再改）' })
+    )
+    await state.save()
+    expect(state.autosavePaused.value).toBe(false)
+    scope.stop()
+  })
+
   it('409 置 conflict，重新加载后以服务端 manualFields 为准', async () => {
     api.get.mockResolvedValueOnce(draftView('draft-a'))
     const { state, scope } = setup('draft-a')
@@ -334,6 +360,69 @@ describe('在飞请求的草稿归属', () => {
     expect(state.review.value).toBeNull()
     expect(state.draft.value?.id).toBe('draft-b')
     expect(state.validating.value).toBe(false)
+    scope.stop()
+  })
+
+  it('已 manual 的字段在 AI 期间被改也不丢，合并后标脏并补存', async () => {
+    const draftA = draftView('draft-a')
+    draftA.manualFields = ['evidence.selectionNote']
+    draftA.payload.evidence.frontImageUrl = 'https://example.com/front.png'
+    draftA.payload.evidence.labelImageUrl = 'https://example.com/label.png'
+    draftA.payload.evidence.selectionNote = '原来的选品依据'
+    api.get.mockResolvedValueOnce(draftA)
+    const { state, scope } = setup('draft-a')
+    await state.load()
+
+    let resolveAi!: (value: SupplementDraftView) => void
+    api.aiFill.mockReturnValueOnce(
+      new Promise<SupplementDraftView>((resolve) => {
+        resolveAi = resolve
+      })
+    )
+    const pending = state.runAi()
+    await nextTick()
+
+    // markManual 对已存在的路径会直接 return；改值仍必须被保住。
+    state.markManual('evidence.selectionNote')
+    state.draft.value!.payload.evidence.selectionNote = 'AI 期间的本地新值'
+
+    const aiView = draftView('draft-a', {
+      manualFields: ['evidence.selectionNote']
+    })
+    aiView.payload.evidence.frontImageUrl = 'https://example.com/front.png'
+    aiView.payload.evidence.labelImageUrl = 'https://example.com/label.png'
+    aiView.payload.evidence.selectionNote = 'AI 回包的值'
+    resolveAi(aiView)
+    await pending
+
+    expect(state.draft.value?.payload.evidence.selectionNote).toBe(
+      'AI 期间的本地新值'
+    )
+    expect(state.dirty.value).toBe(true)
+    expect(state.error.value).toContain('合并回草稿')
+    expect(state.error.value).not.toContain('已保留你的修改')
+
+    const savedView = draftView('draft-a', {
+      manualFields: ['evidence.selectionNote']
+    })
+    savedView.payload.evidence.selectionNote = 'AI 期间的本地新值'
+    api.update.mockResolvedValueOnce(savedView)
+    // runAi 结束后会排一次 800ms 防抖补存；等它真正把合并值发出去。
+    await new Promise((resolve) => setTimeout(resolve, 1100))
+
+    expect(api.update).toHaveBeenCalledWith(
+      'draft-a',
+      expect.objectContaining({
+        manualFields: expect.arrayContaining(['evidence.selectionNote']),
+        payload: expect.objectContaining({
+          evidence: expect.objectContaining({
+            selectionNote: 'AI 期间的本地新值'
+          })
+        })
+      })
+    )
+    // 保存成功后才撤掉「正在保存」提示。
+    expect(state.error.value).toBeNull()
     scope.stop()
   })
 

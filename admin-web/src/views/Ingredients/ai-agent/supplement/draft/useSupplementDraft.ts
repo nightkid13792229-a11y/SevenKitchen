@@ -34,8 +34,11 @@ import {
 import { getApiErrorMessage } from '@/utils/apiError'
 import {
   canFinalize,
+  cloneDraftPayload,
+  cloneDraftValue,
   hasBlocker,
   isManualDraftPath,
+  isSameDraftValue,
   mergeManualFields,
   readDraftPath,
   writeDraftPath
@@ -43,6 +46,10 @@ import {
 
 /** 自动保存防抖：人停手 800ms 后才发 PATCH。 */
 const AUTOSAVE_DEBOUNCE_MS = 800
+
+/** AI 合并人工修改后的提示；只在这次合并真的保存成功后撤掉。 */
+const AI_MERGE_MESSAGE =
+  'AI 起草期间检测到人工修改：已把人工值合并回草稿，正在保存；请核对后再离开'
 
 /** 判「内容有没有变」只比人可编辑的三块，`updatedAt` 等元数据不参与。 */
 function signatureOf(draft: SupplementDraftView | null): string {
@@ -89,6 +96,12 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   const manualFields = ref<string[]>([])
   /** 保存/AI/校验进行中人又改了：等动作结束再补一次自动保存。 */
   const pendingAutosave = ref(false)
+  /** 409 后暂停自动保存，直到人重新加载或手动保存成功，避免连环 409。 */
+  const autosavePaused = ref(false)
+  /** 最近一次 load 的 HTTP 状态；404 时 Flow 要退回列表。 */
+  const loadErrorStatus = ref<number | null>(null)
+  /** AI 合并人改后的提示文案；只有它还在 error 里且保存成功才清。 */
+  let aiMergeError: string | null = null
 
   /**
    * 请求代次：`reset()` / `load()` 递增。请求回来时代次不同就丢弃结果。
@@ -142,6 +155,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     dirty.value = false
     saveError.value = ''
     conflict.value = false
+    autosavePaused.value = false
   }
 
   /**
@@ -170,7 +184,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   function drainPendingAutosave(): void {
     if (!pendingAutosave.value) return
     pendingAutosave.value = false
-    if (!draft.value || disposed) return
+    if (!draft.value || disposed || autosavePaused.value) return
     if (signatureOf(draft.value) === lastKnownSignature) return
     if (saving.value || loading.value || aiRunning.value || validating.value || finalizing.value) {
       pendingAutosave.value = true
@@ -213,7 +227,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
   }
 
   function scheduleAutosave(delayMs = AUTOSAVE_DEBOUNCE_MS): void {
-    if (disposed) return
+    if (disposed || autosavePaused.value) return
     clearAutosaveTimer()
     autosaveTimer = setTimeout(() => {
       autosaveTimer = null
@@ -286,6 +300,9 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     error.value = null
     saveError.value = ''
     conflict.value = false
+    autosavePaused.value = false
+    loadErrorStatus.value = null
+    aiMergeError = null
     dirty.value = false
     manualFields.value = []
     lastKnownSignature = ''
@@ -302,8 +319,10 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     review.value = null
     validatedSignature = ''
     error.value = null
-    saveError.value = ''
-    conflict.value = false
+    loadErrorStatus.value = null
+    if (!conflict.value) {
+      saveError.value = ''
+    }
     loading.value = false
     saving.value = false
     aiRunning.value = false
@@ -316,6 +335,8 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       lastKnownSignature = ''
       dirty.value = false
       manualFields.value = []
+      conflict.value = false
+      autosavePaused.value = false
       return null
     }
 
@@ -328,6 +349,7 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       return loaded
     } catch (err) {
       if (!isCurrent(epochAtStart, id)) return null
+      loadErrorStatus.value = statusOf(err)
       error.value = getApiErrorMessage(err, '加载草稿失败')
       return null
     } finally {
@@ -379,13 +401,26 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       }
       saveError.value = ''
       conflict.value = false
+      autosavePaused.value = false
+      // AI 合并人改后确实保存成功了，才撤掉那条「正在保存」提示。
+      if (aiMergeError && error.value === aiMergeError) {
+        error.value = null
+        aiMergeError = null
+      }
       return updated
     } catch (err) {
       if (!isCurrent(epochAtStart, idAtStart)) return null
-      conflict.value = statusOf(err) === 409
-      saveError.value = conflict.value
-        ? '草稿已被更新，可以点「重新加载草稿」取回服务端最新内容'
-        : getApiErrorMessage(err, '保存草稿失败')
+      const status = statusOf(err)
+      if (status === 409) {
+        conflict.value = true
+        autosavePaused.value = true
+        clearAutosaveTimer()
+        pendingAutosave.value = false
+        saveError.value =
+          '草稿已被更新，可以点「重新加载草稿」取回服务端最新内容'
+      } else {
+        saveError.value = getApiErrorMessage(err, '保存草稿失败')
+      }
       dirty.value = true
       return null
     } finally {
@@ -441,31 +476,58 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       })
       if (!isCurrent(epochAtStart, idAtStart)) return null
 
+      // 服务端回包整体替换前，先把**所有** manualFields 的本地值盖回去，
+      // 不只 AI 期间新增的那些：已有 manual 字段如果在 AI 期间被改，
+      // markManual 会因为路径已存在直接 return，不能靠 addedManual 判断。
+      const serverManual = mergeManualFields(updated.manualFields)
+      const serverPayload = cloneDraftPayload(updated.payload)
+      const serverSignature = signatureOf({
+        ...updated,
+        payload: serverPayload,
+        manualFields: serverManual
+      })
       const localBeforeApply = draft.value
-      const addedManual = manualFields.value.filter(
-        (path) => !manualAtStart.includes(path)
-      )
-      const changedDuringAi =
-        localBeforeApply !== null && signatureOf(localBeforeApply) !== signatureAtStart
-      if (localBeforeApply && addedManual.length > 0) {
-        for (const path of addedManual) {
+      const manualToRestore = localBeforeApply
+        ? mergeManualFields(manualAtStart, manualFields.value)
+        : manualAtStart
+      let mergedManualValue = false
+      if (localBeforeApply) {
+        for (const path of manualToRestore) {
           const localValue = readDraftPath(localBeforeApply.payload, path)
+          const serverValue = readDraftPath(updated.payload, path)
+          if (!isSameDraftValue(localValue, serverValue)) {
+            mergedManualValue = true
+          }
           writeDraftPath(
             updated.payload,
             path,
-            localValue === undefined
-              ? undefined
-              : (JSON.parse(JSON.stringify(localValue)) as unknown)
+            cloneDraftValue(localValue)
           )
         }
-        updated.manualFields = mergeManualFields(updated.manualFields, addedManual)
+        updated.manualFields = mergeManualFields(serverManual, manualToRestore)
       }
+      const mergedManual = mergeManualFields(updated.manualFields)
+      const manualListChanged = mergedManual.length !== serverManual.length
+      const changedDuringAi =
+        localBeforeApply !== null &&
+        signatureOf(localBeforeApply) !== signatureAtStart
+      const needsSave =
+        localBeforeApply !== null &&
+        (changedDuringAi || mergedManualValue || manualListChanged)
       applyServerDraft(updated, {
-        preserveLocalManual: addedManual.length > 0
+        preserveLocalManual: manualToRestore.length > 0
       })
-      if (changedDuringAi) {
+      if (needsSave) {
+        // 合并后的本地内容并不等于服务端回包，必须重新标脏并补存一次，
+        // 不能把 lastKnownSignature 记成合并内容后假装「已同步」。
+        lastKnownSignature = serverSignature
+        dirty.value = true
+        pendingAutosave.value = true
+        aiMergeError = AI_MERGE_MESSAGE
+        error.value = AI_MERGE_MESSAGE
+      } else if (changedDuringAi) {
         error.value =
-          'AI 起草期间检测到草稿有改动：已保留你的修改，请逐项核对 AI 结果后再保存'
+          'AI 起草期间检测到草稿改动但缺少人改标记，请逐项核对 AI 结果'
       }
       verification.value = updated.verification
       review.value = null
@@ -670,6 +732,8 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
     dirty,
     manualFields,
     conflict,
+    autosavePaused,
+    loadErrorStatus,
     pendingAutosave,
     markManual,
     hasUnsavedWork,

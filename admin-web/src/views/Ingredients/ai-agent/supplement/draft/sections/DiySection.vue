@@ -5,6 +5,7 @@
       <div class="draft-section__row">
         <span class="draft-field__label">
           <span>是否用于 DIY</span>
+          <AiFieldTag :tag="aiTag('diy.enabled')" />
           <span
             v-if="isManual('diy.enabled')"
             class="draft-field__manual"
@@ -28,6 +29,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>购买平台</span>
+            <AiFieldTag :tag="aiTag('diy.platform')" />
             <span
               v-if="isManual('diy.platform')"
               class="draft-field__manual"
@@ -54,6 +56,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>购买链接</span>
+            <AiFieldTag :tag="aiTag('diy.linkUrl')" />
             <span
               v-if="isManual('diy.linkUrl')"
               class="draft-field__manual"
@@ -71,13 +74,19 @@
             />
             <el-button
               :loading="fetching"
-              :disabled="!diy.linkUrl.trim() || fetching"
+              :disabled="locked || !diy.linkUrl.trim() || fetching"
               data-action="diy-fetch"
               @click="fetchFromLink"
             >
               从链接抓取
             </el-button>
           </div>
+          <em v-if="!diy.platform && missingReason('diy.platform')" class="draft-field__missing" :title="missingReason('diy.platform')">
+            AI 没找到，请补
+          </em>
+          <em v-if="!diy.linkUrl.trim() && missingReason('diy.linkUrl')" class="draft-field__missing" :title="missingReason('diy.linkUrl')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             抓取用于补商品主图/品牌/规格；目前支持 iHerb 等能读到的商品页。
           </em>
@@ -105,6 +114,7 @@
             plain
             size="small"
             :loading="adopting"
+            :disabled="locked"
             data-action="diy-adopt-image"
             @click="adoptFetchedImage"
           >
@@ -115,11 +125,15 @@
     </div>
 
     <div class="draft-section__group">
-      <h4 class="draft-section__title">商品图片</h4>
+      <h4 class="draft-section__title">
+        商品图片
+        <AiFieldTag :tag="aiTag('diy.imageUrl')" />
+      </h4>
       <div class="draft-diy__image-row">
         <div
           class="draft-diy__image-slot"
           :class="{ 'draft-diy__image-slot--filled': diy.imageUrl }"
+          @click="pickFile"
           @dragover.prevent
           @drop.prevent="onDrop"
         >
@@ -141,13 +155,19 @@
             hidden
             @change="onFileChange"
           />
-          <el-button :loading="uploading" data-action="diy-upload" @click="pickFile">
+          <el-button
+            :loading="uploading"
+            :disabled="locked"
+            data-action="diy-upload"
+            @click="pickFile"
+          >
             {{ diy.imageUrl ? '替换图片' : '上传图片' }}
           </el-button>
           <el-button
             v-if="diy.imageUrl"
             text
             type="danger"
+            :disabled="locked"
             data-action="diy-clear-image"
             @click="clearImage"
           >
@@ -155,6 +175,9 @@
           </el-button>
           <em class="draft-field__hint">
             上传会转存到我们自己的图床；公司商品图与 DIY 链接共用同一套上传接口。
+          </em>
+          <em v-if="!diy.imageUrl && missingReason('diy.imageUrl')" class="draft-field__missing" :title="missingReason('diy.imageUrl')">
+            AI 没找到，请补
           </em>
           <em v-if="uploadError" class="draft-field__warn">{{ uploadError }}</em>
         </div>
@@ -174,13 +197,21 @@
  */
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import type { SupplementDraftDiy } from '@/api/supplementDrafts'
+import type {
+  SupplementDraftAiSnapshot,
+  SupplementDraftDiy
+} from '@/api/supplementDrafts'
 import { ingredientApi } from '@/api/ingredients'
 import { ingredientCreationApi } from '@/api/ingredientCreation'
 import { getApiErrorMessage } from '@/utils/apiError'
 import { isManualDraftPath } from '../supplementDraftState'
+import AiFieldTag from './AiFieldTag.vue'
+import { aiFieldTag, aiMissingReason } from './aiFieldMeta'
 
 const props = defineProps<{
+  aiSnapshot?: SupplementDraftAiSnapshot | null
+  /** AI 起草中或差异弹窗打开：窗口级粘贴/拖入也要拒绝，不能只靠遮罩 */
+  locked?: boolean
   /** 人改过的字段路径；用于显示「人改」标记 */
   manualFields?: string[]
   /** 只有人的输入事件才调用它（初始加载/AI 回写都不调用） */
@@ -211,6 +242,9 @@ function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
 
+const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
+
 function update<K extends keyof SupplementDraftDiy>(
   key: K,
   value: SupplementDraftDiy[K]
@@ -238,6 +272,7 @@ async function uploadImage(file: File): Promise<string> {
 }
 
 async function acceptFile(file: File): Promise<void> {
+  if (props.locked) return
   if (!file.type.startsWith('image/')) {
     ElMessage.warning('这不是图片文件')
     return
@@ -257,6 +292,7 @@ async function acceptFile(file: File): Promise<void> {
 }
 
 function pickFile(): void {
+  if (props.locked) return
   fileInput.value?.click()
 }
 
@@ -270,6 +306,7 @@ async function onFileChange(event: Event): Promise<void> {
 }
 
 async function onDrop(event: DragEvent): Promise<void> {
+  if (props.locked) return
   const file = event.dataTransfer?.files?.[0]
   if (file) {
     await acceptFile(file)
@@ -277,6 +314,7 @@ async function onDrop(event: DragEvent): Promise<void> {
 }
 
 function clearImage(): void {
+  if (props.locked) return
   update('imageUrl', '')
 }
 
@@ -285,6 +323,7 @@ function clearImage(): void {
  * 避免抢掉普通文字粘贴。
  */
 async function onPaste(event: ClipboardEvent): Promise<void> {
+  if (props.locked) return
   const target = event.target as HTMLElement | null
   if (
     target &&
@@ -313,6 +352,7 @@ onBeforeUnmount(() => {
 })
 
 async function fetchFromLink(): Promise<void> {
+  if (props.locked) return
   const url = diy.value.linkUrl.trim()
   if (!url) {
     ElMessage.warning('先填购买链接')
@@ -343,6 +383,7 @@ async function fetchFromLink(): Promise<void> {
 
 /** 采用抓到的商品图：先转存到我们自己的图床，再写进草稿。 */
 async function adoptFetchedImage(): Promise<void> {
+  if (props.locked) return
   const source = fetchedImage.value
   if (!source) return
   adopting.value = true
@@ -404,6 +445,7 @@ async function adoptFetchedImage(): Promise<void> {
 }
 
 .draft-diy__image-slot {
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;

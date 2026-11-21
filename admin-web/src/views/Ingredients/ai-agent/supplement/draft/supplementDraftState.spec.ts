@@ -279,16 +279,22 @@ describe('AI 重填 diff', () => {
     after.basic.brand = 'AI 品牌'
     after.nutrition.servingNutrients = { 'fattyAcids.epa': 120 }
 
+    const local = basePayload()
+    local.basic.name = '本地名字'
+    local.basic.brand = '本地品牌'
+    local.nutrition.servingNutrients = { 'fattyAcids.epa': 100 }
+
     const result = applyDraftAiSelection(
       before,
       after,
       ['basic.brand'],
-      ['basic.name']
+      ['basic.name'],
+      local
     )
 
     expect(result.payload.basic.name).toBe('AI 名字')
-    // 人改过的品牌即使 AI 给了新值，也不采用。
-    expect(result.payload.basic.brand).toBe('旧品牌')
+    // 人改过的品牌即使 AI 给了新值，也保留当前本地值（不是 before）。
+    expect(result.payload.basic.brand).toBe('本地品牌')
     expect(result.payload.nutrition.servingNutrients['fattyAcids.epa']).toBe(100)
     expect(result.manualPaths).toEqual(
       expect.arrayContaining([
@@ -297,6 +303,32 @@ describe('AI 重填 diff', () => {
       ])
     )
     expect(result.manualPaths).not.toContain('basic.name')
+  })
+
+  it('manual 行保留当前本地值，非 manual 未勾选行才回退 before', () => {
+    const before = basePayload()
+    before.basic.name = '旧名字'
+    before.basic.brand = '旧品牌'
+    const after = basePayload()
+    after.basic.name = 'AI 名字'
+    after.basic.brand = 'AI 品牌'
+    const local = basePayload()
+    local.basic.name = 'AI 名字'
+    local.basic.brand = '本地最新品牌'
+
+    const result = applyDraftAiSelection(
+      before,
+      after,
+      ['basic.brand'],
+      [],
+      local
+    )
+
+    expect(result.payload.basic.brand).toBe('本地最新品牌')
+    expect(result.payload.basic.name).toBe('旧名字')
+    expect(result.manualPaths).toEqual(
+      expect.arrayContaining(['basic.brand', 'basic.name'])
+    )
   })
 
   it('「保留我的」把全部变化回退成原值', () => {

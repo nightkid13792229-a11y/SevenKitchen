@@ -6,6 +6,7 @@
         <label class="draft-field" style="flex: 1">
           <span class="draft-field__label">
             <span>等价组</span>
+            <AiFieldTag :tag="aiTag('equivalence.groupId')" />
             <span
               v-if="isManual('equivalence.groupId')"
               class="draft-field__manual"
@@ -33,6 +34,9 @@
               :value="group.id"
             />
           </el-select>
+          <em v-if="!equivalence.groupId && missingReason('equivalence.groupId')" class="draft-field__missing" :title="missingReason('equivalence.groupId')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             「暂不归组」是明确表态，和「还没选」不同；最终校验会要求二者之一。
           </em>
@@ -47,6 +51,7 @@
         <label class="draft-field" style="width: 200px">
           <span class="draft-field__label">
             <span>组内优先级</span>
+            <AiFieldTag :tag="aiTag('equivalence.priority')" />
             <span
               v-if="isManual('equivalence.priority')"
               class="draft-field__manual"
@@ -193,14 +198,18 @@ import {
 } from '@/api/supplementEquivalence'
 import {
   supplementDraftsApi,
+  type SupplementDraftAiSnapshot,
   type SupplementDraftEquivalence,
   type SupplementDraftGroupRecommendations
 } from '@/api/supplementDrafts'
 import { getApiErrorMessage } from '@/utils/apiError'
 import { GROUP_SKIPPED } from '../../launchConfigState'
 import { isManualDraftPath } from '../supplementDraftState'
+import AiFieldTag from './AiFieldTag.vue'
+import { aiFieldTag, aiMissingReason } from './aiFieldMeta'
 
 const props = defineProps<{
+  aiSnapshot?: SupplementDraftAiSnapshot | null
   /** 当前草稿 id：推荐接口按草稿态算候选 */
   draftId: string
   /** 人改过的字段路径；用于显示「人改」标记 */
@@ -241,6 +250,9 @@ function groupOptionLabel(group: EquivalenceGroupSummary): string {
 function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
+
+const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
 
 async function loadGroups(): Promise<void> {
   groupsLoading.value = true

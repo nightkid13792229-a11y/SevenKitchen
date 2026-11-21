@@ -179,10 +179,21 @@ export function isManualDraftPath(
 const NUTRIENT_SECTION_PREFIX = 'nutrition.servingNutrients.'
 
 /** JSON 深拷贝：payload 只含可序列化值，避开结构化克隆对响应式代理的限制。 */
+export function cloneDraftValue<T>(value: T): T {
+  if (value === undefined) return value
+  return JSON.parse(JSON.stringify(value)) as T
+}
+
+/** 深拷贝整份草稿载荷。 */
 export function cloneDraftPayload(
   payload: SupplementDraftPayload
 ): SupplementDraftPayload {
-  return JSON.parse(JSON.stringify(payload)) as SupplementDraftPayload
+  return cloneDraftValue(payload)
+}
+
+/** 与 diff 同一口径的值比较（数字、数组、对象键序无关）。 */
+export function isSameDraftValue(left: unknown, right: unknown): boolean {
+  return isSameValue(left, right)
 }
 
 /** 读叶子路径的值；读不到返回 undefined。 */
@@ -256,14 +267,36 @@ export function applyDraftAiSelection(
   before: SupplementDraftPayload,
   after: SupplementDraftPayload,
   manualFields: readonly string[],
-  applyPaths: readonly string[]
+  applyPaths: readonly string[],
+  /**
+   * 当前本地载荷（默认用 after）。人改行必须保留这里的最新值，
+   * 不能回退成 AI 起草前的 before——否则等于把 AI 期间的人改丢掉。
+   */
+  localPayload: SupplementDraftPayload = after
 ): SupplementDraftAiApplyResult {
   const selected = new Set(applyPaths)
   const payload = cloneDraftPayload(after)
   const manualPaths: string[] = []
   for (const row of diffDraft(before, after, manualFields)) {
-    if (selected.has(row.path) && !row.manual) continue
-    writeDraftPath(payload, row.path, readDraftPath(before, row.path))
+    if (row.manual) {
+      // 人改行：保留当前本地值，并继续锁进 manualFields。
+      writeDraftPath(
+        payload,
+        row.path,
+        cloneDraftValue(readDraftPath(localPayload, row.path))
+      )
+      if (!manualPaths.includes(row.path)) {
+        manualPaths.push(row.path)
+      }
+      continue
+    }
+    if (selected.has(row.path)) continue
+    // 非人改且未勾选：回退成原值，并标人改。
+    writeDraftPath(
+      payload,
+      row.path,
+      cloneDraftValue(readDraftPath(before, row.path))
+    )
     if (!manualPaths.includes(row.path)) {
       manualPaths.push(row.path)
     }

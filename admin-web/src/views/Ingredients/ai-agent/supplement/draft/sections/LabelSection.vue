@@ -6,6 +6,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>标签分类</span>
+            <AiFieldTag :tag="aiTag('label.labelCategory')" />
             <span
               v-if="isManual('label.labelCategory')"
               class="draft-field__manual"
@@ -23,6 +24,9 @@
             <el-option label="饲料原料" value="FEED_MATERIAL" />
             <el-option label="饲料添加剂" value="FEED_ADDITIVE" />
           </el-select>
+          <em v-if="!label.labelCategory && missingReason('label.labelCategory')" class="draft-field__missing" :title="missingReason('label.labelCategory')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             两本目录只用来查规范名，不判断犬用适用范围。
           </em>
@@ -31,6 +35,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>添加时机</span>
+            <AiFieldTag :tag="aiTag('basic.addTiming')" />
             <span
               v-if="isManual('basic.addTiming')"
               class="draft-field__manual"
@@ -48,6 +53,9 @@
             <el-option label="制作中" value="BEFORE_MIXING" />
             <el-option label="随餐" value="BEFORE_MEAL" />
           </el-select>
+          <em v-if="!addTiming && missingReason('basic.addTiming')" class="draft-field__missing" :title="missingReason('basic.addTiming')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             写入原料档案的添加时机，最终审核会按允许值再校验一次。
           </em>
@@ -61,6 +69,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>标签名称（目录规范名）</span>
+            <AiFieldTag :tag="aiTag('label.labelNames')" />
             <span
               v-if="isManual('label.labelNames')"
               class="draft-field__manual"
@@ -80,6 +89,9 @@
             style="width: 100%"
             @update:model-value="(value: string[]) => updateLabelNames(value)"
           />
+          <em v-if="label.labelNames.length === 0 && missingReason('label.labelNames')" class="draft-field__missing" :title="missingReason('label.labelNames')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             目录规范名由 AI 填入，可手改；这里不判断犬用适用范围。没把握的名称请对照目录再确认。
           </em>
@@ -88,6 +100,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>标签分类标签</span>
+            <AiFieldTag :tag="aiTag('label.tagNames')" />
             <span
               v-if="isManual('label.tagNames')"
               class="draft-field__manual"
@@ -107,6 +120,9 @@
             style="width: 100%"
             @update:model-value="(value: string[]) => updateTagNames(value)"
           />
+          <em v-if="label.tagNames.length === 0 && missingReason('label.tagNames')" class="draft-field__missing" :title="missingReason('label.tagNames')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             按允许词表填写；AI 从标签里认出来的会先放在这里，最终审核会再核对。
           </em>
@@ -148,12 +164,16 @@
  */
 import { computed } from 'vue'
 import type {
+  SupplementDraftAiSnapshot,
   SupplementDraftLabel,
   SupplementLabelCategory
 } from '@/api/supplementDrafts'
 import { isManualDraftPath } from '../supplementDraftState'
+import AiFieldTag from './AiFieldTag.vue'
+import { aiFieldTag, aiMissingReason } from './aiFieldMeta'
 
 const props = defineProps<{
+  aiSnapshot?: SupplementDraftAiSnapshot | null
   /** 人改过的字段路径；用于显示「人改」标记 */
   manualFields?: string[]
   /** 只有人的输入事件才调用它（初始加载/AI 回写都不调用） */
@@ -168,6 +188,9 @@ const manual = computed(() => props.manualFields ?? [])
 function isManual(path: string): boolean {
   return isManualDraftPath(path, manual.value)
 }
+
+const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
 
 function updateCategory(value: string): void {
   props.markManual?.('label.labelCategory')

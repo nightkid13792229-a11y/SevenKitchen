@@ -41,6 +41,7 @@
         :dirty="dirty"
         :save-error="saveError"
         :conflict="conflict"
+        :locked="aiDiff !== null"
         :mark-manual="markManual"
         @save="handleSaveAndLeave"
         @run-ai="handleRunAi"
@@ -173,6 +174,7 @@ const {
   finalizing,
   error,
   manualFields,
+  loadErrorStatus,
   markManual,
   hasUnsavedWork,
   load,
@@ -357,10 +359,11 @@ async function handleAiDiffApply(applyPaths: string[]): Promise<void> {
     pending.before,
     pending.after,
     pending.manualFields,
-    applyPaths
+    applyPaths,
+    // 人改行必须保留「当前本地值」，不能回退成 AI 前的 before。
+    target.payload
   )
   aiDiff.value = null
-  error.value = null
   target.payload = payload
   for (const path of manualPaths) {
     markManual(path)
@@ -375,6 +378,10 @@ async function handleAiDiffApply(applyPaths: string[]): Promise<void> {
   }
   const saved = await save()
   if (!saved) {
+    if (saving.value) {
+      ElMessage.warning('正在保存，修改已留在编辑页，稍后会自动补存')
+      return
+    }
     ElMessage.error(saveError.value || '保存失败，修改还在编辑页')
     return
   }
@@ -410,10 +417,16 @@ async function handleReload(): Promise<void> {
   }
   const loaded = await load()
   if (!loaded) {
-    if (selectedDraftId.value && !loading.value && !error.value) {
-      // 服务端已没有这张草稿（被放弃/删除）时退回列表。
+    if (loadErrorStatus.value === 404) {
+      // 这张草稿已经被放弃/删除：留在编辑页没有意义，退回列表。
+      ElMessage.warning('这张草稿已不存在，已返回草稿列表')
       await returnToList()
+      return
     }
+    // 网络/500 等：保留 conflict 与本地内容，允许重试，不要清成「已同步」。
+    ElMessage.error(
+      error.value || '重新加载失败，请检查网络后重试；本地修改仍保留'
+    )
     return
   }
   ElMessage.success('已重新加载服务端草稿')

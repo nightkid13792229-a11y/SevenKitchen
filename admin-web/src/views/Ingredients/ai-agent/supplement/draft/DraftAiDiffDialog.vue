@@ -6,7 +6,7 @@
     aria-modal="true"
     aria-label="AI 起草结果：采用前先对一遍"
   >
-    <div class="draft-diff__panel">
+    <div ref="panelRef" class="draft-diff__panel" tabindex="-1">
       <header class="draft-diff__head">
         <h3 class="draft-diff__title">AI 起草结果：采用前先对一遍</h3>
         <span class="draft-diff__sub">
@@ -123,7 +123,7 @@
  *   回退到原值并逐条 `markManual`。
  * - 弹窗不可点遮罩/Esc 关闭，必须明确选一次，避免不小心把 AI 值留在表单里。
  */
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { SupplementDraftPayload } from '@/api/supplementDrafts'
 import {
   diffDraft,
@@ -152,6 +152,49 @@ const selectableRows = computed(() => rows.value.filter((row) => !row.manual))
 
 /** 默认全选「非人改」行；人改行默认保持原值。 */
 const selected = ref<string[]>([])
+
+/** 弹窗自己的焦点陷阱：差异未选完前，Tab 不能跑回后面的表单。 */
+const panelRef = ref<HTMLElement | null>(null)
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function focusableElements(): HTMLElement[] {
+  const panel = panelRef.value
+  if (!panel) return []
+  return Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    // 不能 Esc 跳过：必须明确选「采用所选」或「保留我的」。
+    event.preventDefault()
+    return
+  }
+  if (event.key !== 'Tab') return
+  const elements = focusableElements()
+  if (elements.length === 0) return
+  const first = elements[0]!
+  const last = elements[elements.length - 1]!
+  const active = document.activeElement
+  if (event.shiftKey && (active === first || !panelRef.value?.contains(active))) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && (active === last || !panelRef.value?.contains(active))) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+onMounted(async () => {
+  await nextTick()
+  focusableElements()[0]?.focus()
+  window.addEventListener('keydown', onKeydown, true)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeydown, true)
+})
 
 watch(
   selectableRows,

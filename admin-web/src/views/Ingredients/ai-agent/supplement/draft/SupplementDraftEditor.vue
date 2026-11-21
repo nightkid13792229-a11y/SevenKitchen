@@ -21,6 +21,7 @@
           text
           class="draft-editor__back"
           data-action="back"
+          :disabled="formLocked"
           @click="emit('back')"
         >
           ← 返回草稿列表
@@ -30,7 +31,7 @@
           class="draft-editor__name"
           placeholder="未命名补剂"
           maxlength="200"
-          :disabled="aiRunning || finalizing"
+          :disabled="formLocked || finalizing"
         />
       </div>
 
@@ -53,7 +54,7 @@
         <el-tooltip :content="aiHint" placement="bottom">
           <span class="draft-editor__ai-anchor">
             <el-button
-              :disabled="!aiReady || aiRunning || validating || finalizing || saving"
+              :disabled="!aiReady || formLocked || validating || finalizing || saving"
               :loading="aiRunning"
               data-action="run-ai"
               @click="emit('run-ai')"
@@ -65,7 +66,7 @@
 
         <el-button
           type="primary"
-          :disabled="saving || aiRunning || validating || finalizing"
+          :disabled="formLocked || saving || validating || finalizing"
           :loading="validating"
           data-action="review"
           @click="emit('review')"
@@ -77,9 +78,9 @@
 
     <div
       class="draft-editor__body"
-      :class="{ 'draft-editor__body--locked': aiRunning }"
-      :aria-busy="aiRunning"
-      :inert="aiRunning"
+      :class="{ 'draft-editor__body--locked': formLocked }"
+      :aria-busy="formLocked"
+      :inert="formLocked"
     >
       <nav class="draft-editor__nav" aria-label="草稿区块">
         <button
@@ -150,6 +151,7 @@
           v-else-if="activeSection === 'label'"
           v-model="draft.payload.label"
           v-model:add-timing="draft.payload.basic.addTiming"
+          :ai-snapshot="aiSnapshot"
           :manual-fields="draft.manualFields"
           :mark-manual="markManual"
         />
@@ -163,6 +165,7 @@
             draft.payload.basic.currentPricePerPurchaseUnit
           "
           :unit-display-label="draft.payload.basic.unitDisplayLabel"
+          :ai-snapshot="aiSnapshot"
           :manual-fields="draft.manualFields"
           :mark-manual="markManual"
         />
@@ -170,6 +173,8 @@
         <DiySection
           v-else-if="activeSection === 'diy'"
           v-model="draft.payload.diy"
+          :ai-snapshot="aiSnapshot"
+          :locked="formLocked"
           :manual-fields="draft.manualFields"
           :mark-manual="markManual"
         />
@@ -183,6 +188,7 @@
             draft.payload.basic.currentPricePerPurchaseUnit
           "
           :unit-display-label="draft.payload.basic.unitDisplayLabel"
+          :ai-snapshot="aiSnapshot"
           :manual-fields="draft.manualFields"
           :mark-manual="markManual"
         />
@@ -191,6 +197,7 @@
           v-else-if="activeSection === 'equivalence'"
           v-model="draft.payload.equivalence"
           :draft-id="draft.id"
+          :ai-snapshot="aiSnapshot"
           :manual-fields="draft.manualFields"
           :mark-manual="markManual"
         />
@@ -199,15 +206,22 @@
           v-else
           v-model="draft.payload.evidence"
           :ai-snapshot="aiSnapshot"
+          :locked="formLocked"
           :manual-fields="draft.manualFields"
           :mark-manual="markManual"
         />
       </main>
 
-      <div v-if="aiRunning" class="draft-editor__lock" data-ai-lock>
-        <p class="draft-editor__lock-title">AI 正在读图起草…</p>
+      <div v-if="formLocked" class="draft-editor__lock" data-ai-lock>
+        <p class="draft-editor__lock-title">
+          {{ aiRunning ? 'AI 正在读图起草…' : '请先处理 AI 差异' }}
+        </p>
         <p class="draft-editor__lock-desc">
-          起草期间表单锁定，避免 AI 结果覆盖你正在改的内容。请稍候。
+          {{
+            aiRunning
+              ? '起草期间表单锁定，避免 AI 结果覆盖你正在改的内容。请稍候。'
+              : '差异弹窗关闭前不能编辑草稿；请选择「采用所选」或「保留我的」。'
+          }}
         </p>
       </div>
     </div>
@@ -224,7 +238,7 @@
         <el-button
           type="primary"
           :loading="saving"
-          :disabled="aiRunning || validating || finalizing"
+          :disabled="formLocked || validating || finalizing"
           data-action="save"
           @click="emit('save')"
         >
@@ -233,7 +247,7 @@
         <el-button
           type="danger"
           plain
-          :disabled="saving || aiRunning || validating || finalizing"
+          :disabled="formLocked || saving || validating || finalizing"
           data-action="discard"
           @click="emit('discard')"
         >
@@ -286,6 +300,8 @@ const props = defineProps<{
   saveError: string
   /** 上一次保存是 409 冲突：显示「重新加载草稿」入口 */
   conflict?: boolean
+  /** AI 差异弹窗打开等场景：锁住整个表单，避免绕过遮罩改字段 */
+  locked?: boolean
   /** 人改标记入口（由父级 composable 的 markManual 提供） */
   markManual?: (path: string) => void
 }>()
@@ -341,8 +357,15 @@ const aiSnapshot = computed<SupplementDraftAiSnapshot | null>(
   () => props.draft?.aiSnapshot ?? null
 )
 
+/** AI 起草中或差异弹窗打开时，整个表单都锁住。 */
+const formLocked = computed(
+  () => props.aiRunning || props.locked === true
+)
+
 /** 点路径 → 编辑页区块；只认 payload 里的业务区块。 */
 function sectionOfPath(path: string): SectionKey | null {
+  // 添加时机虽然存在 basic 里，但编辑入口在「标签与合规」，角标跟着入口走。
+  if (path === 'basic.addTiming') return 'label'
   const key = path.split('.')[0]
   switch (key) {
     case 'basic':
@@ -407,9 +430,11 @@ const activeManualCount = computed(
 const draftName = computed({
   get: () => props.draft?.name ?? '',
   set: (value: string) => {
-    if (props.draft) {
-      props.draft.name = value
-    }
+    if (!props.draft) return
+    props.draft.name = value
+    // 草稿名与原料名保持同步，并记成人改：AI 重跑时不能把名字覆盖回去。
+    props.draft.payload.basic.name = value
+    props.markManual?.('basic.name')
   }
 })
 

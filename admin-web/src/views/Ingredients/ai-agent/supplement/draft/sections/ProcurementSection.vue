@@ -5,6 +5,7 @@
       <div class="draft-section__row">
         <span class="draft-field__label">
           <span>是否用于生产/采购</span>
+          <AiFieldTag :tag="aiTag('procurement.enabled')" />
           <span
             v-if="isManual('procurement.enabled')"
             class="draft-field__manual"
@@ -47,10 +48,16 @@
  * 这里只读展示，避免同一份口径在两处被改出差异。
  */
 import { computed } from 'vue'
-import type { SupplementDraftProcurement } from '@/api/supplementDrafts'
+import type {
+  SupplementDraftAiSnapshot,
+  SupplementDraftProcurement
+} from '@/api/supplementDrafts'
 import { isManualDraftPath } from '../supplementDraftState'
+import AiFieldTag from './AiFieldTag.vue'
+import { aiFieldTag } from './aiFieldMeta'
 
 const props = defineProps<{
+  aiSnapshot?: SupplementDraftAiSnapshot | null
   /** 采购口径（来自「商品与基本信息」），只读 */
   purchaseUnit: string
   purchaseToBaseRatio: number | null
@@ -77,6 +84,8 @@ const priceText = computed(() =>
 function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
+
+const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
 
 function updateEnabled(value: boolean): void {
   props.markManual?.('procurement.enabled')

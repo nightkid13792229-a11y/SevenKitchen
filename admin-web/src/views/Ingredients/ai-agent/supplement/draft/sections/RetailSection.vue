@@ -5,6 +5,7 @@
       <div class="draft-section__row">
         <span class="draft-field__label">
           <span>是否上架补剂商城</span>
+          <AiFieldTag :tag="aiTag('retail.enabled')" />
           <span
             v-if="isManual('retail.enabled')"
             class="draft-field__manual"
@@ -48,6 +49,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>原厂保质期（月）</span>
+            <AiFieldTag :tag="aiTag('retail.shelfLifeMonths')" />
             <span
               v-if="isManual('retail.shelfLifeMonths')"
               class="draft-field__manual"
@@ -67,6 +69,9 @@
                 update('shelfLifeMonths', value ?? null)
             "
           />
+          <em v-if="!retail.shelfLifeMonths && missingReason('retail.shelfLifeMonths')" class="draft-field__missing" :title="missingReason('retail.shelfLifeMonths')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">标签上写的未开封保质期，按整月填。</em>
         </label>
 
@@ -83,7 +88,7 @@
           </span>
           <el-input-number
             :model-value="retail.openedShelfLifeDays ?? undefined"
-            :min="0"
+            :min="1"
             :precision="0"
             controls-position="right"
             style="width: 100%"
@@ -98,6 +103,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>储存条件</span>
+            <AiFieldTag :tag="aiTag('retail.storageCondition')" />
             <span
               v-if="isManual('retail.storageCondition')"
               class="draft-field__manual"
@@ -112,11 +118,15 @@
             maxlength="200"
             @update:model-value="(value: string) => update('storageCondition', value)"
           />
+          <em v-if="!retail.storageCondition.trim() && missingReason('retail.storageCondition')" class="draft-field__missing" :title="missingReason('retail.storageCondition')">
+            AI 没找到，请补
+          </em>
         </label>
 
         <label class="draft-field">
           <span class="draft-field__label">
             <span>内容物是否油性</span>
+            <AiFieldTag :tag="aiTag('retail.isOilBased')" />
             <span
               v-if="isManual('retail.isOilBased')"
               class="draft-field__manual"
@@ -142,6 +152,7 @@
         <label class="draft-field" style="flex: 1">
           <span class="draft-field__label">
             <span>不上架原因</span>
+            <AiFieldTag :tag="aiTag('retail.noSaleReason')" />
             <span
               v-if="isManual('retail.noSaleReason')"
               class="draft-field__manual"
@@ -163,6 +174,9 @@
               :value="option.value"
             />
           </el-select>
+          <em v-if="!retail.noSaleReason && missingReason('retail.noSaleReason')" class="draft-field__missing" :title="missingReason('retail.noSaleReason')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             不上架时必选；原因会写进原料 properties，制作单据此提示。
           </em>
@@ -195,11 +209,17 @@
  * “配置改了价格跟着动”的不确定性。
  */
 import { computed } from 'vue'
-import type { SupplementDraftRetail } from '@/api/supplementDrafts'
+import type {
+  SupplementDraftAiSnapshot,
+  SupplementDraftRetail
+} from '@/api/supplementDrafts'
 import { NO_SALE_REASONS, type NoSaleReason } from '../../launchConfigState'
 import { isManualDraftPath } from '../supplementDraftState'
+import AiFieldTag from './AiFieldTag.vue'
+import { aiFieldTag, aiMissingReason } from './aiFieldMeta'
 
 const props = defineProps<{
+  aiSnapshot?: SupplementDraftAiSnapshot | null
   /** 采购单位 / 换算倍数 / 进货价 / 展示单位：来自「商品与基本信息」，只读展示 */
   purchaseUnit: string
   purchaseToBaseRatio: number | null
@@ -254,6 +274,9 @@ const perUnitCostText = computed(() => {
 function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
+
+const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
 
 function update<K extends keyof SupplementDraftRetail>(
   key: K,

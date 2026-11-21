@@ -89,6 +89,11 @@
   line-height: 18px;
 }
 
+.draft-field__source--low {
+  background: #fff4e5;
+  color: #c46a00;
+}
+
 .draft-field__manual {
   padding: 0 6px;
   border-radius: 8px;

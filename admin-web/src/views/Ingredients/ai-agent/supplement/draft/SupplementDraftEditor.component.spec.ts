@@ -5,7 +5,7 @@
  * 复核点：顶部/底部不能再说「已自动保存」——防抖期间必须是「未保存」，
  * 保存失败必须显示「保存失败」，只有服务端确认过才是「已保存」。
  */
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ElementPlus from 'element-plus'
 import type {
@@ -92,6 +92,7 @@ interface EditorProps {
   dirty: boolean
   saveError: string
   conflict: boolean
+  locked: boolean
 }
 
 function mountEditor(overrides: Partial<EditorProps> = {}) {
@@ -105,6 +106,7 @@ function mountEditor(overrides: Partial<EditorProps> = {}) {
       dirty: false,
       saveError: '',
       conflict: false,
+      locked: false,
       ...overrides
     },
     global: { plugins: [ElementPlus] }
@@ -148,6 +150,40 @@ describe('草稿编辑页保存状态', () => {
 
     await wrapper.find('[data-action="reload"]').trigger('click')
     expect(wrapper.emitted('reload')).toHaveLength(1)
+  })
+
+  it('顶部草稿名改名会同步 payload.basic.name 并标人改', async () => {
+    const draft = draftView()
+    const markManual = vi.fn()
+    const wrapper = mount(SupplementDraftEditor, {
+      props: {
+        draft,
+        saving: false,
+        aiRunning: false,
+        validating: false,
+        finalizing: false,
+        dirty: false,
+        saveError: '',
+        conflict: false,
+        markManual
+      },
+      global: { plugins: [ElementPlus] }
+    })
+
+    await wrapper.find('.draft-editor__name input').setValue('铜（新名）')
+
+    expect(markManual).toHaveBeenCalledWith('basic.name')
+    expect(draft.payload.basic.name).toBe('铜（新名）')
+    expect(draft.name).toBe('铜（新名）')
+  })
+
+  it('差异弹窗打开时（locked）同样锁表单', async () => {
+    const wrapper = mountEditor({ locked: true })
+    expect(wrapper.find('[data-ai-lock]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('请先处理 AI 差异')
+    expect(
+      wrapper.find('[data-action="save"]').attributes('disabled')
+    ).toBeDefined()
   })
 
   it('AI 起草期间显示遮罩锁定表单', async () => {

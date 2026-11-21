@@ -9,6 +9,7 @@
         <div class="draft-evidence__slot-wrap">
           <span class="draft-field__label">
             <span>商品正面图</span>
+            <AiFieldTag :tag="aiTag('evidence.frontImageUrl')" />
             <span
               v-if="isManual('evidence.frontImageUrl')"
               class="draft-field__manual"
@@ -44,6 +45,7 @@
             <el-button
               size="small"
               :loading="uploadingFront"
+              :disabled="locked"
               data-action="evidence-upload-front"
               @click="pick('front')"
             >
@@ -54,12 +56,16 @@
               text
               size="small"
               type="danger"
+              :disabled="locked"
               data-action="evidence-clear-front"
               @click="clearImage('front')"
             >
               移除
             </el-button>
           </div>
+          <em v-if="!evidence.frontImageUrl && missingReason('evidence.frontImageUrl')" class="draft-field__missing" :title="missingReason('evidence.frontImageUrl')">
+            AI 没找到，请补
+          </em>
           <em v-if="uploadErrors.front" class="draft-field__warn">
             {{ uploadErrors.front }}
           </em>
@@ -68,6 +74,7 @@
         <div class="draft-evidence__slot-wrap">
           <span class="draft-field__label">
             <span>标签图</span>
+            <AiFieldTag :tag="aiTag('evidence.labelImageUrl')" />
             <span
               v-if="isManual('evidence.labelImageUrl')"
               class="draft-field__manual"
@@ -103,6 +110,7 @@
             <el-button
               size="small"
               :loading="uploadingLabel"
+              :disabled="locked"
               data-action="evidence-upload-label"
               @click="pick('label')"
             >
@@ -113,12 +121,16 @@
               text
               size="small"
               type="danger"
+              :disabled="locked"
               data-action="evidence-clear-label"
               @click="clearImage('label')"
             >
               移除
             </el-button>
           </div>
+          <em v-if="!evidence.labelImageUrl && missingReason('evidence.labelImageUrl')" class="draft-field__missing" :title="missingReason('evidence.labelImageUrl')">
+            AI 没找到，请补
+          </em>
           <em v-if="uploadErrors.label" class="draft-field__warn">
             {{ uploadErrors.label }}
           </em>
@@ -147,6 +159,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>商品链接</span>
+            <AiFieldTag :tag="aiTag('evidence.productUrl')" />
             <span
               v-if="isManual('evidence.productUrl')"
               class="draft-field__manual"
@@ -161,6 +174,9 @@
             maxlength="500"
             @update:model-value="(value: string) => update('productUrl', value)"
           />
+          <em v-if="!evidence.productUrl.trim() && missingReason('evidence.productUrl')" class="draft-field__missing" :title="missingReason('evidence.productUrl')">
+            AI 没找到，请补
+          </em>
           <em class="draft-field__hint">
             商品链接只在这一处维护；DIY 的购买链接在「DIY 推荐」里单独填。
           </em>
@@ -169,6 +185,7 @@
         <label class="draft-field">
           <span class="draft-field__label">
             <span>选品依据</span>
+            <AiFieldTag :tag="aiTag('evidence.selectionNote')" />
             <span
               v-if="isManual('evidence.selectionNote')"
               class="draft-field__manual"
@@ -242,10 +259,14 @@ import type {
   SupplementDraftEvidence
 } from '@/api/supplementDrafts'
 import { isManualDraftPath } from '../supplementDraftState'
+import AiFieldTag from './AiFieldTag.vue'
+import { aiFieldTag, aiMissingReason } from './aiFieldMeta'
 
 const props = defineProps<{
   /** AI 起草快照：展示 missing 与决策理由 */
   aiSnapshot?: SupplementDraftAiSnapshot | null
+  /** AI 起草中或差异弹窗打开：窗口级粘贴/拖入也要拒绝，不能只靠遮罩 */
+  locked?: boolean
   /** 人改过的字段路径；用于显示「人改」标记 */
   manualFields?: string[]
   /** 只有人的输入事件才调用它（初始加载/AI 回写都不调用） */
@@ -363,6 +384,9 @@ function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
 
+const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
+
 function update<K extends keyof SupplementDraftEvidence>(
   key: K,
   value: SupplementDraftEvidence[K]
@@ -372,6 +396,7 @@ function update<K extends keyof SupplementDraftEvidence>(
 }
 
 function pick(slot: Slot): void {
+  if (props.locked) return
   activeSlot.value = slot
   if (slot === 'front') {
     frontInput.value?.click()
@@ -401,6 +426,7 @@ function setImage(slot: Slot, url: string): void {
 }
 
 async function acceptImage(slot: Slot, file: File): Promise<void> {
+  if (props.locked) return
   if (!file.type.startsWith('image/')) {
     ElMessage.warning('这不是图片文件')
     return
@@ -437,6 +463,7 @@ async function onFileChange(slot: Slot, event: Event): Promise<void> {
 }
 
 async function onDrop(slot: Slot, event: DragEvent): Promise<void> {
+  if (props.locked) return
   const file = event.dataTransfer?.files?.[0]
   if (file) {
     activeSlot.value = slot
@@ -445,6 +472,7 @@ async function onDrop(slot: Slot, event: DragEvent): Promise<void> {
 }
 
 function clearImage(slot: Slot): void {
+  if (props.locked) return
   setImage(slot, '')
 }
 
@@ -457,6 +485,7 @@ function pasteTarget(): Slot {
 }
 
 async function onPaste(event: ClipboardEvent): Promise<void> {
+  if (props.locked) return
   const target = event.target as HTMLElement | null
   if (
     target &&

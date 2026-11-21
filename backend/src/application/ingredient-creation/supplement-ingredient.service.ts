@@ -211,7 +211,35 @@ export class SupplementIngredientService {
           };
         });
 
-        const nutritionFood = await tx.nutritionFood.create({
+        /**
+         * 上一次写入中断（或原料被删）会在 nutrition_food 里留下同名孤儿：
+         * 营养档案的唯一键是 (name, dataSource, version)，孤儿在，这次插入就会撞键，
+         * 还会被误报成「补剂重复」。所以先找同名的无主档案，有就复用（更新数据）。
+         */
+        const existingFood = await tx.nutritionFood.findFirst({
+          where: {
+            name: nutritionFoodName,
+            dataSource: 'MANUAL',
+            version: 1,
+            mappings: { none: {} },
+          },
+          select: { id: true },
+        });
+        const nutritionFood = existingFood
+          ? await tx.nutritionFood.update({
+              where: { id: existingFood.id },
+              data: {
+                externalId: `SUPPLEMENT-MANUAL:${ingredient.id}`,
+                nutritionData: profile as unknown as Prisma.InputJsonValue,
+                defaultSupplementTargets:
+                  defaultSupplementTargets as unknown as Prisma.InputJsonValue,
+                status: 'VERIFIED',
+                verifiedBy: input.createdBy,
+                verifiedAt: new Date(),
+                notes: '补剂标签折算；建档时已逐项核对，随建档确认可用',
+              },
+            })
+          : await tx.nutritionFood.create({
           data: {
             name: nutritionFoodName,
             nameEn: null,
@@ -300,7 +328,9 @@ export class SupplementIngredientService {
           })} existing=${JSON.stringify(existing)}`,
         );
         throw new ConflictException(
-          existing ? this.duplicateMessage(existing) : '这条补剂已经建过（同名、同品牌、同规格），不要重复建',
+          existing
+            ? this.duplicateMessage(existing)
+            : '同名的补剂或营养档案已存在；刷新页面后重试，若仍失败请联系管理员',
         );
       }
       throw error;

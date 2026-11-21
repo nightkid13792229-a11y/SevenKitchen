@@ -396,6 +396,26 @@ export class RecipeAgentService implements OnModuleInit {
     phase: AgentPhase,
   ): Promise<void> {
     const startedAt = Date.now();
+    // 用户明确要求重新选材：确定性回到选材，不依赖模型是否调用工具。
+    if (phase !== 'PLAN' && /重新打开选材|回到选材|重新选材/.test(message)) {
+      await this.prisma.recipeDesignAgentSession.update({
+        where: { id: sessionId },
+        data: {
+          phase: 'SELECT',
+          selection: Prisma.DbNull,
+          selectionConfirmedAt: null,
+          status: 'WAITING_USER',
+          endedAt: new Date(),
+        },
+      });
+      await this.appendMessage(
+        sessionId,
+        'ASSISTANT',
+        '已回到选材阶段；请重新确认食材清单。',
+      );
+      await this.markWaiting(sessionId);
+      return;
+    }
     const config = await this.resolveConfig(flow);
     const port = new RecipeDraftPort(
       this.designer,

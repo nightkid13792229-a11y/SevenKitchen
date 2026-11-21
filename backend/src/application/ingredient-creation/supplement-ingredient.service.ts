@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+} from '@nestjs/common';
 import { IngredientType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
@@ -113,6 +118,8 @@ function isNutrientGroup(value: string): value is NutrientGroup {
 
 @Injectable()
 export class SupplementIngredientService {
+  private readonly logger = new Logger(SupplementIngredientService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   async create(
@@ -135,11 +142,23 @@ export class SupplementIngredientService {
             brand: input.brand ?? null,
             productModel: input.productModel ?? null
           },
-          select: { id: true }
+          select: { id: true, name: true, brand: true, productModel: true }
         });
         if (duplicate) {
+          // 把撞上的那条写清楚，否则人只看到"已建过"，不知道该改哪里
+          const spec = [duplicate.brand, duplicate.productModel]
+            .filter(Boolean)
+            .join(' · ');
+          this.logger.warn(
+            `[supplement-create] 重复建档 incoming=${JSON.stringify({
+              name: input.name,
+              brand: input.brand ?? null,
+              productModel: input.productModel ?? null,
+            })} existing=${JSON.stringify(duplicate)}`,
+          );
           throw new ConflictException(
-            '这条补剂已经建过了（同名、同品牌、同规格），不要重复建'
+            `已经有同名同规格的补剂：${duplicate.name}${spec ? `（${spec}）` : ''}。` +
+              '如果是同一款，去「原料库」找到它继续配置；不是的话，改一下名称或产品规格再存',
           );
         }
 

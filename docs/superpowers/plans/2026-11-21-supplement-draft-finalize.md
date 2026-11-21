@@ -1043,7 +1043,7 @@ Expected: FAIL — component missing.
 - Flow: on mount, load draft list; default list; “新建” creates a draft via API then opens editor; “继续” opens editor; “放弃” confirms then deletes and refreshes.
 - Editor: top bar with draft name, save status, “让 AI 起草”, “最终审核”; left nav for 8 sections; right content; bottom “保存并离开”/“放弃草稿”.
 - BasicSection fields: name, brand, model, channel, base unit, display unit, physical form, serving size, purchase unit, ratio, price, loss rate, add timing. Show AI/source badges from `draft.aiSnapshot` if available; mark missing fields. Product URL lives in EvidenceSection only (single source).
-- NutritionSection: nutrient groups, serving values, per-unit preview, default targets, label text.
+- NutritionSection: nutrient groups, serving values, per-unit preview, default targets, label text. The default-target cleanup watcher must use `{ deep: true, immediate: true }`.
 - Disable “胶囊”/“份” issues: display unit options from `supplementUsageUnitOptions` minus `份`; show “胶囊” option (Task 2 backend accepts).
 - “让 AI 起草” disabled unless both `evidence.frontImageUrl` and `evidence.labelImageUrl` are set; tooltip explains.
 
@@ -1097,6 +1097,10 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement the sections and diff dialog**
 
+- **Manual-field tracking (critical)**: Basic/Nutrition/Retail/DIY/Procurement/Equivalence/Evidence sections must call a composable `markManual(path)` on **human input only** (not on initial load or AI-applied values); `manualFields` is sent on every PATCH. Without this, the backend/AI cannot honor “不覆盖人改” and the diff dialog's manual labels are meaningless.
+- **AI-in-flight safety**: disable the form (or show a blocking overlay) while `aiRunning`; capture `before` before calling runAi, and show `DraftAiDiffDialog` after; if the user somehow edits during AI, do not silently overwrite — merge with manual paths and surface the conflict.
+- **Save-and-leave**: after `save()`, if `dirty` is still true or a pending autosave exists, stay on the editor and tell the user; do not navigate away with unsaved edits.
+- **409 recovery**: show a “重新加载草稿” action (reload from server) alongside the 409 message; do not require a browser refresh.
 - RetailSection: switch, shelf life, opened shelf life (days), storage, oil, no-sale reason (visible when off), price preview from existing quote API (optional).
 - DiySection: switch, platform/link/image, upload/paste, link fetch, “采用” with image transfer.
 - ProcurementSection: switch, purchase fields, SKU hint.
@@ -1155,7 +1159,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement review/verification**
 
-- Review loads via `useSupplementDraft.validate` on mount; show loading/error.
+- Review loads via `useSupplementDraft.validate` on mount; if the draft is dirty or `validatedSignature` no longer matches, re-validate before enabling finalize; show loading/error.
 - While `finalize` is pending, show a non-dismissible overlay with the steps (校验 → 写原料 → 写营养 → 写证据/标签 → 归组 → 回读核验); on failure keep the review data and show the error.
 - Use `fieldMapRows` for “字段 → 生产落点”.
 - Acknowledge warnings using the backend-provided `ackKey` (fallback to `code` only if absent); call `canFinalize`.

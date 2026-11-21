@@ -266,6 +266,7 @@ const selectionFoodItems = computed(() =>
 );
 const cfctCoverage = computed(() =>
   CFCT_CLASS_OPTIONS.map((category) => {
+    const confirmed = Boolean(session.value?.selectionConfirmedAt);
     const count = selectionFoodItems.value.filter(
       (item) => item.foodCategory === category,
     ).length;
@@ -373,9 +374,19 @@ async function send() {
   const text = input.value.trim();
   if (!text || sending.value || running.value) return;
   sending.value = true;
+  // 先乐观显示用户消息；接口慢或刷新失败时，至少不会“发了没反应”。
+  messages.value.push({
+    id: `temp-${Date.now()}`,
+    seq: Number.MAX_SAFE_INTEGER,
+    role: "USER",
+    content: text,
+    createdAt: new Date().toISOString(),
+  });
+  input.value = "";
+  await nextTick();
+  scrollToBottom();
   try {
     await recipeDesignerApi.startAgentRun(props.draftId, text);
-    input.value = "";
     await loadSession();
   } finally {
     sending.value = false;

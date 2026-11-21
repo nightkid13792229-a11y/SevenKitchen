@@ -317,6 +317,29 @@ describe('propose_selection normalization', () => {
     ).toThrow('选材阶段只列食材');
   });
 
+  it('allows a user-confirmed list with one item in a category', () => {
+    const normalized = normalizeSelection({
+      summary: '用户最终确认 9 项',
+      confirmed: true,
+      items: [
+        {
+          kind: 'FOOD',
+          name: '燕麦片',
+          foodCategory: '谷类及制品',
+          reason: 'x',
+        },
+        {
+          kind: 'FOOD',
+          name: '苹果',
+          foodCategory: '水果类及制品',
+          reason: 'x',
+        },
+      ],
+    });
+    expect(normalized.confirmed).toBe(true);
+    expect(normalized.items).toHaveLength(2);
+  });
+
   it('requires at least two candidates per category', () => {
     expect(() =>
       normalizeSelection({

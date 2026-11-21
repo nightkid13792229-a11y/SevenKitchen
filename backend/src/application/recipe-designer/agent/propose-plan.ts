@@ -99,7 +99,7 @@ const PROPOSE_SELECTION_DESCRIPTION =
   '按营养与忌口自由选食材，不要查原料库，也不要填写库 ID；提交后系统会按名称自动匹配原料库，没匹配到才标库外。' +
   `按 CFCT 固定 15 类分组（${CFCT_CLASS_PROMPT}），每个适用类型至少 2 个候选。` +
   '选材前先逐条读已确认方案（含 nonNutrient），任何候选违反一条就淘汰；方案约束优先级最高，不要按疾病名做选材特判。' +
-  '只有用户明确说“最终确认/就按这份清单/确认选材”时才把 confirmed 设为 true；此时只列用户确认的食材，不要补替代候选；' +
+  '只有用户明确说“最终确认/就按这份清单/确认选材”时才把 confirmed 设为 true；此时只列用户确认的食材，不要补替代候选；confirmed=true 时不受“每类至少 2 个”限制；' +
   '如果确认清单与方案硬约束冲突，先指出冲突并询问，不要把 confirmed 设为 true。' +
   '15 类是词表，不是必须每类都填：只在合格食材里分组，每个适用类型至少 2 个；凑不出就放进 skippedCategories，写清违反的是哪条方案约束；' +
   '不要用补剂、水、加工品、高脂坚果或高碘海藻凑数。' +
@@ -359,17 +359,21 @@ export function normalizeSelection(raw: unknown): AgentSelection {
   const items = rawItems.map((entry, index) =>
     normalizeSelectionItem(entry, index),
   );
-  const byCategory = new Map<string, number>();
-  for (const item of items) {
-    const category = item.foodCategory ?? '未分类';
-    byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
-  }
-  const singleton = [...byCategory.entries()].find(([, count]) => count < 2);
-  if (singleton) {
-    throw new AgentToolError(
-      'INVALID_ARGUMENT',
-      `食材类型「${singleton[0]}」至少要有 2 个候选；请补足后再提交`,
-    );
+  // 候选清单要求每类至少 2 个；但用户明确最终确认的清单是例外：
+  // 用户可能只选 1 个燕麦、1 个苹果，不能再用候选多样性规则拒绝。
+  if (input.confirmed !== true) {
+    const byCategory = new Map<string, number>();
+    for (const item of items) {
+      const category = item.foodCategory ?? '未分类';
+      byCategory.set(category, (byCategory.get(category) ?? 0) + 1);
+    }
+    const singleton = [...byCategory.entries()].find(([, count]) => count < 2);
+    if (singleton) {
+      throw new AgentToolError(
+        'INVALID_ARGUMENT',
+        `食材类型「${singleton[0]}」至少要有 2 个候选；请补足后再提交（用户最终确认的清单除外，需 confirmed=true）`,
+      );
+    }
   }
   const rawSkipped = Array.isArray(input.skippedCategories)
     ? input.skippedCategories

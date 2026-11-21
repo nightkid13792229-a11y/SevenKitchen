@@ -862,6 +862,8 @@ Cover each feature:
 - EQUIVALENCE: group id/priority match; if should participate, group APPROVED/member ≥2/`resolveConcentration` OK.
 - DUPLICATE: no second name/brand/model.
 - PACKAGING: query enabled `POUCH` rules that match `physicalForm` (null = any); if none match, return `ok:false` with `severity:'WARN'` and action `/supplement-shop/packaging`; it must not make `verification.ok` false on its own.
+- RECIPE/EQUIVALENCE actions use real routes; a missing stored report in reverify is an ERROR feature, not a silent ok=true.
+- DIY on + LIQUID is a WARN.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -873,7 +875,9 @@ Expected: FAIL — service missing.
 - Use `PrismaService`, `SupplementDosageService`, `SupplementCatalogService` (or `supplementShopApi` equivalent query), `SupplementEquivalenceGroup` query.
 - `verifyFeatures` queries by ingredient id; builds `VerificationFeature[]` with `ok`, `detail`, `action` (path strings for the UI).
 - `getVerification` loads a FINALIZED draft owned by the user and returns its stored `verification` (or null).
-- `reverify` loads a FINALIZED draft owned by the user, re-runs features, calls `draftService.saveVerification(draftId, userId, verification)`, returns it.
+- `reverify` loads a FINALIZED draft owned by the user, re-runs features, calls `draftService.saveVerification(draftId, userId, verification)`, returns it. If the stored report is missing (`fields` unavailable), **do not claim `ok=true`**: return `ok=false` plus a `DIRECT_FIELDS_MISSING` ERROR feature (“缺少写入时字段核验记录，不能判定全部成功”); add a test.
+- Fix-entry action paths must be real admin-web routes: RECIPE → `/ingredients?tab=nutrition`, EQUIVALENCE → `/supplement-shop/equivalence-groups`, PACKAGING → `/supplement-shop/packaging`; assert them in tests.
+- DIY on + physicalForm LIQUID → DIY feature `ok:false` severity WARN (liquid not supported for DIY packing), in addition to the link check. Use the group's `nutrientKey` for the equivalence concentration check, not the draft's default targets.
 - Update `finalize` to call `verifyFeatures` after commit; `verification.ok` is false only when a `severity='ERROR'` feature fails (or a direct field mismatches). A packaging `WARN` is shown but does not fail the report; the write is already committed, so do not throw.
 
 - [ ] **Step 4: Run tests**

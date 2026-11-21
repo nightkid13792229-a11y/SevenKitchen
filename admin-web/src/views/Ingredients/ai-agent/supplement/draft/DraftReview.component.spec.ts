@@ -201,6 +201,20 @@ function mountReview(overrides: Partial<ReviewProps> = {}) {
 }
 
 describe('补剂草稿最终审核页', () => {
+  it('写入摘要用人话展示，不把技术路径塞给审核人', () => {
+    const wrapper = mountReview()
+
+    const summary = wrapper.find('[data-write-summary]')
+    expect(summary.exists()).toBe(true)
+    expect(summary.text()).toContain('铜')
+    expect(summary.text()).toContain('Swanson')
+    expect(summary.text()).toContain('每份')
+    expect(summary.text()).toContain('不上架')
+    expect(summary.text()).toContain('已选等价组')
+    expect(summary.text()).not.toContain('retail.enabled')
+    expect(summary.text()).not.toContain('ingredient.supplement_retail_enabled')
+  })
+
   it('有阻断项时禁用写入，并显示阻断项与字段路径', async () => {
     const wrapper = mountReview({
       review: reviewState({ blockers: [blocker()] })

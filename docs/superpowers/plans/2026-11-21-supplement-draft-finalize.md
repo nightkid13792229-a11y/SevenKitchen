@@ -1149,7 +1149,7 @@ bash scripts/session.sh commit -m "feat(supplement): 上架/DIY/采购/等价组
 
 **Interfaces:**
 - `DraftReview` props `review`, `draft`; emits `finalize`, `back`, `update:acknowledged`.
-- Displays completeness, blockers, warnings with checkboxes, AI decision log, field mapping table, “确认写入” disabled until blockers empty and all warnings acknowledged.
+- Displays completeness, blockers, warnings with checkboxes, a human-readable write summary, and “确认写入” disabled until blockers empty and all warnings acknowledged. AI decision log and field mapping table go into a collapsed “AI 依据 / 技术明细（一般不用看）” section, closed by default.
 - Add a **pre-write feature readiness card** derived from the draft (retail/shelf life/liquid; DIY/link/liquid; procurement fields; equivalence group + reapprove consequence; default targets; evidence images) labeled “按草稿意向估算”.
 - Add a **post-write verification checklist** card listing the 7 feature checks (RETAIL/RECIPE/DIY/PROCUREMENT/EQUIVALENCE/DUPLICATE/PACKAGING).
 - Show AI missing items and labelNames/defaultTargetFields decisions; show the equivalence reapprove consequence (“加入已审核组会打回待审核；取消则留 DRAFT”).

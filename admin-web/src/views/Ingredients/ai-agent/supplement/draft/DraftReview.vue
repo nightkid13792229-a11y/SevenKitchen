@@ -17,6 +17,14 @@
       </el-tag>
     </header>
 
+    <el-alert
+      class="draft-review__howto"
+      type="info"
+      :closable="false"
+      show-icon
+      title="怎么审：先看红色阻断，再逐条勾选黄色提醒，最后看「这次会写入什么」。技术字段在页面底部，一般不用看。"
+    />
+
     <div class="draft-review__stats">
       <div class="draft-review__stat" data-completeness>
         <span class="draft-review__stat-label">完整性</span>
@@ -162,6 +170,23 @@
       </template>
     </section>
 
+    <section class="draft-review__block" data-write-summary>
+      <h3 class="draft-review__block-title">这次会写入什么（人话版）</h3>
+      <p class="draft-review__hint">
+        审核主要看这里；技术字段路径在页面底部「技术明细」里，一般不用看。
+      </p>
+      <dl class="draft-review__summary">
+        <div
+          v-for="row in writeSummary"
+          :key="row.label"
+          class="draft-review__summary-row"
+        >
+          <dt>{{ row.label }}</dt>
+          <dd>{{ row.value }}</dd>
+        </div>
+      </dl>
+    </section>
+
     <section class="draft-review__block" data-readiness>
       <header class="draft-review__block-head">
         <div>
@@ -217,6 +242,9 @@
         </li>
       </ul>
     </section>
+
+    <details class="draft-review__more">
+      <summary>AI 依据 / 技术明细（一般不用看）</summary>
 
     <section class="draft-review__block" data-decision-log>
       <h3 class="draft-review__block-title">AI 决策日志</h3>
@@ -332,6 +360,8 @@
       </el-collapse>
     </section>
 
+    </details>
+
     <footer class="draft-review__footer">
       <span
         class="draft-review__footer-hint"
@@ -386,8 +416,10 @@ import {
   ackKeyOf,
   canFinalize,
   fieldMapRows,
+  formatDraftFieldValue,
   type SupplementDraftFieldMapRow
 } from './supplementDraftState'
+import { supplementNutrientGroups } from '@/constants/supplementNutrients'
 
 const props = withDefaults(
   defineProps<{
@@ -514,6 +546,120 @@ function missingLabel(key: string): string {
 const NO_SALE_REASON_LABELS = new Map<string, string>(
   NO_SALE_REASONS.map((reason) => [reason.value, reason.label])
 )
+
+const NUTRIENT_BY_FIELD = new Map(
+  supplementNutrientGroups.flatMap((group) =>
+    group.fields.map((field) => [field.fieldPath, field] as const)
+  )
+)
+
+function nutrientLabelOf(fieldPath: string): string {
+  return NUTRIENT_BY_FIELD.get(fieldPath)?.label ?? fieldPath
+}
+
+const writeSummary = computed<Array<{ label: string; value: string }>>(() => {
+  const payload = props.draft.payload
+  const { basic, nutrition, label, retail, diy, procurement, equivalence, evidence } =
+    payload
+
+  const unit = basic.unitDisplayLabel.trim() || '个'
+  const price =
+    typeof basic.currentPricePerPurchaseUnit === 'number'
+      ? `¥${basic.currentPricePerPurchaseUnit}`
+      : '未填'
+  const name =
+    [basic.name, basic.brand, basic.productModel].filter(Boolean).join(' · ') ||
+    '未填'
+
+  const nutrients = Object.entries(nutrition.servingNutrients)
+    .filter(([, value]) => Number.isFinite(value) && value > 0)
+    .map(([fieldPath, value]) => {
+      const field = NUTRIENT_BY_FIELD.get(fieldPath)
+      return field
+        ? `${field.label} ${value}${field.unit}`
+        : `${fieldPath} ${value}`
+    })
+  const targetNames = nutrition.defaultTargetFields.map(nutrientLabelOf)
+
+  const labelParts = [
+    basic.physicalForm
+      ? formatDraftFieldValue('basic.physicalForm', basic.physicalForm)
+      : '',
+    label.labelCategory
+      ? formatDraftFieldValue('label.labelCategory', label.labelCategory)
+      : '',
+    label.labelNames.length > 0 ? label.labelNames.join('、') : '',
+    label.tagNames.length > 0 ? label.tagNames.join('、') : ''
+  ].filter(Boolean)
+
+  const retailText = retail.enabled
+    ? `上架 · 保质期 ${retail.shelfLifeMonths ?? '未填'} 个月 · 储存：${
+        retail.storageCondition.trim() || '默认（避光、密封、阴凉干燥处保存）'
+      }`
+    : `不上架 · ${
+        retail.noSaleReason
+          ? formatDraftFieldValue('retail.noSaleReason', retail.noSaleReason)
+          : '未填原因'
+      }`
+
+  const diyText = diy.enabled
+    ? `参与 · ${
+        diy.platform
+          ? formatDraftFieldValue('diy.platform', diy.platform)
+          : '平台未填'
+      }${diy.linkUrl.trim() ? ' · 有链接' : ' · 链接选填'}${
+        diy.imageUrl.trim() ? ' · 有商品图' : ''
+      }`
+    : '不参与'
+
+  const procurementText = procurement.enabled
+    ? `参与 · 1 ${basic.purchaseUnit || '个'} = ${
+        basic.purchaseToBaseRatio ?? '未填'
+      } ${unit} · 进货价 ${price}`
+    : '不参与'
+
+  const groupText = equivalence.groupId
+    ? equivalence.groupId === '__SKIP__'
+      ? '暂不归组'
+      : '已选等价组（名称见草稿等价组区块）'
+    : '未选'
+
+  const evidenceCount = [evidence.frontImageUrl, evidence.labelImageUrl].filter(
+    (url) => url.trim()
+  ).length
+
+  return [
+    { label: '原料', value: name },
+    {
+      label: '规格',
+      value: `每份 ${basic.servingUnitsPerDose ?? '未填'} ${unit} · 采购 1 ${
+        basic.purchaseUnit || '个'
+      } = ${basic.purchaseToBaseRatio ?? '未填'} ${unit} · 进货价 ${price}`
+    },
+    {
+      label: '营养',
+      value: `${
+        nutrients.length > 0
+          ? `${nutrients.slice(0, 4).join('、')}${
+              nutrients.length > 4 ? ` 等 ${nutrients.length} 项` : ''
+            }`
+          : '未填营养素'
+      }；默认目标：${targetNames.length > 0 ? targetNames.join('、') : '未填'}`
+    },
+    { label: '标签', value: labelParts.length > 0 ? labelParts.join(' · ') : '未填' },
+    { label: '上架', value: retailText },
+    { label: 'DIY', value: diyText },
+    { label: '生产采购', value: procurementText },
+    { label: '等价组', value: groupText },
+    {
+      label: '证据',
+      value:
+        evidenceCount === 2
+          ? '正面图 + 标签图已上传'
+          : `已上传 ${evidenceCount}/2 张图${evidence.productUrl.trim() ? ' · 有商品链接' : ''}`
+    }
+  ]
+})
 
 type UnknownRecord = Record<string, unknown>
 
@@ -1155,6 +1301,60 @@ const openedSections = ref<string[]>(
   font-size: 12.5px;
   line-height: 1.7;
   color: #5b6470;
+}
+
+.draft-review__howto {
+  margin-bottom: 16px;
+}
+
+.draft-review__summary {
+  margin: 0;
+  border: 1px solid #eceff3;
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.draft-review__summary-row {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #f2f4f7;
+}
+
+.draft-review__summary-row:last-child {
+  border-bottom: 0;
+}
+
+.draft-review__summary-row dt {
+  color: #98a1ad;
+  font-size: 13px;
+}
+
+.draft-review__summary-row dd {
+  margin: 0;
+  color: #38414d;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+
+.draft-review__more {
+  margin-top: 18px;
+  border: 1px solid #e6eaf0;
+  border-radius: 10px;
+  background: #fafbfc;
+}
+
+.draft-review__more > summary {
+  padding: 12px 16px;
+  cursor: pointer;
+  color: #5b6470;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.draft-review__more[open] > summary {
+  border-bottom: 1px solid #e6eaf0;
 }
 
 .draft-review__stats {

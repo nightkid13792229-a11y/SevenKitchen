@@ -96,6 +96,8 @@ const MAX_TOOL_CALLS = positiveInt(process.env.AGENT_MAX_TOOL_CALLS, 320);
 /** 方案/选材阶段单次读页的 token 预算上限（默认 20k 太大）。 */
 const EARLY_PHASE_READ_BUDGET = 12000;
 const MAX_NO_PROGRESS_ASSESSMENTS = 6;
+/** 连续改配方多少次没有评估，就强制先评估一次。 */
+const MAX_EDITS_BETWEEN_ASSESS = 20;
 /** 一次运行最长多久。 */
 const MAX_RUN_MS = positiveInt(process.env.AGENT_MAX_RUN_MS, 30 * 60 * 1000);
 /** 回灌给模型的历史条数（只含用户与助手）。 */
@@ -461,6 +463,7 @@ export class RecipeAgentService implements OnModuleInit {
 
     let messages = await this.buildMessages(sessionId, message, phase);
     let toolCalls = 0;
+    let editsSinceAssess = 0;
     let lastGapSignature: string | null = null;
     let sameGapCount = 0;
     /**
@@ -519,11 +522,19 @@ export class RecipeAgentService implements OnModuleInit {
         });
 
       const isFirstModelCall = firstModelCall;
-      const forcedTool = isFirstModelCall
+      let forcedTool = isFirstModelCall
         ? 'read_design_context'
         : forceAsk
           ? 'ask'
           : forceProposeTool;
+      // 防止盲改：连续改配方 20 次还没评估，先强制跑一次评估。
+      if (
+        !forcedTool &&
+        phase === 'DESIGN' &&
+        editsSinceAssess >= MAX_EDITS_BETWEEN_ASSESS
+      ) {
+        forcedTool = 'assess';
+      }
       let response: DeepSeekToolsResult;
       try {
         response = await callModel(forcedTool);
@@ -699,6 +710,11 @@ export class RecipeAgentService implements OnModuleInit {
           outcome = result.outcome;
           images = result.images;
           contextImages = result.contextImages;
+          if (call.function.name === 'assess') {
+            editsSinceAssess = 0;
+          } else if (call.function.name === 'edit_recipe' && outcome.ok) {
+            editsSinceAssess += 1;
+          }
           if (call.function.name === 'read_design_context' && outcome.ok) {
             designContextJson = JSON.stringify(outcome.data).slice(0, 20000);
           }

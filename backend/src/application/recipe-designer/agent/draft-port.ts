@@ -349,8 +349,14 @@ export class RecipeDraftPort {
       this.access,
       resolution.overrides,
     );
+    const raw = result?.assessment ?? null;
     return {
-      assessment: result?.assessment ?? null,
+      assessment: raw?.summary
+        ? {
+            summary: raw.summary,
+            gaps: Array.isArray(raw.summary.gaps) ? raw.summary.gaps : [],
+          }
+        : null,
       overrides: resolution.overrides,
       unsupported: resolution.unsupported,
     };

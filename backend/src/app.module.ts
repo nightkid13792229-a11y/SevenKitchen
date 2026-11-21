@@ -229,6 +229,7 @@ import { NutritionFoodService } from './application/nutrition-food/nutrition-foo
 import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
 import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
+import { SupplementDraftController } from './interfaces/controllers/supplement-draft.controller';
 import { IngredientCatalogController } from './interfaces/controllers/ingredient-catalog.controller';
 import { SupplementAgentController } from './interfaces/controllers/supplement-agent.controller';
 import { SupplementLabelIntakeService } from './application/ingredient-creation/supplement-label-intake.service';
@@ -242,6 +243,11 @@ import { IngredientSkillService } from './application/ingredient-creation/ingred
 import { IngredientCreationCheckService } from './application/ingredient-creation/ingredient-creation-check.service';
 import { IngredientCreationCommitService } from './application/ingredient-creation/ingredient-creation-commit.service';
 import { SupplementIngredientService } from './application/ingredient-creation/supplement-ingredient.service';
+import { SupplementDraftService } from './application/ingredient-creation/supplement-draft.service';
+import { SupplementDraftAiService } from './application/ingredient-creation/supplement-draft-ai.service';
+import { SupplementDraftReviewService } from './application/ingredient-creation/supplement-draft-review.service';
+import { SupplementFinalizeService } from './application/ingredient-creation/supplement-finalize.service';
+import { SupplementVerificationService } from './application/ingredient-creation/supplement-verification.service';
 import { SupplementLinkPreviewService } from './application/ingredient-creation/supplement-link-preview.service';
 import { FeedAdditiveCatalogService } from './domain/ingredient/feed-additive-catalog.service';
 import { FeedMaterialCatalogService } from './domain/ingredient/feed-material-catalog.service';
@@ -513,6 +519,7 @@ validatePrismaConfig();
     NutritionFoodController,
     NutritionGovernanceController,
     IngredientCreationController,
+    SupplementDraftController,
     IngredientCatalogController,
     SupplementAgentController,
     SearchGovernanceController,
@@ -1071,6 +1078,11 @@ validatePrismaConfig();
     FeedMaterialCatalogService,
     SupplementLabelIntakeService,
     SupplementLabelVisionService,
+    SupplementDraftService,
+    SupplementDraftAiService,
+    SupplementDraftReviewService,
+    SupplementFinalizeService,
+    SupplementVerificationService,
     IngredientCreationIntakeService,
     IngredientNameClassifierService,
     IngredientDraftAgentService,

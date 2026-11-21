@@ -14,8 +14,9 @@ describe('必填项展示', () => {
       label: '原厂保质期',
       section: 'retail'
     })
-    expect(requiredFieldMeta('linkUrl')).toEqual({
-      label: 'DIY 购买链接',
+    expect(requiredFieldMeta('linkUrl')).toBeNull()
+    expect(requiredFieldMeta('platform')).toEqual({
+      label: 'DIY 平台',
       section: 'diy'
     })
     expect(requiredFieldMeta('groupId')).toEqual({

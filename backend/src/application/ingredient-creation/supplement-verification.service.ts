@@ -470,14 +470,6 @@ export class SupplementVerificationService {
     }
 
     const url = readPurchaseLinkUrl(ingredient.properties);
-    if (!url) {
-      return failFeature(
-        code,
-        label,
-        'ERROR',
-        'DIY 已开启，但原料档案里没有购买链接（properties.purchase_link.url）',
-      );
-    }
     if (ingredient.physicalForm === 'LIQUID') {
       // 制作单不支持液体分装：提醒，不影响「数据已写入」的结论。
       return failFeature(
@@ -488,7 +480,12 @@ export class SupplementVerificationService {
       );
     }
 
-    return passFeature(code, label, 'DIY 已开启，购买链接可读');
+    // 购买链接是选填；没有链接不影响 DIY 开关本身可用。
+    return passFeature(
+      code,
+      label,
+      url ? 'DIY 已开启，购买链接可读' : 'DIY 已开启；购买链接未填（选填）',
+    );
   }
 
   /* ------------------------------------------------------------------ */

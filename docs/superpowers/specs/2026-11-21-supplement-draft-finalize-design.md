@@ -148,7 +148,7 @@
 4. **写入后核验清单**
    - 写入成功后要逐项核验的内容（见第 9 节），让人知道“不是点完就算”。
 
-- 等价组段：如果选了已审核组，显示“加入会把组打回待审核”，并给一个默认勾选的“本次一并审核通过”；取消勾选时提示“组会留在待审核，缺货替换暂不生效”。
+- 等价组段：对任意已选组都显示“本次一并审核通过”（默认勾选）。已审核组会先被打回待审核再重新审；草稿组写入时直接自动审核。取消勾选时提示“组会留在当前状态，需要去等价组页提交审核，缺货替换暂不生效”。
 - 按钮：`确认写入`（有阻断项时禁用）。旁边：`保存并离开`、`放弃草稿`。
 
 ### 4.5 写入中 / 写入后
@@ -354,7 +354,7 @@ interface SupplementAiDraft {
 
 1. **读图/读链接**：复用现有 `SupplementLabelIntakeService` + `SupplementLinkPreviewService`，拿到标签原文、每份量、营养素、正面字段、商品页价格/品牌/规格/主图。
 2. **补全字段**：用规则 + 目录 + 配置补：单位、每份量、采购倍数、标签名、默认目标、保质期/储存/油性、DIY 链接/图片、采购开关。
-3. **做决定**：单独一次“决策”调用，把草稿字段 + 目录 + 配置 + 等价组候选给模型，输出上架/不上架、归组/不归组、DIY/采购、标签名、默认目标，以及理由。
+3. **做决定**：单独一次“决策”调用，把草稿字段 + 目录 + 配置 + 等价组候选给模型，输出上架/不上架、归组/不归组、DIY/采购、标签名、默认目标，以及理由。模型没有明确归组时，允许把第一个候选组暂选进草稿以便 AI 填完整；界面必须显示“当前组以左侧为准、可改选/暂不归组”，推荐按钮本身不得再自动改草稿。
 
 这样每一步都能单独测、单独重试；出错时知道是哪一步。
 
@@ -410,7 +410,7 @@ interface SupplementAiDraft {
 | 上架 | 储存条件 | 提醒 | 影响标签印刷，不挡上架 |
 | 上架 | 开盖后保质期（天） | 提醒 | 选填；标签写了就填，生产落点 `ingredient.opened_shelf_life_days` |
 | 上架 | 商城总开关关闭 | 提醒 | 写入后顾客看不到，需去设置开 |
-| DIY | DIY=开 时，购买链接必填且平台合法 | 阻断 | 没链接等于入口死路 |
+| DIY | DIY=开 时，购买平台必填且合法；购买链接选填 | 阻断仅平台 | 没链接不影响建档；有链接才能抓商品图/品牌 |
 | DIY | DIY=开 时，商品图片 | 提醒 | 影响制作单弹窗展示 |
 | 采购 | 采购=开 时，采购单位/倍数/价格齐全 | 阻断 | 已在上面校验 |
 | 采购 | 采购 SKU 未建 | 提醒 | 可用原料档案兜底，采购页会提示 |
@@ -512,7 +512,7 @@ interface SupplementAiDraft {
    - 未选/暂不归组：不改
    - 选组：写 `equivalenceGroupId` + `equivalencePriority`
    - 如果组是 APPROVED：把组状态改回 DRAFT（与现有 `assign` 行为一致），写审计 `MEMBER_ADD`
-   - 如果 `equivalence.reapproveGroup` 为 true（默认）：在同一事务里把组改回 APPROVED，写 `reviewedBy/reviewedAt` + 审计 `STATUS_CHANGE`；为 false 则留在 DRAFT，审核屏明确提示“替换暂不生效”
+   - 如果 `equivalence.reapproveGroup` 为 true（默认）：在同一事务里把组审到 APPROVED，写 `reviewedBy/reviewedAt` + 审计 `STATUS_CHANGE`；已审核组会先因成员变更打回 DRAFT 再重审，草稿组直接审。为 false 则保持当前/ DRAFT 状态，审核屏明确提示“替换暂不生效、需去等价组页提交审核”
    - 归组前复用现有 `assertProductionLimit`；要一并审核通过时，复用 `buildApprovalErrors`，不满足审核条件就不允许“一并通过”
    - 未指定组内排序时，排在组末（现有 `nextPriorities` 的 max+1 口径）
    - 审计写 `supplement_equivalence_group_audit`
@@ -526,7 +526,7 @@ interface SupplementAiDraft {
 
 - 上架清单里能查到，`supplementRetailEnabled` 与草稿一致，`issues` 无 ERROR，`readyToSell` 符合预期。
 - 配方设计器的补剂候选里能查到（营养档案 VERIFIED + 主映射 + 默认目标）。
-- DIY：`supplement-plan` 能返回购买链接/图片；`diyEnabled` 与草稿一致。
+- DIY：`supplement-plan` 能返回购买链接/图片（链接选填）；`diyEnabled` 与草稿一致。
 - 采购：采购需求里能查到这条原料（`procurementEnabled` 与价格/单位可用）。
 - 等价组：组状态/成员/优先级符合草稿；若本应参与替换，`resolveConcentration` 不是 UNIT_MISMATCH。
 - 包材：能匹配到袋型规则；没有则标提醒，不改变“数据已写入”的结论。
@@ -738,7 +738,7 @@ interface SupplementWriteVerification {
 |---|---|---|---|---|
 | 是否用于 DIY | 是 | 是 | `ingredient.diy_enabled` | 布尔 |
 | 购买平台 | 是 | DIY=开时是 | `ingredient.properties.purchase_link.platform` | 允许值 |
-| 购买链接 | 是 | DIY=开时是 | `ingredient.properties.purchase_link.url` | 非空 |
+| 购买链接 | 是 | 否（选填） | `ingredient.properties.purchase_link.url` | 可空；有链接才能抓商品图/品牌 |
 | 商品图片 | 是 | 提醒 | `ingredient.properties.image_url` | 可空 |
 | 推荐商品 | 否 | — | `recommended_product`（仅 FOOD） | 补剂不适用；DIY 用 properties 兜底 |
 
@@ -755,9 +755,9 @@ interface SupplementWriteVerification {
 | 字段 | AI | 必填 | 生产落点 | 校验/备注 |
 |---|---|---|---|---|
 | 归组/暂不归组 | 是 | 是 | `ingredient.equivalence_group_id` | `__SKIP__` 显式表态 |
-| 组内优先级 | 是 | 否 | `ingredient.equivalence_priority` | 0 最前 |
+| 组内优先级 | 是 | 否 | `ingredient.equivalence_priority` | 0 最前；填 0 会插到最前，原 0 及以后自动顺延 |
 | 组状态 | 查 | — | `supplement_equivalence_group.status` | 参与替换需 APPROVED |
-| 加入已审核组的处理 | 决定 | — | 组状态 + 审计 | 默认打回 DRAFT，随后默认一并审核通过；可取消 |
+| 一并审核的处理 | 决定 | — | 组状态 + 审计 | 默认勾选；写入时同事务自动审核通过，可取消。已审核组先打回 DRAFT 再重审，草稿组直接审 |
 | 组审计 | — | — | `supplement_equivalence_group_audit` | MEMBER_ADD / STATUS_CHANGE |
 
 ### 12.8 证据/审计
@@ -830,7 +830,7 @@ interface SupplementWriteVerification {
 6. 重复建档 → 409 + 已有记录；草稿保留。
 7. 上架=开但缺保质期 → 阻断；补后通过；写入后开关真的开。
 8. 等价组加入已审核组 → 打回 DRAFT；选择一并审核 → APPROVED；核验通过。
-9. DIY=开但没链接 → 阻断；补链接后写入；supplement-plan 能返回。
+9. DIY=开但没平台 → 阻断；DIY=开但没链接 → 允许写入；supplement-plan 能返回。
 10. 采购=开但没价格 → 阻断；补后写入；采购需求能查到。
 11. 包材无匹配 → 提醒；写入成功但功能核验标提醒。
 12. 写入失败（模拟事务异常）→ 无正式记录；草稿还在。

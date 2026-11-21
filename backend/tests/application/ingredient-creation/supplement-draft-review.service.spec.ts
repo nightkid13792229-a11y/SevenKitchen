@@ -458,21 +458,21 @@ describe('validateSupplementDraftFeatures', () => {
 
   /* ⑤ DIY ---------------------------------------------------------- */
 
-  it('DIY=开但缺链接/平台 → DIY_LINK_REQUIRED 阻断', () => {
+  it('DIY=开但缺平台 → DIY_PLATFORM_REQUIRED 阻断', () => {
     const issues = featureIssues({
-      diy: { enabled: true, platform: '', linkUrl: '' },
+      diy: { enabled: true, platform: '', linkUrl: 'https://example.com/item' },
     });
 
-    expect(issueOf(issues, 'DIY_LINK_REQUIRED')?.level).toBe('BLOCKER');
+    expect(issueOf(issues, 'DIY_PLATFORM_REQUIRED')?.level).toBe('BLOCKER');
   });
 
-  it.each([
-    ['缺平台', { platform: '', linkUrl: 'https://example.com/item' }],
-    ['缺链接', { platform: 'TAOBAO', linkUrl: '' }],
-  ])('DIY=开但%s → DIY_LINK_REQUIRED', (_title, diy) => {
-    const issues = featureIssues({ diy: { enabled: true, ...diy } });
+  it('DIY=开但只缺链接 → 不阻断，链接是选填', () => {
+    const issues = featureIssues({
+      diy: { enabled: true, platform: 'TAOBAO', linkUrl: '' },
+    });
 
-    expect(issueOf(issues, 'DIY_LINK_REQUIRED')?.level).toBe('BLOCKER');
+    expect(issueOf(issues, 'DIY_PLATFORM_REQUIRED')).toBeUndefined();
+    expect(issueOf(issues, 'DIY_LINK_REQUIRED')).toBeUndefined();
   });
 
   it('DIY=开但平台不在允许值内 → DIY_PLATFORM_INVALID 阻断', () => {
@@ -487,16 +487,17 @@ describe('validateSupplementDraftFeatures', () => {
     const issue = issueOf(issues, 'DIY_PLATFORM_INVALID');
     expect(issue?.level).toBe('BLOCKER');
     expect(issue?.message).toContain('WEBVIEW');
-    expect(issueOf(issues, 'DIY_LINK_REQUIRED')).toBeUndefined();
+    expect(issueOf(issues, 'DIY_PLATFORM_REQUIRED')).toBeUndefined();
   });
 
   it.each(['TAOBAO', 'JD', 'PINDUODUO', 'IHERB', 'OTHER'])(
-    'DIY=开且平台合法（%s）+ 有链接 → 无 DIY 问题',
+    'DIY=开且平台合法（%s）→ 无 DIY 问题，链接可空',
     (platform) => {
       const issues = featureIssues({
-        diy: { enabled: true, platform, linkUrl: 'https://example.com/item' },
+        diy: { enabled: true, platform, linkUrl: '' },
       });
 
+      expect(issueOf(issues, 'DIY_PLATFORM_REQUIRED')).toBeUndefined();
       expect(issueOf(issues, 'DIY_LINK_REQUIRED')).toBeUndefined();
       expect(issueOf(issues, 'DIY_PLATFORM_INVALID')).toBeUndefined();
     },
@@ -507,6 +508,7 @@ describe('validateSupplementDraftFeatures', () => {
       diy: { enabled: false, platform: 'WEBVIEW', linkUrl: '' },
     });
 
+    expect(issueOf(issues, 'DIY_PLATFORM_REQUIRED')).toBeUndefined();
     expect(issueOf(issues, 'DIY_LINK_REQUIRED')).toBeUndefined();
     expect(issueOf(issues, 'DIY_PLATFORM_INVALID')).toBeUndefined();
   });

@@ -77,3 +77,35 @@ describe('draft completeness', () => {
     expect(computeDraftCompleteness(on).missing).toContain('shelfLifeMonths');
   });
 });
+
+  it('DIY 开启只要求平台，商品链接是选填', () => {
+    const payload = normalizeSupplementDraftPayload({
+      basic: {
+        name: '鱼油',
+        baseUnit: 'PCS',
+        unitDisplayLabel: '粒',
+        physicalForm: 'CAPSULE',
+        servingUnitsPerDose: 2,
+        purchaseUnit: '瓶',
+        purchaseToBaseRatio: 120,
+        currentPricePerPurchaseUnit: 398,
+        addTiming: 'BEFORE_MIXING',
+      },
+      nutrition: {
+        servingNutrients: { 'fattyAcids.epa': 650 },
+        defaultTargetFields: ['fattyAcids.epa'],
+      },
+      label: {
+        labelCategory: 'FEED_ADDITIVE',
+        labelNames: ['鱼油'],
+        tagNames: ['油脂类'],
+      },
+      retail: { enabled: true, shelfLifeMonths: 24, noSaleReason: null },
+      diy: { enabled: true, platform: 'TAOBAO', linkUrl: '' },
+      procurement: { enabled: true },
+      equivalence: { groupId: '__SKIP__' },
+    });
+
+    expect(computeDraftCompleteness(payload).missing).not.toContain('linkUrl');
+    expect(computeDraftCompleteness(payload).missing).not.toContain('platform');
+  });

@@ -483,7 +483,29 @@ describe('SupplementVerificationService', () => {
       expect(diy.detail).toBe('液体补剂暂不支持分装，DIY 制作单不会出现');
     });
 
-    it('开启但购买链接缺失 → 失败', async () => {
+    it('开启 + 液体但没链接 → 仍然提醒液体不适合分装', async () => {
+      prismaMock.ingredient.findUnique.mockResolvedValue(
+        ingredientRow({
+          physicalForm: 'LIQUID',
+          diyEnabled: true,
+          properties: { purchase_link: { platform: 'iHerb', url: null } },
+        }),
+      );
+
+      const diy = featureOf(
+        await service.verifyFeatures(
+          draftView({ payload: payload({ diy: { enabled: true } }) }),
+          ids,
+        ),
+        'DIY',
+      );
+
+      expect(diy.ok).toBe(false);
+      expect(diy.severity).toBe('WARN');
+      expect(diy.detail).toContain('液体补剂暂不支持分装');
+    });
+
+    it('开启但购买链接缺失 → 通过（链接是选填）', async () => {
       prismaMock.ingredient.findUnique.mockResolvedValue(
         ingredientRow({
           diyEnabled: true,
@@ -499,9 +521,9 @@ describe('SupplementVerificationService', () => {
         'DIY',
       );
 
-      expect(diy.ok).toBe(false);
-      expect(diy.severity).toBe('ERROR');
-      expect(diy.detail).toContain('购买链接');
+      expect(diy.ok).toBe(true);
+      expect(diy.severity).toBe('INFO');
+      expect(diy.detail).toContain('选填');
     });
 
     it('DIY 开关与草稿不一致 → 失败', async () => {

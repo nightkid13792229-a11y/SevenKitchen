@@ -580,6 +580,42 @@ describe('SupplementEquivalenceService', () => {
       ).toBe(false);
     });
 
+    it('显式优先级 0 会插到最前，原 0 及以后顺延', async () => {
+      const group = await approvedGroupWithOneMember();
+
+      const result = await service.assignInTransaction(
+        store.prisma,
+        ['ing-citrate'],
+        group.id,
+        operator,
+        { reapprove: false, priority: 0 },
+      );
+
+      expect(result).toEqual({ moved: 1, skipped: 0 });
+      const members = store.ingredients
+        .filter((row) => row.equivalenceGroupId === group.id)
+        .sort(
+          (left, right) =>
+            left.equivalencePriority - right.equivalencePriority,
+        );
+      expect(
+        members.map((row) => [row.id, row.equivalencePriority]),
+      ).toEqual([
+        ['ing-citrate', 0],
+        ['ing-caco3', 1],
+      ]);
+
+      const addAudit = store.audits
+        .filter(
+          (row) => row.groupId === group.id && row.action === 'MEMBER_ADD',
+        )
+        .at(-1);
+      expect(addAudit?.changes).toMatchObject({
+        priority: 0,
+        shiftedPriorities: [{ id: 'ing-caco3', from: 0, to: 1 }],
+      });
+    });
+
     it('取消一并通过时组留在 DRAFT，替换暂不生效', async () => {
       const group = await approvedGroupWithOneMember();
 

@@ -57,6 +57,7 @@ export type SupplementDraftIssueCode =
   | 'NO_SALE_REASON_INVALID'
   | 'SHELF_LIFE_INVALID'
   | 'DIY_LINK_REQUIRED'
+  | 'DIY_PLATFORM_REQUIRED'
   | 'DIY_PLATFORM_INVALID'
   | 'STORAGE_CONDITION_TOO_LONG'
   | 'PURCHASE_UNIT_TOO_LONG'
@@ -647,16 +648,15 @@ export function validateSupplementDraftFeatures(
     );
   }
 
-  // ⑥ DIY：开就必须有平台 + 链接，平台还得在允许值内。
+  // ⑥ DIY：开就必须有平台；购买链接是选填，不再阻塞。
   if (diy.enabled) {
     const platform = diy.platform.trim();
-    const linkUrl = diy.linkUrl.trim();
-    if (!platform || !linkUrl) {
+    if (!platform) {
       issues.push(
         blockerIssue(
-          'DIY_LINK_REQUIRED',
-          '开启 DIY 时必须同时填写购买平台和购买链接',
-          'diy.linkUrl',
+          'DIY_PLATFORM_REQUIRED',
+          '开启 DIY 时必须选择购买平台（淘宝/京东/拼多多/iHerb/其它）',
+          'diy.platform',
         ),
       );
     }

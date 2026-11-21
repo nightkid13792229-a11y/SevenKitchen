@@ -691,7 +691,7 @@ const readiness = computed<ReadinessItem[]>(() => {
     })
   }
 
-  // ② DIY：开关 / 链接 / 液体
+  // ② DIY：开关 / 平台 / 液体（购买链接选填）
   if (!diy.enabled) {
     items.push({
       key: 'diy',
@@ -702,8 +702,8 @@ const readiness = computed<ReadinessItem[]>(() => {
     })
   } else {
     const problems: string[] = []
-    if (!diy.platform.trim() || !diy.linkUrl.trim()) {
-      problems.push('缺少购买平台或购买链接')
+    if (!diy.platform.trim()) {
+      problems.push('还没有选择购买平台')
     }
     if (form === 'LIQUID') {
       problems.push(`${formText}补剂暂不支持分装，DIY 制作单不会出现`)
@@ -715,8 +715,8 @@ const readiness = computed<ReadinessItem[]>(() => {
       detail:
         problems.length > 0
           ? problems.join('；')
-          : `开关已开，${diy.platform} 购买链接已填`,
-      note: 'DIY 推荐与购买链接是否可读'
+          : `开关已开，平台 ${diy.platform}${diy.linkUrl.trim() ? '，链接已填' : '，链接未填（选填）'}`,
+      note: 'DIY 开关与平台；链接选填，有链接才能抓商品图/品牌'
     })
   }
 
@@ -778,8 +778,8 @@ const readiness = computed<ReadinessItem[]>(() => {
       status: 'warn',
       detail: `已选等价组 ${groupId}；组状态/成员数无法在审核屏确认`,
       note: reapprove
-        ? '加入已审核组会打回待审核，本次会一并审核通过；取消则留 DRAFT。写入后核验组状态/成员数/浓度'
-        : '已取消一并审核：组会留在待审核（DRAFT），缺货替换暂不生效。写入后核验组状态/成员数/浓度'
+        ? '默认勾选一并审核：写入时同事务自动审到已审核（已审核组先打回待审核再重审）；写入后核验组状态/成员数/浓度'
+        : '已取消一并审核：组保持当前/草稿状态，需去等价组页提交审核，缺货替换暂不生效'
     })
   }
 

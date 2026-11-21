@@ -368,7 +368,7 @@ interface FeatureRoute {
 const FEATURE_ROUTES: Record<SupplementVerificationFeatureCode, FeatureRoute> = {
   RETAIL: { path: '/supplement-shop/catalog', label: '去上架清单处理' },
   RECIPE: { path: '/ingredients?tab=nutrition', label: '去营养档案检查' },
-  DIY: { path: '/ingredients', label: '去原料库补购买链接' },
+  DIY: { path: '/ingredients', label: '去原料库检查 DIY' },
   PROCUREMENT: { path: '/ingredients', label: '去原料库补采购信息' },
   EQUIVALENCE: {
     path: '/supplement-shop/equivalence-groups',

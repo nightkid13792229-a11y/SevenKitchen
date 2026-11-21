@@ -511,7 +511,7 @@ describe('SupplementFinalizeService.finalize', () => {
       ['ing-1'],
       'group-1',
       { id: 'user-1', name: '管理员' },
-      { reapprove: true },
+      { reapprove: true, priority: null },
     );
 
     // ③ 草稿置最终态 + 写入审计（AI 提案 + 人改字段的值）。
@@ -696,7 +696,7 @@ describe('SupplementFinalizeService.finalize', () => {
       ['ing-1'],
       'group-1',
       { id: 'user-1', name: '管理员' },
-      { reapprove: false },
+      { reapprove: false, priority: null },
     );
     expect(result.verification.ok).toBe(true);
   });
@@ -716,10 +716,13 @@ describe('SupplementFinalizeService.finalize', () => {
 
     const result = await service.finalize(user, 'draft-1');
 
-    expect(tx.ingredient.update).toHaveBeenCalledWith({
-      where: { id: 'ing-1' },
-      data: { equivalencePriority: 3 },
-    });
+    expect(equivalenceMock.assignInTransaction).toHaveBeenCalledWith(
+      tx,
+      ['ing-1'],
+      'group-1',
+      { id: 'user-1', name: '管理员' },
+      { reapprove: true, priority: 3 },
+    );
     expect(result.verification.ok).toBe(true);
   });
 

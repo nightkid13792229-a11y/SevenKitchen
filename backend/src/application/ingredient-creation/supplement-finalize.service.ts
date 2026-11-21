@@ -258,14 +258,11 @@ export class SupplementFinalizeService {
             [created.ingredientId],
             groupId,
             { id: user.id, name: user.name },
-            { reapprove: payload.equivalence.reapproveGroup !== false },
+            {
+              reapprove: payload.equivalence.reapproveGroup !== false,
+              priority: payload.equivalence.priority,
+            },
           );
-          if (payload.equivalence.priority !== null) {
-            await tx.ingredient.update({
-              where: { id: created.ingredientId },
-              data: { equivalencePriority: payload.equivalence.priority },
-            });
-          }
         }
 
         await this.draftService.markFinalized(tx, draftId, {

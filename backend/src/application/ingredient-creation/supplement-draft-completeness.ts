@@ -113,12 +113,9 @@ export function computeDraftCompleteness(
           },
         ]),
 
-    // ⑤ DIY：开 → 平台 + 链接
+    // ⑤ DIY：开 → 平台（商品链接是选填，不阻塞建档）
     ...(diy.enabled
-      ? [
-          { key: 'platform', filled: hasText(diy.platform) },
-          { key: 'linkUrl', filled: hasText(diy.linkUrl) },
-        ]
+      ? [{ key: 'platform', filled: hasText(diy.platform) }]
       : []),
 
     // ⑥ 采购没有额外必填（单位/倍数/价格已算在 basic 里）

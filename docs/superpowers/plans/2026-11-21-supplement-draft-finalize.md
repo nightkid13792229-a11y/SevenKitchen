@@ -28,7 +28,7 @@
 
 1. **粉剂/液体小数**：每份 0.9 g / 2.5 ml 时，证据表必须能存小数，营养档案基准必须是 `PER_1_G` / `PER_1_ML`，浓度解析能通过；写入 0/1 或 `PER_SERVING` 都算失败。
 2. **人工改完再重跑 AI**：人改过的字段不能被 AI 静默覆盖；删掉某个营养素后，旧的每粒值/旧字段不能继续写进档案。
-3. **开关打开但依赖缺失**：上架缺保质期、DIY 缺链接、采购缺价格时必须是阻断项，不能静默把开关关掉或写入一个“看起来成功”的档案。
+3. **开关打开但依赖缺失**：上架缺保质期、DIY 缺平台、采购缺价格时必须是阻断项，不能静默把开关关掉或写入一个“看起来成功”的档案。DIY 购买链接是选填，不阻断。
 4. **事务失败**：任何一步失败都不能留下半条原料/营养/证据/标签/组关系；草稿必须保留。
 5. **写入后功能核验失败**：字段写进去了但上架清单/配方候选/DIY/采购/等价组查不到时，页面必须显示“已写入，但功能未生效”，不能显示“全部成功”。
 
@@ -242,7 +242,7 @@ Expected: FAIL — modules/functions missing.
   - nutrition: at least one nutrient > 0, at least one default target.
   - label: labelCategory, labelNames length > 0, tagNames length > 0.
   - retail: if enabled → shelfLifeMonths; else → noSaleReason.
-  - diy: if enabled → platform and linkUrl.
+  - diy: if enabled → platform; linkUrl is optional.
   - procurement: no extra.
   - equivalence: groupId not null (including `__SKIP__`).
 - `normalizeSupplementDraftPayload` must deep-merge nested objects from `emptySupplementDraftPayload()` and keep only known keys.
@@ -503,7 +503,7 @@ bash scripts/session.sh commit -m "feat(supplement): 服务端草稿 CRUD" \
 
 - [ ] **Step 1: Write failing feature-validation tests**
 
-Cover: duplicate; catalog exact → pass, non-exact labelNames → warning with candidates (not basic.name); retail on with ERROR; retail off without reason; shelfLifeMonths present but invalid (0/negative/decimal, including retail off); noSaleReason not in the four-value whitelist; DIY on without link; DIY platform not in the allowed whitelist; storageCondition >200; purchaseUnit >50; group not approved/singleton/skip; group concentration MISSING/UNIT_MISMATCH → warning; global shop/equivalence off warnings; missing evidence images → warning with per-image ackKey (not blocker). Assert levels and codes.
+Cover: duplicate; catalog exact → pass, non-exact labelNames → warning with candidates (not basic.name); retail on with ERROR; retail off without reason; shelfLifeMonths present but invalid (0/negative/decimal, including retail off); noSaleReason not in the four-value whitelist; DIY on without platform; DIY on with empty linkUrl → no blocker; DIY platform not in the allowed whitelist; storageCondition >200; purchaseUnit >50; group not approved/singleton/skip; group concentration MISSING/UNIT_MISMATCH → warning; global shop/equivalence off warnings; missing evidence images → warning with per-image ackKey (not blocker). Assert levels and codes.
 
 - [ ] **Step 2: Run and confirm failure**
 
@@ -762,7 +762,7 @@ bash scripts/session.sh commit -m "refactor(supplement): 建档事务复用与�
   - `SupplementWriteVerification { ok; checkedAt; fields: VerificationField[]; features: VerificationFeature[] }`.
   - `SupplementFinalizeService.finalize(user: { id: string; name?: string }, draftId, input?): Promise<FinalizeResult>`.
   - `FinalizeResult { ingredientId; nutritionFoodId; evidenceId; verification: SupplementWriteVerification }`.
-  - `SupplementEquivalenceService.assignInTransaction(tx, ingredientIds, groupId, operator, options?: { reapprove?: boolean }): Promise<{ moved: number; skipped: number }>`.
+  - `SupplementEquivalenceService.assignInTransaction(tx, ingredientIds, groupId, operator, options?: { reapprove?: boolean; priority?: number | null }): Promise<{ moved: number; skipped: number }>`.
 
 - [ ] **Step 1: Write failing pure tests**
 
@@ -799,7 +799,7 @@ Expected: FAIL — modules missing.
   - `$transaction`:
     - `createInTransaction(tx, input)`.
     - `tx.ingredient.update` for launch fields/properties if not already set by the create input.
-    - Group assignment: if `equivalence.groupId` is not `__SKIP__`, call `equivalence.assignInTransaction(tx, [ingredientId], groupId, user, { reapprove: payload.equivalence.reapproveGroup !== false })`. Do not call `assign()` (it opens its own transaction).
+    - Group assignment: if `equivalence.groupId` is not `__SKIP__`, call `equivalence.assignInTransaction(tx, [ingredientId], groupId, user, { reapprove: payload.equivalence.reapproveGroup !== false, priority: payload.equivalence.priority })`. Do not call `assign()` (it opens its own transaction). An explicit priority is insert-at-position: existing members at/after it shift +1.
     - `draftService.markFinalized(tx, ...)`.
     - `ingredientCreationAudit.create` with `proposals=aiSnapshot`, `changes=manualFields+values`.
     - Read back ingredient/nutrition/mapping/evidence/tags/group; `buildDirectVerification`; throw on mismatch. **Actual nutrient values come from `nutrition_food.nutrition_data`** (the recipe designer's source of truth), not only `ingredient.nutrition_profile`; verify both sinks.
@@ -810,7 +810,7 @@ Expected: FAIL — modules missing.
 - [ ] **Step 3b: Add transaction-safe equivalence assignment**
 
 - In `SupplementEquivalenceService`, extract the `assign` body into `assignInTransaction(tx, ...)`; add `assertProductionLimitInTransaction(tx, ...)` and `nextPrioritiesInTransaction(tx, ...)` (or make the existing private helpers accept a `tx` argument).
-- `assign()` becomes `this.prisma.$transaction((tx) => this.assignInTransaction(tx, ...))` and keeps its public signature.
+- `assign()` becomes `this.prisma.$transaction((tx) => this.assignInTransaction(tx, ...))` and keeps its public signature. `assignInTransaction` accepts `priority`; when provided for one member, existing members with priority ≥ it shift +1 before insert.
 - `assignInTransaction`:
   - Validates group/ingredient types using `tx`.
   - Rejects moving to another group with the existing message.
@@ -1086,7 +1086,7 @@ bash scripts/session.sh commit -m "feat(supplement): 草稿列表与建档编辑
 - Sections use `defineModel` for their sub-objects; read-only badges from `draft.aiSnapshot`.
 - `DraftAiDiffDialog` props `before`, `after`, `manualFields`; emits `apply` with selected paths.
 - Evidence section handles image upload/paste and “从链接抓取”/“采用主图” (reuse existing upload API and `previewSupplementLink`).
-- Equivalence section lists groups (existing API), recommendation button, current group status, “本次一并审核通过” default checked.
+- Equivalence section lists groups (existing API), recommendation button, current group status, members with priorities, “插到最前” shortcut, and “本次一并审核通过” default checked for any selected group.
 
 - [ ] **Step 1: Write failing diff dialog test**
 
@@ -1301,8 +1301,9 @@ Set `VITE_SUPPLEMENT_DRAFT_FLOW=true` for admin-web and `SUPPLEMENT_DRAFT_FLOW=t
 - 人改一个字段 → 刷新后还在；重跑 AI → 人改字段不被覆盖。
 - 粉剂 0.9 g / 液体 2.5 ml → 证据读回小数；营养基准 PER_1_G/ML。
 - 上架=开缺保质期 → 阻断；补后通过；写入后开关真的开。
-- 等价组加入已审核组 → 默认勾选本次一并审核 → 组 APPROVED；取消 → DRAFT。
-- DIY=开没链接 → 阻断；补后写入；制作单/DIY 能返回。
+- 等价组加入已审核组/草稿组 → 默认勾选本次一并审核 → 写入时组 APPROVED；取消 → 保持/ DRAFT，并提示需去分组页提交。
+- DIY=开没平台 → 阻断；DIY=开没链接 → 允许写入；制作单/DIY 核验不因缺链接失败。
+- 优先级填 0（或点“插到最前”）→ 新成员排第一，原 0 及以后顺延；再写入。
 - 采购=开缺价格 → 阻断；补后写入；采购需求能查到。
 - 重复建档 → 409 + 已有记录；草稿保留。
 - 模拟事务失败 → 无正式记录；草稿还在。

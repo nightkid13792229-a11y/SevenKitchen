@@ -889,7 +889,7 @@ export class SupplementEquivalenceService {
     ingredientIds: string[],
     groupId: string,
     operator: EquivalenceOperator,
-    options: { reapprove?: boolean } = {},
+    options: { reapprove?: boolean; priority?: number | null } = {},
   ): Promise<{ moved: number; skipped: number }> {
     const group = await tx.supplementEquivalenceGroup.findUnique({
       where: { id: groupId },
@@ -942,11 +942,54 @@ export class SupplementEquivalenceService {
       ),
     );
 
-    const movePriorities = await this.nextPrioritiesInTransaction(
-      tx,
-      groupId,
-      toMove.length,
-    );
+    const explicitPriority =
+      typeof options.priority === 'number' &&
+      Number.isInteger(options.priority) &&
+      options.priority >= 0
+        ? options.priority
+        : null;
+    const useExplicitPriority =
+      explicitPriority !== null && toMove.length === 1;
+    const shiftedPriorities: Array<{
+      id: string;
+      from: number;
+      to: number;
+    }> = [];
+
+    if (useExplicitPriority) {
+      const movingIds = new Set(toMove.map((item) => item.id));
+      const members = await tx.ingredient.findMany({
+        where: { equivalenceGroupId: groupId },
+        select: { id: true, equivalencePriority: true },
+      });
+      const toShift = members
+        .filter(
+          (member) =>
+            !movingIds.has(member.id) &&
+            (member.equivalencePriority ?? 0) >= explicitPriority,
+        )
+        .sort(
+          (left, right) =>
+            (right.equivalencePriority ?? 0) -
+            (left.equivalencePriority ?? 0),
+        );
+      for (const member of toShift) {
+        const from = member.equivalencePriority ?? 0;
+        await tx.ingredient.update({
+          where: { id: member.id },
+          data: { equivalencePriority: from + 1 },
+        });
+        shiftedPriorities.push({ id: member.id, from, to: from + 1 });
+      }
+    }
+
+    const movePriorities = useExplicitPriority
+      ? [explicitPriority]
+      : await this.nextPrioritiesInTransaction(
+          tx,
+          groupId,
+          toMove.length,
+        );
 
     for (const [index, ingredient] of toMove.entries()) {
       await tx.ingredient.update({
@@ -984,11 +1027,29 @@ export class SupplementEquivalenceService {
           ingredientIds: toMove.map((item) => item.id),
           names: toMove.map((item) => item.name),
           movedFromGroupIds: oldGroupIds,
+          priority: movePriorities[0] ?? null,
+          shiftedPriorities,
         } as Prisma.InputJsonValue,
         operatorId: operator.id,
         operatorName: operator.name ?? operator.id,
       },
     });
+    if (shiftedPriorities.length > 0) {
+      await tx.supplementEquivalenceGroupAudit.create({
+        data: {
+          groupId,
+          action: 'MEMBER_PRIORITY',
+          changes: {
+            reason: 'INSERT_AT_PRIORITY',
+            priority: explicitPriority,
+            shiftedPriorities,
+          } as Prisma.InputJsonValue,
+          operatorId: operator.id,
+          operatorName: operator.name ?? operator.id,
+        },
+      });
+    }
+
     for (const oldGroupId of oldGroupIds) {
       await tx.supplementEquivalenceGroupAudit.create({
         data: {

@@ -55,7 +55,7 @@
 
         <label class="draft-field">
           <span class="draft-field__label">
-            <span>购买链接</span>
+            <span>购买链接（选填）</span>
             <AiFieldTag :tag="aiTag('diy.linkUrl')" />
             <span
               v-if="isManual('diy.linkUrl')"
@@ -84,11 +84,8 @@
           <em v-if="!diy.platform && missingReason('diy.platform')" class="draft-field__missing" :title="missingReason('diy.platform')">
             AI 没找到，请补
           </em>
-          <em v-if="!diy.linkUrl.trim() && missingReason('diy.linkUrl')" class="draft-field__missing" :title="missingReason('diy.linkUrl')">
-            AI 没找到，请补
-          </em>
           <em class="draft-field__hint">
-            抓取用于补商品主图/品牌/规格；目前支持 iHerb 等能读到的商品页。
+            选填：有链接可以抓商品主图/品牌/规格；没有链接也能保存，不影响建档。
           </em>
           <em v-if="fetchError" class="draft-field__warn">{{ fetchError }}</em>
         </label>

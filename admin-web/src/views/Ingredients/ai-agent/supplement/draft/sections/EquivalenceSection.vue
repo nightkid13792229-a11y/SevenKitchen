@@ -60,17 +60,30 @@
               人改
             </span>
           </span>
-          <el-input-number
-            :model-value="equivalence.priority ?? undefined"
-            :min="0"
-            :precision="0"
-            controls-position="right"
-            style="width: 100%"
-            @update:model-value="
-              (value: number | undefined) => updatePriority(value ?? null)
-            "
-          />
-          <em class="draft-field__hint">0 最前；可选，不填按组内默认排序。</em>
+          <div class="draft-section__row">
+            <el-input-number
+              :model-value="equivalence.priority ?? undefined"
+              :min="0"
+              :precision="0"
+              controls-position="right"
+              style="flex: 1"
+              @update:model-value="
+                (value: number | undefined) => updatePriority(value ?? null)
+              "
+            />
+            <el-button
+              size="small"
+              :disabled="!selectedGroup"
+              data-action="equivalence-insert-first"
+              @click="updatePriority(0)"
+            >
+              插到最前
+            </el-button>
+          </div>
+          <em class="draft-field__hint">
+            0 会插到最前，原有 0 及以后自动顺延一位；填 1 插到第二位，以此类推。
+            不填则按组内默认排到队尾。
+          </em>
         </label>
       </div>
 
@@ -139,12 +152,12 @@
         </el-table>
         <p class="draft-field__hint">
           新补剂写入时按你填的「组内优先级」排队：0 最前，数字越小越前。
-          先看上面的现有顺序，再决定填最前、中间还是最后。
+          填 0 会插到最前，原有 0 及以后自动顺延；也可以直接点上面的「插到最前」。
         </p>
       </div>
 
       <div
-        v-if="selectedGroup && selectedGroup.status === 'APPROVED'"
+        v-if="selectedGroup"
         class="draft-section__row"
         style="margin-top: 10px"
       >
@@ -155,13 +168,19 @@
             (value: boolean | string | number) => updateReapprove(value === true)
           "
         >
-          本次一并审核通过
+          {{
+            selectedGroup.status === 'APPROVED'
+              ? '本次一并审核通过（加入后重新审核）'
+              : '本次一并审核通过（写入时自动审核）'
+          }}
         </el-checkbox>
         <em v-if="!equivalence.reapproveGroup" class="draft-field__warn">
-          组会留在待审核，缺货替换暂不生效
+          组会留在{{ statusLabel(selectedGroup.status) }}，缺货替换暂不生效；
+          需要去等价组页提交审核。
         </em>
         <em v-else class="draft-field__hint">
-          默认勾选；取消后组会留在待审核，需要的话稍后到等价组页审核。
+          默认勾选：写入时会在同一事务里自动审到「已审核」，不需要再去分组页。
+          如果整组不满足审核条件，写入会整体失败并提示原因。
         </em>
       </div>
 
@@ -189,7 +208,8 @@
       </div>
 
       <p class="draft-field__hint" style="margin-top: 0">
-        推荐只是候选，不会自动改草稿；点「采用这个组」才写进草稿。
+        推荐本身不会改草稿；但 AI 起草时可能已按候选暂选一个组（以左侧「等价组」当前值为准），
+        可以随时改选其他组或「暂不归组」。点「采用这个组」只是把候选写进草稿。
       </p>
 
       <p v-if="recommendError" class="draft-field__warn">

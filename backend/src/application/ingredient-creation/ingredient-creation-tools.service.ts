@@ -35,6 +35,8 @@ import {
 import { normalizeUnit } from '../../domain/ingredient-creation/unit-guard';
 import {
   readSourceBasis,
+  SOURCE_BASIS_LABELS,
+  sourceBasisToPer100gScale,
   sourceValuesMatch,
 } from '../../domain/ingredient-creation/source-consistency';
 import {
@@ -346,7 +348,7 @@ const GET_RECORD_TOOL: AgentToolDefinition = {
   function: {
     name: 'getRecord',
     description:
-      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值且不为 0 的比例（%，60 项口径）。拿到值之后用 writeNutrition 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）。没有值的字段不要编造、不要推算。',
+      '读取某条来源记录里真实存在的全部营养素值（只读）。返回按营养字段目录输出的 fieldPath / value / unit、目录里缺的字段与生熟状态；coverage 是目录字段中有值且不为 0 的比例（%，60 项口径）；basis / basisLabel 是这条来源的计量口径（per100g 每 100g、per1g 每 1g、per100ml 每 100ml、perServing 每份）。拿到值之后用 writeNutrition 把要写的字段一次性批量写入草稿（fieldPath 与 unit 原样照抄；单次最多 70 条）。每份 / 每 ml 的来源不能直接当每 100g 写，遇到就换一条每 100g 的来源；每 1g 的来源按 ×100 换算成每 100g 再写。没有值的字段不要编造、不要推算。',
     parameters: {
       type: 'object',
       properties: {
@@ -2313,6 +2315,8 @@ export class IngredientCreationToolsService {
       collectNutritionRecordValues(record.normalizedNutrition);
     // 与候选表同一口径：60 项目录、0 值不计入。
     const coverage = computeCatalogCoverage(record.normalizedNutrition).percent;
+    // 口径必须提前告诉模型：不然要写一次 writeNutrition 才知道这条来源能不能用。
+    const basis = readSourceBasis(record.normalizedNutrition);
 
     return {
       ok: true,
@@ -2322,6 +2326,8 @@ export class IngredientCreationToolsService {
           name: record.foodName,
           sourceType: record.sourceType,
           state: derivePreparationStateFromSource(record),
+          basis,
+          basisLabel: SOURCE_BASIS_LABELS[basis],
           coverage,
           values,
           missing,
@@ -2444,6 +2450,7 @@ export class IngredientCreationToolsService {
     const writtenFieldPaths: string[] = [];
     const sourceCache = new Map<string, SourceRecordRow | null>();
     let applied = 0;
+    let profilesDirty = false;
 
     for (let index = 0; index < args.entries.length; index += 1) {
       const raw = args.entries[index];
@@ -2493,28 +2500,32 @@ export class IngredientCreationToolsService {
       profiles = write.profiles;
       applied += 1;
       const writtenProfile = profiles[profileIndex];
-      if (writtenProfile) {
-        aiBaseline = mergeProfileBaseline(
-          aiBaseline,
-          writtenProfile.sourceRecordId,
-          [
-            {
-              fieldPath: validation.fieldPath,
-              finalValue: validation.value,
-              unit: validation.field.unit,
-            },
-          ],
-          new Date().toISOString(),
-        );
-        baselineTouched = true;
-      }
+      // 基线只记「AI 真的写了（值或单位变了）」的字段：同值重写不该刷新
+      // aiBaseline.updatedAt，否则 payload 哈希变化会让核验报告无谓作废。
       if (write.changed) {
+        profilesDirty = true;
         writtenFieldPaths.push(validation.fieldPath);
+        if (writtenProfile) {
+          aiBaseline = mergeProfileBaseline(
+            aiBaseline,
+            writtenProfile.sourceRecordId,
+            [
+              {
+                fieldPath: validation.fieldPath,
+                finalValue: validation.value,
+                unit: validation.field.unit,
+              },
+            ],
+            new Date().toISOString(),
+          );
+          baselineTouched = true;
+        }
       }
     }
 
     // 部分成功也要落库：失败项跳过，成功项已在 profiles 里。
-    if (applied > 0) {
+    // 但「全是同值重写」时内容没变，不 patch（避免无谓地让核验报告过期）。
+    if (applied > 0 && profilesDirty) {
       await this.draftService.patch(draftId, draft.step, {
         profiles,
         ...(baselineTouched ? { aiBaseline } : {}),
@@ -2878,17 +2889,8 @@ export class IngredientCreationToolsService {
       };
     }
 
-    // 档案口径恒为每 100g；来源是每份/每 100ml 时本流程不做换算，直接拒绝。
-    const basis = readSourceBasis(sourceRecord.normalizedNutrition);
-    if (basis !== 'PER_100_G') {
-      return {
-        ok: false,
-        error: `来源记录 ${sourceRecord.id} 的口径是 ${basis}，档案口径是每 100g；本流程不做换算，不能把这份数据写成每 100g。请换一条每 100g 的来源。`,
-      };
-    }
-
-    // 人工值优先：先判人工核对，再判来源数值；否则人工格写了不同值会报
-    // 「与来源不一致」，而不是按约定跳过。
+    // 人工值优先：人工格不需要来源，也就不该被来源口径/数值挡住。
+    // 先判人工核对，再判来源；否则人工格会报「与来源不一致」而不是跳过。
     const currentProfile =
       profileIndex < profiles.length ? profiles[profileIndex] : null;
     const existingEntry =
@@ -2909,20 +2911,36 @@ export class IngredientCreationToolsService {
       };
     }
 
-    const sourceValue = readCatalogFieldValue(
+    // 档案口径恒为每 100g：每 1g 可 ×100 等价换算；每份 / 每 100ml 缺份量克数
+    // 或密度，本流程不做换算，直接拒绝（不能把每份的数当每 100g 写进去）。
+    const basis = readSourceBasis(sourceRecord.normalizedNutrition);
+    const scale = sourceBasisToPer100gScale(basis);
+    if (scale === null) {
+      return {
+        ok: false,
+        error: `来源记录 ${sourceRecord.id} 的口径是 ${basis}，档案口径是每 100g；本流程不做换算，不能把这份数据写成每 100g。请换一条每 100g 的来源。`,
+      };
+    }
+
+    const rawSourceValue = readCatalogFieldValue(
       sourceRecord.normalizedNutrition,
       fieldPath,
     );
-    if (sourceValue === null) {
+    if (rawSourceValue === null) {
       return {
         ok: false,
         error: `来源记录 ${sourceRecord.id} 里没有字段 ${fieldPath} 的数值；不能凭这个来源写入，请换一条有该字段的来源或留空。`,
       };
     }
+    // 证据行存「可比值」（每 100g）：页面「来源 x → 档案 y」与审计都按它比较，
+    // 否则每 1g 的来源会显示成 0.1 g → 10 g 的假差异。
+    const sourceValue = rawSourceValue * scale;
     if (!sourceValuesMatch(value, sourceValue)) {
+      const basisNote =
+        scale === 100 ? '（按每 1g 记录，已换算成每 100g）' : '';
       return {
         ok: false,
-        error: `字段 ${fieldPath} 写的是 ${value}${field.unit}，来源记录 ${sourceRecord.id} 是 ${sourceValue}${field.unit}；两个数对不上，不能写成“直接来自来源”。请按来源值改正。`,
+        error: `字段 ${fieldPath} 写的是 ${value}${field.unit}，来源记录 ${sourceRecord.id} 是 ${sourceValue}${field.unit}${basisNote}；两个数对不上，不能写成“直接来自来源”。请按来源值改正。`,
       };
     }
 
@@ -2997,11 +3015,20 @@ export class IngredientCreationToolsService {
           skipped: 'MANUAL',
         };
       }
-      // 新增字段或值/单位变了才算进展；重复写同一个值不算。
+      // 新增字段或值/单位变了才算进展；重复写同一个值不算—
+      // 连证据行都不重写（重写会刷新 confirmedAt，payload 哈希一变，核验报告就被作废）。
       const changed =
         !existing ||
         existing.finalValue !== value ||
         existing.unit !== field.unit;
+      if (!changed) {
+        return {
+          ok: true,
+          profiles,
+          preparationState: current.preparationState,
+          changed: false,
+        };
+      }
 
       const nextEntries = existing
         ? current.entries.map((candidate) =>

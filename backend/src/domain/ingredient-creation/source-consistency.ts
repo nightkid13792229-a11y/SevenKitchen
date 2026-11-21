@@ -21,6 +21,8 @@ import { NUTRITION_FIELD_CATALOG } from '../ingredient/nutrition-field-catalog';
 export type SourceBasis =
   | 'PER_100_G'
   | 'PER_100_ML'
+  | 'PER_1_G'
+  | 'PER_1_ML'
   | 'PER_SERVING'
   | 'OTHER';
 
@@ -57,10 +59,43 @@ export function readSourceBasis(normalizedNutrition: unknown): SourceBasis {
   if (raw === 'PER_100_ML' || raw === 'PER_100ML') {
     return 'PER_100_ML';
   }
+  if (raw === 'PER_1_G' || raw === 'PER_1G') {
+    return 'PER_1_G';
+  }
+  if (raw === 'PER_1_ML' || raw === 'PER_1ML') {
+    return 'PER_1_ML';
+  }
   if (raw === 'PER_SERVING') {
     return 'PER_SERVING';
   }
   return 'OTHER';
+}
+
+/** 口径的人话标签：工具结果与错误文案共用，避免页面/模型看到内部枚举。 */
+export const SOURCE_BASIS_LABELS: Readonly<Record<SourceBasis, string>> = {
+  PER_100_G: '每 100g',
+  PER_1_G: '每 1g',
+  PER_100_ML: '每 100ml',
+  PER_1_ML: '每 1ml',
+  PER_SERVING: '每份',
+  OTHER: '未知口径',
+};
+
+/**
+ * 来源值 → 「每 100g」的倍率；不可等价换算的口径返回 null（fail closed）。
+ *
+ * 每 1g 就是每 100g 的 1/100，线性可换；每份 / 每 100ml 缺份量克数或密度，
+ * 本流程不换算，按设计直接拒绝。返回 null 的调用方必须当「不可用」处理，
+ * 不能悄悄按 1 倍算——那会把每份的营养值当成每 100g 写进档案。
+ */
+export function sourceBasisToPer100gScale(basis: SourceBasis): number | null {
+  if (basis === 'PER_100_G') {
+    return 1;
+  }
+  if (basis === 'PER_1_G') {
+    return 100;
+  }
+  return null;
 }
 
 /** 把来源记录的 normalizedNutrition 压成目录字段值；没有值的不补 0。 */
@@ -122,14 +157,29 @@ export function checkProfileSourceConsistency(
       return;
     }
 
-    if (record.basis !== 'PER_100_G') {
-      items.push({
-        code: 'SOURCE_BASIS_NOT_PER_100G',
-        message: `第 ${profileIndex + 1} 份档案的来源口径是 ${record.basis}，档案口径是每 100g；本流程不做换算，不能直接写入。`,
-        fieldPath: `profiles.${profileIndex}`,
-        suggestion: '换一条每 100g 的来源记录；不要拿每份/每 100ml 的数直接当每 100g。',
-      });
-      return;
+    // 只有「有来源值的格子」才受口径约束：整份都是人工核对值时，
+    // 值不是从来源抄的，口径不影响这些值能不能用。
+    const hasSourceBackedValue = profile.entries.some(
+      (entry) =>
+        entry &&
+        typeof entry.fieldPath === 'string' &&
+        entry.finalValue !== null &&
+        entry.finalValue !== undefined &&
+        Number.isFinite(entry.finalValue) &&
+        !isManual(entry),
+    );
+    const scale = sourceBasisToPer100gScale(record.basis);
+    if (scale === null) {
+      if (hasSourceBackedValue) {
+        items.push({
+          code: 'SOURCE_BASIS_NOT_PER_100G',
+          message: `第 ${profileIndex + 1} 份档案的来源口径是 ${record.basis}，档案口径是每 100g；本流程不做换算，不能直接写入。`,
+          fieldPath: `profiles.${profileIndex}`,
+          suggestion:
+            '换一条每 100g 的来源记录；不要拿每份/每 100ml 的数直接当每 100g。',
+        });
+        return;
+      }
     }
 
     for (const entry of profile.entries) {
@@ -177,10 +227,14 @@ export function checkProfileSourceConsistency(
         continue;
       }
 
-      if (!sourceValuesMatch(entry.finalValue, sourceValue)) {
+      // 每 1g 的来源要 ×100 才是每 100g 的可比值（见 sourceBasisToPer100gScale）。
+      const comparableSource = scale === null ? sourceValue : sourceValue * scale;
+      if (!sourceValuesMatch(entry.finalValue, comparableSource)) {
         items.push({
           code: 'SOURCE_VALUE_MISMATCH',
-          message: `字段 ${entry.fieldPath} 写的是 ${entry.finalValue}${entry.unit}，来源是 ${sourceValue}${entry.unit}；两个数对不上，不能当成「直接来自来源」。`,
+          message: `字段 ${entry.fieldPath} 写的是 ${entry.finalValue}${entry.unit}，来源是 ${comparableSource}${entry.unit}${
+            scale === 100 ? '（按每 1g 记录，已换算成每 100g）' : ''
+          }；两个数对不上，不能当成「直接来自来源」。`,
           fieldPath: entry.fieldPath,
           suggestion: '按来源值改正；来源确实不对就换一条来源。',
         });

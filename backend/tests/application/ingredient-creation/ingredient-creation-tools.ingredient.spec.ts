@@ -597,7 +597,9 @@ describe('IngredientCreationToolsService · writeIngredient 原料卡', () => {
   });
 
 describe('IngredientCreationToolsService · 进展信号只认真读', () => {
-  function createProgressTools() {
+  function createProgressTools(
+    normalizedNutrition: Record<string, unknown> = {},
+  ) {
     const listNutritionNames = jest.fn(async () => ({
       total: 2,
       names: [
@@ -612,7 +614,7 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
       sourceType: 'USDA',
       foodName: 'Chicken, liver, raw',
       foodNameEn: 'Chicken liver raw',
-      normalizedNutrition: {},
+      normalizedNutrition,
     }));
 
     const searchByLibrary = jest.fn(async ({ library }: { library: string }) => ({
@@ -675,6 +677,23 @@ describe('IngredientCreationToolsService · 进展信号只认真读', () => {
     const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
     expect(read.ok).toBe(true);
     expect(read.progress?.sourceRecordIds).toEqual(['rec-1']);
+  });
+
+  it('getRecord 明确告知来源口径，模型不用先撞 writeNutrition 的错', async () => {
+    const { tools } = createProgressTools({
+      meta: { rawBasisType: 'PER_1_G', sampleState: 'RAW' },
+      macros: { crudeProtein: 0.1 },
+    });
+
+    const read = await executeTool(tools, 'getRecord', { id: 'rec-1' });
+
+    expect(read.ok).toBe(true);
+    const body = JSON.parse(read.content) as {
+      record?: { basis?: string; basisLabel?: string };
+    };
+    // 每 1g 是可换算口径：模型看到 basis 就知道该 ×100，而不是换一条来源。
+    expect(body.record?.basis).toBe('PER_1_G');
+    expect(body.record?.basisLabel).toContain('1g');
   });
 
   it('getRecord 返回来源库，步骤摘要才能写清这条记录来自哪个库', async () => {

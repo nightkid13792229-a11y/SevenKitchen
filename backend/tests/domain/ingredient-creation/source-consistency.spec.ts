@@ -56,14 +56,21 @@ describe('readSourceBasis', () => {
     expect(readSourceBasis({ macros: { crudeProtein: 10 } })).toBe('PER_100_G');
   });
 
-  it('识别每份 / 每 100ml / 其它口径', () => {
+  it('识别每份 / 每 100ml / 每 1g / 其它口径', () => {
     expect(readSourceBasis({ meta: { rawBasisType: 'PER_SERVING' } })).toBe(
       'PER_SERVING',
     );
     expect(readSourceBasis({ meta: { rawBasisType: 'PER_100_ML' } })).toBe(
       'PER_100_ML',
     );
+    // 每 1g 是「每 100g 的 1/100」，可以等价换算，不能当「口径不明」硬拦。
     expect(readSourceBasis({ meta: { rawBasisType: 'PER_1_G' } })).toBe(
+      'PER_1_G',
+    );
+    expect(readSourceBasis({ meta: { rawBasisType: 'PER_1_ML' } })).toBe(
+      'PER_1_ML',
+    );
+    expect(readSourceBasis({ meta: { rawBasisType: 'PER_KG' } })).toBe(
       'OTHER',
     );
   });
@@ -170,5 +177,76 @@ describe('checkProfileSourceConsistency', () => {
       recordsOf(record({ 'macros.crudeProtein': 100 })),
     );
     expect(bad.map((item) => item.code)).toContain('SOURCE_VALUE_MISMATCH');
+  });
+});
+
+describe('来源口径换算与人工档案豁免', () => {
+  it('每 1g 的来源按 ×100 等价比较：不再误拦', () => {
+    const items = checkProfileSourceConsistency(
+      [profile([entry('macros.crudeProtein', 25)])],
+      recordsOf(record({ 'macros.crudeProtein': 0.25 }, 'PER_1_G')),
+    );
+    expect(items).toEqual([]);
+  });
+
+  it('每 1g 来源换算后对不上：拦死，并写出换算后的来源值', () => {
+    const items = checkProfileSourceConsistency(
+      [profile([entry('macros.crudeProtein', 26)])],
+      recordsOf(record({ 'macros.crudeProtein': 0.25 }, 'PER_1_G')),
+    );
+    const mismatch = items.find(
+      (item) => item.code === 'SOURCE_VALUE_MISMATCH',
+    );
+    expect(mismatch).toBeDefined();
+    expect(mismatch?.message).toContain('26');
+    expect(mismatch?.message).toContain('25');
+  });
+
+  it('每 1ml 仍按口径不符拦死，但文案写真实口径', () => {
+    const items = checkProfileSourceConsistency(
+      [profile([entry('macros.moisture', 80)])],
+      recordsOf(record({ 'macros.moisture': 0.8 }, 'PER_1_ML')),
+    );
+    expect(items.map((item) => item.code)).toContain(
+      'SOURCE_BASIS_NOT_PER_100G',
+    );
+    expect(items[0]?.message).toContain('PER_1_ML');
+  });
+
+  it('全部字段都是人工核对值时，来源口径不影响授权', () => {
+    const items = checkProfileSourceConsistency(
+      [
+        profile([
+          entry('macros.crudeProtein', 25, {
+            status: 'MANUAL',
+            confirmedBy: 'HUMAN_REVIEW',
+          }),
+          entry('macros.moisture', 70, {
+            status: 'MANUAL',
+            confirmedBy: 'HUMAN_REVIEW',
+          }),
+        ]),
+      ],
+      recordsOf(record({ 'macros.crudeProtein': 25 }, 'PER_SERVING')),
+    );
+    expect(items).toEqual([]);
+  });
+
+  it('人工 + AI 混在一份档案里：口径不符仍然拦（AI 那格没有出处）', () => {
+    const items = checkProfileSourceConsistency(
+      [
+        profile([
+          entry('macros.crudeProtein', 25, {
+            status: 'MANUAL',
+            confirmedBy: 'HUMAN_REVIEW',
+          }),
+          entry('macros.moisture', 70),
+        ]),
+      ],
+      recordsOf(record({ 'macros.moisture': 70 }, 'PER_SERVING')),
+    );
+    expect(items.map((item) => item.code)).toContain(
+      'SOURCE_BASIS_NOT_PER_100G',
+    );
   });
 });

@@ -295,6 +295,164 @@ describe('writeNutrition · 来源数值与人工值保护', () => {
     expect(draftService.patch).not.toHaveBeenCalled();
   });
 
+  it('重复写同一个值：不重写证据行、不刷新基线、不 patch 草稿', async () => {
+    const existingEntry = {
+      fieldPath: 'macros.crudeProtein',
+      finalValue: 10,
+      unit: 'g',
+      status: 'DIRECT',
+      sourceRecordId: 'rec-1',
+      sourceValue: 10,
+      sourceUnit: 'g',
+      formula: null,
+      confirmedBy: null,
+      confirmedAt: '2026-11-20T00:00:00.000Z',
+    };
+    const { tools, draftService } = createHarness(
+      {
+        profiles: [
+          {
+            preparationState: 'RAW',
+            sourceRecordId: 'rec-1',
+            entries: [existingEntry],
+            notes: '',
+          },
+        ],
+      },
+      { normalizedNutrition: { macros: { crudeProtein: 10 } } },
+    );
+
+    const result = await write(tools, {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 10,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    // 内容没变，就不该 patch：否则 payload 哈希会变、核验报告被无谓作废。
+    expect(draftService.patch).not.toHaveBeenCalled();
+  });
+
+  it('人工格即使来源口径不是每 100g，也先跳过而不是报口径错', async () => {
+    const manualEntry = {
+      fieldPath: 'macros.crudeProtein',
+      finalValue: 21.2,
+      unit: 'g',
+      status: 'MANUAL',
+      sourceRecordId: 'rec-1',
+      sourceValue: 21.2,
+      sourceUnit: 'g',
+      formula: null,
+      confirmedBy: 'HUMAN_REVIEW',
+      confirmedAt: '2026-11-21T00:00:00.000Z',
+    };
+    const { tools } = createHarness(
+      {
+        profiles: [
+          {
+            preparationState: 'RAW',
+            sourceRecordId: 'rec-1',
+            entries: [manualEntry],
+            notes: '',
+          },
+        ],
+      },
+      {
+        normalizedNutrition: {
+          meta: { rawBasisType: 'PER_SERVING', sampleState: 'RAW' },
+          macros: { crudeProtein: 21.2 },
+        },
+      },
+    );
+
+    const result = await write(tools, {
+      profileIndex: 0,
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 21.2,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    expect(JSON.parse(String(result.content)).skipped).toEqual([
+      { fieldPath: 'macros.crudeProtein', reason: 'MANUAL' },
+    ]);
+  });
+
+  it('来源按每 1g 记录时，×100 后与档案值比较：一致就写入，证据记可比值', async () => {
+    const { tools, draftService } = createHarness(
+      {},
+      {
+        normalizedNutrition: {
+          meta: { rawBasisType: 'PER_1_G', sampleState: 'RAW' },
+          macros: { crudeProtein: 0.1 },
+        },
+      },
+    );
+
+    const result = await write(tools, {
+      preparationState: 'RAW',
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 10,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(true);
+    const patched = draftService.patch.mock.calls.at(-1)?.[2] as {
+      profiles?: Array<{
+        entries?: Array<{ sourceValue: number | null; sourceUnit: string | null }>;
+      }>;
+    };
+    // 证据行记「可比值」（每 100g），否则页面会显示 0.1 g → 10 g 的假差异。
+    expect(patched.profiles?.[0]?.entries?.[0]).toMatchObject({
+      sourceValue: 10,
+      sourceUnit: 'g',
+    });
+  });
+
+  it('每 1g 的来源换算后对不上 → 拒绝，错误里写换算后的值', async () => {
+    const { tools } = createHarness(
+      {},
+      {
+        normalizedNutrition: {
+          meta: { rawBasisType: 'PER_1_G', sampleState: 'RAW' },
+          macros: { crudeProtein: 0.1 },
+        },
+      },
+    );
+
+    const result = await write(tools, {
+      preparationState: 'RAW',
+      entries: [
+        {
+          fieldPath: 'macros.crudeProtein',
+          value: 12,
+          unit: 'g',
+          sourceRecordId: 'rec-1',
+        },
+      ],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(String(result.error)).toContain('12');
+    expect(String(result.error)).toContain('10');
+  });
+
   it('人工值优先：即使 AI 写的数与来源不一致，也先跳过而不是报错', async () => {
     const manualEntry = {
       fieldPath: 'macros.crudeProtein',

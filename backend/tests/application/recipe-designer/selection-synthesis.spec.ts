@@ -66,6 +66,8 @@ describe('selection synthesis fallback context', () => {
     const text = messages.map((m) => String(m.content)).join('\n');
 
     expect(text).not.toContain('牛、羊、鸡、鸡蛋');
+    expect(text).not.toContain('高脂坚果');
+    expect(text).not.toContain('高碘海藻');
     expect(text).toContain('只按已确认方案');
     expect(text).toContain('不要自行添加通用食材禁忌');
   });

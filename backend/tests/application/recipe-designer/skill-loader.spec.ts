@@ -11,4 +11,11 @@ describe('recipe agent skills', () => {
     expect(text).toContain('recipe-assessment');
     expect(text).toContain('recipe-supplement');
   });
+
+  it('does not hard-code general food taboos in skills', () => {
+    expect(loadSkillsForPhase('PLAN')).not.toContain('豆类、粗纤维');
+    expect(loadSkillsForPhase('PLAN')).not.toContain('MAINTAIN 不写');
+    expect(loadSkillsForPhase('SELECT')).not.toContain('高脂坚果');
+    expect(loadSkillsForPhase('SELECT')).not.toContain('高碘海藻');
+  });
 });

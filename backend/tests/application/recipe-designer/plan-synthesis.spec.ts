@@ -103,6 +103,8 @@ describe('plan synthesis fallback context', () => {
     expect(text).not.toContain('30% DM');
     expect(text).not.toContain('30–45%');
     expect(text).not.toContain('胰腺炎与肿瘤');
+    expect(text).not.toContain('豆类、粗纤维');
+    expect(text).not.toContain('MAINTAIN 不要列');
     expect(text).toContain('知识库');
     expect(text).toContain('待确认');
   });

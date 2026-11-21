@@ -97,16 +97,16 @@
       <el-tooltip
         v-for="issue in item.issues || []"
         :key="issue.code + issue.message"
-        :content="issue.message"
+        :content="issueContent(issue)"
         placement="top"
       >
         <el-tag
-          :type="issue.level === 'ERROR' ? 'danger' : 'warning'"
+          :type="isPendingIssue(issue) ? 'info' : issue.level === 'ERROR' ? 'danger' : 'warning'"
           size="small"
           effect="plain"
           class="archive-issue"
         >
-          {{ ISSUE_LABELS[issue.code] || issue.code }}
+          {{ isPendingIssue(issue) ? `${ISSUE_LABELS[issue.code] || issue.code}（待保存）` : ISSUE_LABELS[issue.code] || issue.code }}
         </el-tag>
       </el-tooltip>
     </div>
@@ -125,6 +125,27 @@ import {
   canToggleListing,
   showListingBlockedHint,
 } from '@/views/SupplementShop/catalog-listing'
+
+/**
+ * 体检结果是按**已保存的数据**算的。这一屏里刚填、还没保存的项，
+ * 不该继续标红——否则人明明填了保质期，还看到「缺保质期」。
+ */
+const PENDING_FIELD_BY_CODE: Record<string, () => boolean> = {
+  SHELF_LIFE_MISSING: () => !!form.shelfLifeMonths,
+  STORAGE_MISSING: () => !!form.storageCondition?.trim(),
+  FORM_MISSING: () => !!form.physicalForm,
+}
+
+function isPendingIssue(issue: { code: string }): boolean {
+  const check = PENDING_FIELD_BY_CODE[issue.code]
+  return check ? check() : false
+}
+
+function issueContent(issue: { code: string; message: string }): string {
+  return isPendingIssue(issue)
+    ? `${issue.message}（你刚填了，点底部「全部保存并确认」后生效）`
+    : issue.message
+}
 
 const props = defineProps<{
   item: SupplementCatalogItem
@@ -176,7 +197,8 @@ function formLabel(value: string | null | undefined): string {
 /** 给「上架开关能不能点」用的行数据：用**表单里的值**，不是库里旧值 */
 const toggleRow = computed(() => ({
   supplementRetailEnabled: form.supplementRetailEnabled,
-  issues: props.item.issues || [],
+  // 表单里已经填了的项不算"缺"，否则保质期填了还打不开上架开关
+  issues: (props.item.issues || []).filter((issue) => !isPendingIssue(issue)),
 }))
 
 function buildPatch(): UpdateSupplementCatalogItemDto {

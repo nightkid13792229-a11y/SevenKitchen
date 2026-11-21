@@ -496,6 +496,7 @@ bash scripts/session.sh commit -m "feat(supplement): 服务端草稿 CRUD" \
   - `validateSupplementDraftFeatures(payload, context): SupplementDraftIssue[]`.
   - `SupplementDraftReviewService.validate(userId, draftId): Promise<SupplementDraftReview>`.
   - `SupplementDraftReviewService.recommendGroups(userId, draftId): Promise<{ equivalenceEnabled: boolean; candidates: Array<RecommendationCandidate & { reason: string }> }>`.
+  - `SupplementDraftReviewService.recommendGroupsForPayload(payload): Promise<{ equivalenceEnabled: boolean; candidates: Array<RecommendationCandidate & { reason: string }> }>` — no ingredient row needed; AI uses the in-memory provisional payload before it is saved.
   - `SupplementDraftReview { draft: SupplementDraftView; blockers: SupplementDraftIssue[]; warnings: SupplementDraftIssue[]; completeness: DraftCompleteness }`.
   - `buildContext(payload): Promise<SupplementDraftValidationContext>` (public so the AI service can reuse it).
   - `SupplementDraftIssue` gains `ackKey?: string` — stable `${code}:${paramsHash}` for every warning (including `NAME_FORM_WORD`), so finalize can require acknowledgment.
@@ -530,7 +531,7 @@ Expected: FAIL — function/service missing.
   - Catalog exact via `feedAdditive.get(name)`/`feedMaterial.get(name)`; candidates via `lookup(name, 5)`.
   - Issue list via `evaluateSupplementIssues`.
 - `validate` loads the draft via `draftService.get(draftId, userId)`, calls basics + features, merges. Test that every merged warning has `ackKey` and every blocker does not (including `NAME_FORM_WORD`).
-- `recommendGroups` builds a synthetic ingredient from the draft and lists groups (same query as `SupplementEquivalenceRecommendService`), resolves each candidate with `dosage.resolveConcentration`, then uses `sortRecommendations` + `describeRecommendation`; returns `{ equivalenceEnabled, candidates }` even when the ingredient doesn't exist yet.
+- `recommendGroups` loads the draft and delegates to `recommendGroupsForPayload`; `recommendGroupsForPayload` builds a synthetic ingredient from the payload and lists groups (same query as `SupplementEquivalenceRecommendService`), resolves each candidate with `dosage.resolveConcentration`, then uses `sortRecommendations` + `describeRecommendation`; returns `{ equivalenceEnabled, candidates }` even when the ingredient doesn't exist yet.
 - Set `ackKey` on every warning: `NAME_FORM_WORD:${name}`, label names `:${missingNames.sort().join('|')}`, group warnings `:${groupId}`, DIY `:${platform}`, retail `:${noSaleReason}`, evidence `:${missing.sort().join('+')}`; simple warnings can use `code` alone.
 - Add group concentration warnings: selected group + concentration MISSING → `GROUP_NUTRIENT_MISSING`; UNIT_MISMATCH → `GROUP_UNIT_MISMATCH`; both WARNING with groupId ackKey.
 

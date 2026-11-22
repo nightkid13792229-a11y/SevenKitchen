@@ -240,7 +240,7 @@ Expected: FAIL — modules/functions missing.
 - Required fields follow spec §12:
   - basic: name, baseUnit, unitDisplayLabel, physicalForm, servingUnitsPerDose, purchaseUnit, purchaseToBaseRatio, currentPricePerPurchaseUnit, addTiming.
   - nutrition: at least one nutrient > 0, at least one default target.
-  - label: labelCategory, labelNames length > 0; tagNames optional (used only for catalog filtering).
+  - label: labelCategory, labelNames length > 0; supplement UI has no tagNames field (no supplement catalog-tag requirement).
   - retail: if enabled → shelfLifeMonths; else → noSaleReason.
   - diy: if enabled → platform; linkUrl is optional.
   - procurement: no extra.

@@ -96,34 +96,6 @@
             目录规范名由 AI 填入，可手改；这里不判断犬用适用范围。没把握的名称请对照目录再确认。
           </em>
         </label>
-
-        <label class="draft-field">
-          <span class="draft-field__label">
-            <span>标签分类标签（选填）</span>
-            <AiFieldTag :tag="aiTag('label.tagNames')" />
-            <span
-              v-if="isManual('label.tagNames')"
-              class="draft-field__manual"
-              title="你手动改过，AI 不会覆盖"
-            >
-              人改
-            </span>
-          </span>
-          <el-select
-            :model-value="label.tagNames"
-            multiple
-            filterable
-            allow-create
-            :reserve-keyword="false"
-            default-first-option
-            placeholder="如 矿物质 / 维生素（输入后回车新增）"
-            style="width: 100%"
-            @update:model-value="(value: string[]) => updateTagNames(value)"
-          />
-          <em class="draft-field__hint">
-            选填，只用于原料库筛选（如「氨基酸」「矿物质」）；不填不影响标签、配方和写入。
-          </em>
-        </label>
       </div>
 
       <div class="draft-section__row" style="margin-top: 14px">
@@ -197,11 +169,6 @@ function updateCategory(value: string): void {
 function updateLabelNames(value: string[]): void {
   props.markManual?.('label.labelNames')
   label.value.labelNames = value
-}
-
-function updateTagNames(value: string[]): void {
-  props.markManual?.('label.tagNames')
-  label.value.tagNames = value
 }
 
 function updateNameSource(value: string): void {

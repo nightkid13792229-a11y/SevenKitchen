@@ -588,8 +588,7 @@ const writeSummary = computed<Array<{ label: string; value: string }>>(() => {
     label.labelCategory
       ? formatDraftFieldValue('label.labelCategory', label.labelCategory)
       : '',
-    label.labelNames.length > 0 ? label.labelNames.join('、') : '',
-    label.tagNames.length > 0 ? label.tagNames.join('、') : ''
+    label.labelNames.length > 0 ? label.labelNames.join('、') : ''
   ].filter(Boolean)
 
   const retailText = retail.enabled

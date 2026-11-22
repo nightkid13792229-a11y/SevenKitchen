@@ -431,6 +431,9 @@ export function diffDraft(
   after: SupplementDraftPayload,
   manualFields: readonly string[] = []
 ): SupplementDraftDiffRow[] {
+  // 补剂流程已移除「标签分类标签」入口；AI 即使回填也不在差异里展示，
+  // 避免用户又看到一个无法编辑的字段。
+  const hiddenPaths = new Set(['label.tagNames'])
   const rows: SupplementDraftDiffRow[] = []
 
   for (const section of DRAFT_DIFF_SECTIONS) {
@@ -443,6 +446,7 @@ export function diffDraft(
     for (const path of paths) {
       const beforeValue = beforeLeaves.get(path)
       const afterValue = afterLeaves.get(path)
+      if (hiddenPaths.has(path)) continue
       if (isSameValue(beforeValue, afterValue)) continue
       rows.push({
         path,

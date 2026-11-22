@@ -365,6 +365,19 @@ describe('AI 重填 diff', () => {
   })
 })
 
+describe('补剂差异不展示已移除的标签分类标签', () => {
+  it('tagNames 变化不进入 AI 差异列表', () => {
+    const before = basePayload()
+    before.label.tagNames = ['氨基酸']
+    const after = basePayload()
+    after.label.tagNames = ['氨基酸', '矿物质']
+
+    expect(diffDraft(before, after).map((row) => row.path)).not.toContain(
+      'label.tagNames'
+    )
+  })
+})
+
 describe('字段 → 生产落点', () => {
   const byPath = new Map(fieldMapRows.map((row) => [row.path, row]))
 

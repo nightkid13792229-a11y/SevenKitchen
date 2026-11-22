@@ -7064,6 +7064,50 @@ export class RecipeDesignerService {
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.assertItemEditableByUser(itemId, context);
+
+    if (dto.nutritionFoodId) {
+      const current = await this.prisma.designRecipeItem.findUnique({
+        where: { id: itemId },
+        select: {
+          ingredientId: true,
+          nutritionFoodId: true,
+          ingredient: { select: { type: true } },
+        },
+      });
+      if (!current) {
+        throw new NotFoundException(`Design recipe item ${itemId} not found`);
+      }
+      if (current.nutritionFoodId !== dto.nutritionFoodId) {
+        const profile = await this.prisma.nutritionFood.findUnique({
+          where: { id: dto.nutritionFoodId },
+          select: {
+            id: true,
+            mappings: { select: { ingredientId: true } },
+          },
+        });
+        if (!profile) {
+          throw new NotFoundException(
+            `Nutrition food ${dto.nutritionFoodId} not found`,
+          );
+        }
+        if (
+          current.ingredientId &&
+          !profile.mappings.some(
+            (mapping) => mapping.ingredientId === current.ingredientId,
+          )
+        ) {
+          throw new BadRequestException(
+            '这个营养档案不属于当前原料，不能直接切换',
+          );
+        }
+        if (current.ingredient?.type === IngredientType.SUPPLEMENT) {
+          throw new BadRequestException(
+            '补剂换营养档案请删除后重新添加，避免补剂目标错配',
+          );
+        }
+      }
+    }
+
     const changesSupplementTargets =
       dto.supplementTargets !== undefined ||
       dto.nutrientTargetKey !== undefined;
@@ -7159,6 +7203,9 @@ export class RecipeDesignerService {
         : {};
 
     const data = {
+      ...(dto.nutritionFoodId
+        ? { nutritionFoodId: dto.nutritionFoodId }
+        : {}),
       ...(dto.weightG !== undefined ? { weightG: dto.weightG } : {}),
       ...preparationData,
       ...(dto.nutrientTargetKey !== undefined

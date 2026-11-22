@@ -628,6 +628,10 @@ export class AddRecipeDesignItemDto {
 
 export class UpdateRecipeDesignItemDto {
   @IsOptional()
+  @IsString()
+  nutritionFoodId?: string;
+
+  @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)

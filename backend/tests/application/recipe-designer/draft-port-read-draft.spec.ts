@@ -18,6 +18,12 @@ describe('RecipeDraftPort.readDraft', () => {
             ingredient: { name: '鸡胸肉', type: 'FOOD' },
             weightG: 400,
             preparationMethod: '生/去皮',
+            nutritionFoodId: 'nf-food-raw',
+            nutritionFood: {
+              name: '鸡胸肉（生）',
+              displayNameZh: '鸡胸肉（生）',
+              preparationState: 'RAW',
+            },
             supplementTargets: null,
           },
           {
@@ -45,6 +51,9 @@ describe('RecipeDraftPort.readDraft', () => {
       name: '鸡胸肉',
       type: 'FOOD',
       preparationMethod: '生/去皮',
+      nutritionFoodId: 'nf-food-raw',
+      nutritionProfileName: '鸡胸肉（生）',
+      nutritionPreparationState: 'RAW',
       supplementTargets: [],
     });
     expect(summary.items[1]).toMatchObject({

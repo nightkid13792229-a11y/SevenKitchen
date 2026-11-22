@@ -39,6 +39,9 @@ export interface DraftSummary {
     type: 'FOOD' | 'SUPPLEMENT' | null;
     weightG: number;
     preparationMethod: string | null;
+    nutritionFoodId: string | null;
+    nutritionProfileName: string | null;
+    nutritionPreparationState: string | null;
     supplementTargets: Array<{
       fieldPath: string;
       label: string;
@@ -247,6 +250,13 @@ export class RecipeDraftPort {
         weightG: Number(item.weightG ?? 0),
         preparationMethod:
           item.preparationMethodLabel ?? item.preparationMethod ?? null,
+        nutritionFoodId: item.nutritionFoodId ?? null,
+        nutritionProfileName:
+          item.nutritionFood?.displayNameZh ??
+          item.nutritionFood?.name ??
+          null,
+        nutritionPreparationState:
+          item.nutritionFood?.preparationState ?? null,
         supplementTargets: Array.isArray(item.supplementTargets)
           ? item.supplementTargets.map((target: any) => ({
               fieldPath: String(target?.fieldPath ?? ''),
@@ -483,6 +493,9 @@ export class RecipeDraftPort {
           const updated = (await this.designer.updateItem(
             op.itemId,
             {
+              ...(op.nutritionFoodId
+                ? { nutritionFoodId: op.nutritionFoodId }
+                : {}),
               ...(op.weightG !== undefined ? { weightG: op.weightG } : {}),
               ...(op.preparationMethod !== undefined
                 ? { preparationMethod: op.preparationMethod }

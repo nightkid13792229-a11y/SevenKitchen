@@ -64,6 +64,7 @@ export type RecipeEditOp =
   | {
       op: 'update_item';
       itemId: string;
+      nutritionFoodId?: string;
       weightG?: number;
       preparationMethod?: string | null;
       supplementTargets?: RecipeSupplementTargetInput[];

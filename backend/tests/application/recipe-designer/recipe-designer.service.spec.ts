@@ -1682,6 +1682,45 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('switches an existing food item to another nutrition profile of the same ingredient', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      ingredientId: 'ing-1',
+      nutritionFoodId: 'food-cooked',
+      ingredient: { type: 'FOOD' },
+      designRecipe: {
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      id: 'food-raw',
+      mappings: [{ ingredientId: 'ing-1' }],
+    });
+    prisma.designRecipeItem.update.mockResolvedValue(
+      item({ nutritionFoodId: 'food-raw' }),
+    );
+
+    await service.updateItem(
+      'item-1',
+      { nutritionFoodId: 'food-raw', preparationMethod: '生' },
+      'staff-1',
+    );
+
+    expect(prisma.designRecipeItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'item-1' },
+        data: expect.objectContaining({
+          nutritionFoodId: 'food-raw',
+          preparationMethod: '生',
+        }),
+      }),
+    );
+  });
+
   it('defaults a new design item to the latest recipe preparation method for that ingredient', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),

@@ -154,6 +154,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
         '修改当前草稿的原料。一次可传多个操作，按顺序执行并逐条回报结果。' +
         '预处理方式按“部位/状态/处理”写，斜杠分隔，不写原料名；原料名已含部位/状态的那一段直接省略；不写预煮/煮熟/蒸/烤等加热动作，加热放制作步骤。' +
         '营养档案状态必须与制作步骤/克数口径一致：需预煮的原料选熟档案并按熟重，不需要预煮的选生档案并按生重。' +
+        '换营养档案用 update_item + nutritionFoodId，不要用 add/replace 重加原料；换档案前先 read_draft 看当前档案。' +
         '补剂目标只传 fieldPath（营养素字段），具体数值由系统按档案计算。',
       parameters: {
         type: 'object',
@@ -669,6 +670,9 @@ function parseOps(
       ops.push({
         op: 'update_item',
         itemId,
+        ...(readText(entry.nutritionFoodId)
+          ? { nutritionFoodId: readText(entry.nutritionFoodId)! }
+          : {}),
         ...(weightG !== undefined ? { weightG } : {}),
         preparationMethod: readText(entry.preparationMethod),
         ...(supplementTargets.targets

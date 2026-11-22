@@ -111,4 +111,23 @@ describe('RecipeDraftPort editRecipe · update_item / 补剂目标', () => {
 
     expect(results[0]?.preparationChange).toBeUndefined();
   });
+
+  it('update_item 可以切换营养档案，不用删除重加', async () => {
+    const { port, designer, access } = createPort();
+
+    const results = await port.editRecipe([
+      {
+        op: 'update_item',
+        itemId: 'item-1',
+        nutritionFoodId: 'nf-cooked',
+      },
+    ]);
+
+    expect(designer.updateItem).toHaveBeenCalledWith(
+      'item-1',
+      { nutritionFoodId: 'nf-cooked' },
+      access,
+    );
+    expect(results[0]).toMatchObject({ op: 'update_item', ok: true });
+  });
 });

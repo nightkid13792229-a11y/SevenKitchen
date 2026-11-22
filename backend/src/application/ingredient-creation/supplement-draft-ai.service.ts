@@ -500,9 +500,6 @@ export function mergeDraftAiResult(
     if (canWrite('label.labelNames') && decisions.labelNames.length > 0) {
       payload.label.labelNames = uniqueStrings(decisions.labelNames);
     }
-    if (canWrite('label.tagNames') && decisions.tagNames.length > 0) {
-      payload.label.tagNames = uniqueStrings(decisions.tagNames);
-    }
     if (canWrite('basic.addTiming') && decisions.addTiming) {
       payload.basic.addTiming = decisions.addTiming;
     }
@@ -736,9 +733,6 @@ function buildSupplementDraftAiFacts(
     put(label, 'label', 'labelCategory', analysis.labelCategory);
     if (analysis.labelNames.length > 0) {
       put(label, 'label', 'labelNames', uniqueStrings(analysis.labelNames));
-    }
-    if (analysis.tagNames.length > 0) {
-      put(label, 'label', 'tagNames', uniqueStrings(analysis.tagNames));
     }
     const defaultTargets = analysis.defaultTargetFields.filter((fieldPath) =>
       Object.prototype.hasOwnProperty.call(nutrientMap, fieldPath),

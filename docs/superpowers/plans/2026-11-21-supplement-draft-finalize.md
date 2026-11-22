@@ -572,7 +572,7 @@ bash scripts/session.sh commit -m "feat(supplement): 最终校验上下文与审
 - Parses plain JSON and fenced JSON.
 - Drops unknown field paths; keeps allowed ones.
 - Rejects invalid group id (not in `groupIds`) → decision `null` + warning.
-- Filters tagNames/addTiming/labelCategory to allowed values.
+- Filters addTiming/labelCategory to allowed values; does **not** write tagNames for supplements (AI may read it, but it never enters payload).
 - Keeps reasons/confidence/source.
 - Prompt includes label text, front text, link preview, catalog names, group candidates, allowed values, and the JSON schema.
 
@@ -652,7 +652,7 @@ Expected: FAIL — service missing.
 
 - Require both image URLs.
 - `intake.read({ frontImageUrl, labelImageUrl })`; if product URL, `linkPreview.preview(productUrl)`.
-- Use `intake.analysis` as the first-pass facts (name/brand/baseUnit/physicalForm/labelCategory/labelNames/tagNames/addTiming/defaultTargets); the decision call fills/overrides the rest, subject to the precedence rules.
+- Use `intake.analysis` as the first-pass facts (name/brand/baseUnit/physicalForm/labelCategory/labelNames/addTiming/defaultTargets); do **not** use tagNames. The decision call fills/overrides the rest, subject to precedence.
 - Facts:
   - `basic`: name/brand/productModel/purchaseChannel/price/purchaseUnit/ratio/servingUnitsPerDose/physicalForm/baseUnit/unitDisplayLabel from intake/front/link; `productionLossRate` default 1.05; `addTiming` from AI or default.
   - `nutrition`: `servingNutrients` from intake (canonical units), `labelText`.

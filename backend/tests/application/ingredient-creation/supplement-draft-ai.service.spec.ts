@@ -421,6 +421,19 @@ describe('SupplementDraftAiService', () => {
     return lastUpdateInput().aiSnapshot as SupplementDraftAiSnapshot;
   }
 
+  it('AI 不写入标签分类标签，保留草稿里已有的人工标签', async () => {
+    const existing = makePayload({ name: '已有标签的草稿' });
+    existing.label.tagNames = ['人工标签'];
+    currentDraft = draftView(existing);
+
+    await service.fill({ userId: 'u1' }, 'draft-1', {
+      frontImageUrl: FRONT_IMAGE,
+      labelImageUrl: LABEL_IMAGE,
+    });
+
+    expect(lastPayload().label.tagNames).toEqual(['人工标签']);
+  });
+
   it('正面图/标签图缺一张就拒绝，且不读图、不写草稿', async () => {
     const missingLabel = service.fill({ userId: 'u1' }, 'draft-1', {
       frontImageUrl: FRONT_IMAGE,

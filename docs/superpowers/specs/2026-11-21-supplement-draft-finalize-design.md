@@ -717,7 +717,7 @@ interface SupplementWriteVerification {
 | 标签分类 | 是 | 是 | `ingredient.properties.label_category` | FEED_MATERIAL/FEED_ADDITIVE |
 | 标签名称 | 是 | 是 | `ingredient.properties.label_names` | 两本目录只用来查规范名；不判断适用性 |
 | 标签名称依据 | 是 | 否 | `ingredient.properties.label_name_source` | 说明 |
-| 标签分类标签 | — | — | 不写入补剂流程 | 补剂 AI 添加页已移除该字段；历史/AI 数据可保留，但不参与补剂建档与小程序橱窗筛选 |
+| 标签分类标签 | — | — | 不写入补剂流程 | 补剂 AI 添加页已移除该字段；AI 起草也不写入；历史/人工数据可保留，但不参与补剂建档与小程序橱窗筛选 |
 
 ### 12.4 上架/商城
 

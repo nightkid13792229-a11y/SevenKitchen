@@ -33,6 +33,7 @@ describe('AI 设计对话 · 预处理写法比对', () => {
     expect(drawerSource).toContain('用新的')
     expect(drawerSource).toContain('用旧的')
     expect(drawerSource).toContain('preparationMethod: change.before')
+    expect(drawerSource).toContain('collectPreparationChanges(messages.value)')
   })
 })
 

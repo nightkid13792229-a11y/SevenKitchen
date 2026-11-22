@@ -548,6 +548,10 @@ import {
   type AgentSession,
 } from "@/api/recipeDesigner";
 import { CFCT_CLASS_OPTIONS } from "@/types/ingredient";
+import {
+  collectPreparationChanges,
+  type PreparationChange,
+} from "@/utils/recipeDesigner/preparationChanges";
 
 const props = defineProps<{ modelValue: boolean; draftId: string }>();
 const emit = defineEmits<{
@@ -711,43 +715,13 @@ const cfctCoverage = computed(() =>
     };
   }),
 );
-interface PreparationChange {
-  itemId: string;
-  itemName: string;
-  before: string;
-  after: string;
-  source: "DRAFT" | "HISTORY";
-}
-
 /** 已经点过“用新的/用旧的”的变更，不再重复显示。 */
 const dismissedPrepChanges = ref<string[]>([]);
 
-/**
- * AI 改了预处理时，从最近一条 edit_recipe 工具结果里取“旧 → 新”。
- * 后端在 add/update_item 时把 preparationChange 放进 results。
- */
-const preparationChanges = computed<PreparationChange[]>(() => {
-  const editMessages = messages.value.filter(
-    (message) =>
-      message.role === "TOOL" && message.toolName === "edit_recipe",
-  );
-  const last = editMessages[editMessages.length - 1];
-  if (!last) return [];
-  try {
-    const parsed = JSON.parse(last.content);
-    const data = parsed?.data;
-    const results = Array.isArray(data)
-      ? data
-      : Array.isArray(data?.results)
-        ? data.results
-        : [];
-    return results
-      .map((result: any) => result?.preparationChange)
-      .filter((change: any): change is PreparationChange => Boolean(change));
-  } catch {
-    return [];
-  }
-});
+/** 累计整段对话的预处理变更；不能只取最后一条 edit_recipe。 */
+const preparationChanges = computed<PreparationChange[]>(() =>
+  collectPreparationChanges(messages.value),
+);
 
 const finishReadiness = computed<{
   ready?: boolean;

@@ -46,6 +46,7 @@
           :key="message.id"
           class="agent-row"
           :class="`agent-row--${message.role.toLowerCase()}`"
+          :data-message-id="message.id"
         >
           <span class="agent-who">{{
             message.role === "USER" ? "我" : "AI"
@@ -768,6 +769,7 @@ const stickToBottom = ref(true);
 let timer: number | null = null;
 let finalRefreshTimer: number | null = null;
 let lastEditMessageId: string | null = null;
+let lastAssistantMessageId: string | null = null;
 const previousStatus = ref<string | null>(null);
 
 const running = computed(() => session.value?.status === "RUNNING");
@@ -807,10 +809,23 @@ async function loadSession() {
   const previousScrollTop = scrollElement?.scrollTop ?? 0;
   session.value = result?.session ?? null;
   messages.value = result?.messages ?? [];
+  const lastAssistant = [...messages.value]
+    .reverse()
+    .find((message) => message.role === "ASSISTANT");
+  const hasNewAssistant = Boolean(
+    lastAssistant && lastAssistant.id !== lastAssistantMessageId,
+  );
+  if (lastAssistant) lastAssistantMessageId = lastAssistant.id;
   await nextTick();
   const nextScrollElement = scrollRef.value;
   if (wasNearBottom) {
-    scrollToBottom(true);
+    // 方案/选材卡在消息流末尾，直接滚到底会只看到卡片、看不到 AI 最后一句。
+    // 有新助手回复时优先把这条回复滚到可视区顶部。
+    const scrolledToReply =
+      hasNewAssistant && lastAssistant
+        ? scrollToMessage(lastAssistant.id)
+        : false;
+    if (!scrolledToReply) scrollToBottom(true);
   } else if (nextScrollElement) {
     // 用户正在看上面的内容：轮询刷新时保持原来的滚动位置，不要强制拉到底部。
     nextScrollElement.scrollTop = previousScrollTop;
@@ -1035,6 +1050,17 @@ function scrollToBottom(force = false) {
   if (element) element.scrollTop = element.scrollHeight;
 }
 
+function scrollToMessage(messageId: string): boolean {
+  const container = scrollRef.value;
+  if (!container) return false;
+  const target = container.querySelector(
+    `[data-message-id="${messageId}"]`,
+  ) as HTMLElement | null;
+  if (!target) return false;
+  container.scrollTop = Math.max(0, target.offsetTop - 12);
+  return true;
+}
+
 function formatMessageContent(content: string) {
   // 旧消息里写的是“上方”，但方案卡实际在消息流末尾；统一改成中性说法。
   return content.replace("见上方方案卡表格", "见方案卡表格");
@@ -1097,6 +1123,7 @@ watch(
   height: 100%;
 }
 .agent-messages {
+  position: relative;
   flex: 1;
   overflow-y: auto;
   padding-right: 4px;

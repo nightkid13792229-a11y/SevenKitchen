@@ -539,6 +539,17 @@ describe('buildSupplementDraftPrompt', () => {
     expect(prompt).toContain('不要直接抄标签数字');
   });
 
+  it('业务参数不许推断，开关默认关，添加时机按规则给', () => {
+    const prompt = buildSupplementDraftPrompt(promptInput());
+
+    expect(prompt).toContain('业务参数不猜');
+    expect(prompt).toContain('retail.shelfLifeMonths');
+    expect(prompt).toContain('retail.openedShelfLifeDays');
+    expect(prompt).toContain('不要报进 missing');
+    expect(prompt).toContain('由人决定');
+    expect(prompt).toContain('BEFORE_MIXING');
+  });
+
   it('states the no-invention, JSON-only and no-applicability rules', () => {
     const prompt = buildSupplementDraftPrompt(promptInput());
 

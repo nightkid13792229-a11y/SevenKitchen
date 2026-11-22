@@ -69,7 +69,7 @@ describe('draft completeness', () => {
       ...payload,
       retail: { ...payload.retail, enabled: false, shelfLifeMonths: null },
     };
-    expect(computeDraftCompleteness(off).missing).toContain('noSaleReason');
+    expect(computeDraftCompleteness(off).missing).not.toContain('noSaleReason');
     const on = {
       ...payload,
       retail: { ...payload.retail, enabled: true, shelfLifeMonths: null },

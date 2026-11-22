@@ -529,7 +529,6 @@ const MISSING_LABELS: Record<string, string> = {
   labelNames: '标签名称',
   tagNames: '标签分类标签',
   shelfLifeMonths: '原厂保质期',
-  noSaleReason: '不上架原因',
   platform: '购买平台',
   linkUrl: '购买链接',
   groupId: '等价组'
@@ -598,7 +597,7 @@ const writeSummary = computed<Array<{ label: string; value: string }>>(() => {
     : `不上架 · ${
         retail.noSaleReason
           ? formatDraftFieldValue('retail.noSaleReason', retail.noSaleReason)
-          : '未填原因'
+          : '未填（选填）'
       }`
 
   const diyText = diy.enabled

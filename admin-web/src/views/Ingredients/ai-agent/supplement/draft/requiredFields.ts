@@ -35,7 +35,6 @@ const REQUIRED_FIELD_META: Record<string, RequiredFieldMeta> = {
   labelCategory: { label: '标签分类', section: 'label' },
   labelNames: { label: '标签名称', section: 'label' },
   shelfLifeMonths: { label: '原厂保质期', section: 'retail' },
-  noSaleReason: { label: '不上架原因', section: 'retail' },
   platform: { label: 'DIY 平台', section: 'diy' },
   groupId: { label: '等价组意向', section: 'equivalence' }
 }

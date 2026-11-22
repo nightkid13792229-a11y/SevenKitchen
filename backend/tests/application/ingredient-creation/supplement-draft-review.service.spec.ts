@@ -388,20 +388,20 @@ describe('validateSupplementDraftFeatures', () => {
 
   /* ④ 不上架原因 / 保质期 ------------------------------------------- */
 
-  it('上架=关且没填原因 → NO_SALE_REASON_REQUIRED 阻断', () => {
+  it('上架=关且没填原因 → 不阻断（选填）', () => {
     const issues = featureIssues({
       retail: { enabled: false, noSaleReason: null },
     });
 
-    expect(issueOf(issues, 'NO_SALE_REASON_REQUIRED')?.level).toBe('BLOCKER');
+    expect(issueOf(issues, 'NO_SALE_REASON_REQUIRED')).toBeUndefined();
   });
 
-  it.each(['', '   '])('上架=关且原因为空（%j）→ 视同没填', (reason) => {
+  it.each(['', '   '])('上架=关且原因为空（%j）→ 不阻断', (reason) => {
     const issues = featureIssues({
       retail: { enabled: false, noSaleReason: reason },
     });
 
-    expect(issueOf(issues, 'NO_SALE_REASON_REQUIRED')?.level).toBe('BLOCKER');
+    expect(issueOf(issues, 'NO_SALE_REASON_REQUIRED')).toBeUndefined();
   });
 
   it.each(['SELF_MADE', 'BULK', 'NO_SUPPLY', 'UNDECIDED'])(

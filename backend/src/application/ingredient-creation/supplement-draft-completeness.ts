@@ -95,7 +95,7 @@ export function computeDraftCompleteness(
     { key: 'labelCategory', filled: label.labelCategory !== null },
     { key: 'labelNames', filled: label.labelNames.length > 0 },
 
-    // ④ 上架：开 → 保质期；关 → 不上架原因
+    // ④ 上架：开 → 保质期；关 → 不上架原因选填，不进入必填统计
     ...(retail.enabled
       ? [
           {
@@ -103,14 +103,7 @@ export function computeDraftCompleteness(
             filled: isPositiveNumber(retail.shelfLifeMonths),
           },
         ]
-      : [
-          {
-            key: 'noSaleReason',
-            filled:
-              typeof retail.noSaleReason === 'string' &&
-              hasText(retail.noSaleReason),
-          },
-        ]),
+      : []),
 
     // ⑤ DIY：开 → 平台（商品链接是选填，不阻塞建档）
     ...(diy.enabled

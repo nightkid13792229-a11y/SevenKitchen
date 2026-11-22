@@ -607,18 +607,10 @@ export function validateSupplementDraftFeatures(
     }
   }
 
-  // ④ 不上架原因：上架=关时必填且必须是四选一。
+  // ④ 不上架原因：选填；填了必须是四选一。
   if (!retail.enabled) {
     const reason = retail.noSaleReason?.trim() ?? '';
-    if (!reason) {
-      issues.push(
-        blockerIssue(
-          'NO_SALE_REASON_REQUIRED',
-          '关闭上架时必须选择不上架原因',
-          'retail.noSaleReason',
-        ),
-      );
-    } else if (!NO_SALE_REASONS.includes(reason)) {
+    if (reason && !NO_SALE_REASONS.includes(reason)) {
       issues.push(
         blockerIssue(
           'NO_SALE_REASON_INVALID',

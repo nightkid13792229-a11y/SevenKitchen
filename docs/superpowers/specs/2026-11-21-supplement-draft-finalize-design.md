@@ -106,7 +106,7 @@
    - 原厂保质期（月）
    - 储存条件
    - 内容物是否油性
-   - 不上架原因（不上架时必选）
+   - 不上架原因（选填，填了便于说明为什么不上架）
    - 参考售价/成本拆解（只读试算）
    - 数据体检问题（ERROR/WARN）
 5. **DIY 推荐**
@@ -406,7 +406,7 @@ interface SupplementAiDraft {
 | 上架 | 上架=开 时，保质期必填 | 阻断 | |
 | 上架 | 上架=开 时，物理形态不能是液体 | 阻断 | 液体暂不支持分装 |
 | 上架 | 上架=开 时，不能有 ERROR 体检项 | 阻断 | 复用 catalog issues |
-| 上架 | 上架=关 时，不上架原因必选 | 阻断 | 四选一 |
+| 上架 | 上架=关 时，不上架原因选填 | 不阻断 | 填了必须是四选一；不填不影响配方/标签/写入 |
 | 上架 | 储存条件 | 不提醒（选填） | 空着时补剂分装标签用默认「避光、密封、阴凉干燥处保存」；有特殊要求可填，不影响打印/上架 |
 | 上架 | 开盖后保质期（天） | 提醒 | 选填；标签写了就填，生产落点 `ingredient.opened_shelf_life_days` |
 | 上架 | 商城总开关关闭 | 提醒 | 写入后顾客看不到，需去设置开 |
@@ -728,7 +728,7 @@ interface SupplementWriteVerification {
 | 储存条件 | 是 | 否（选填） | `ingredient.storage_condition` | ≤200；空着时订单标签用默认值，不产生提醒 |
 | 开盖后保质期（天） | 是 | 提醒 | `ingredient.opened_shelf_life_days` | 标签写了才填 |
 | 内容物油性 | 是 | 是 | `ingredient.is_oil_based` | 布尔 |
-| 不上架原因 | 是 | 上架=关时是 | `ingredient.properties.no_sale_reason` | 四选一 |
+| 不上架原因 | 是 | 否（选填） | `ingredient.properties.no_sale_reason` | 填了必须四选一；不填不影响写入 |
 | 商城总开关 | 配置 | — | `supplement_shop_config.enabled` | 提醒 |
 | 等价组总开关 | 配置 | — | `supplement_shop_config.equivalence_enabled` | 提醒 |
 

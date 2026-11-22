@@ -33,14 +33,6 @@
         class="draft-section__alert"
         title="上架必须填原厂保质期（月），否则最终校验会阻断。"
       />
-      <el-alert
-        v-if="!retail.enabled && !retail.noSaleReason"
-        type="warning"
-        :closable="false"
-        show-icon
-        class="draft-section__alert"
-        title="不上架时必须在下方选一个原因（四选一）。"
-      />
     </div>
 
     <div class="draft-section__group">
@@ -151,7 +143,7 @@
       <div v-if="!retail.enabled" class="draft-section__row" style="margin-top: 14px">
         <label class="draft-field" style="flex: 1">
           <span class="draft-field__label">
-            <span>不上架原因</span>
+            <span>不上架原因（选填）</span>
             <AiFieldTag :tag="aiTag('retail.noSaleReason')" />
             <span
               v-if="isManual('retail.noSaleReason')"
@@ -174,8 +166,8 @@
               :value="option.value"
             />
           </el-select>
-          <em v-if="!retail.noSaleReason && missingReason('retail.noSaleReason')" class="draft-field__missing" :title="missingReason('retail.noSaleReason')">
-            AI 没找到，请补
+          <em class="draft-field__hint">
+            选填；填了方便以后说明为什么没上架，不填不影响写入和配方使用。
           </em>
           <em class="draft-field__hint">
             不上架时必选；原因会写进原料 properties，制作单据此提示。

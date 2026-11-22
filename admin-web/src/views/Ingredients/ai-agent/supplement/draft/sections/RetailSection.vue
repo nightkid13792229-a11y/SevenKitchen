@@ -267,7 +267,8 @@ function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
 
-const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const aiTag = (path: string) =>
+  aiFieldTag(props.aiSnapshot, path, props.manualFields ?? [])
 const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
 
 function update<K extends keyof SupplementDraftRetail>(

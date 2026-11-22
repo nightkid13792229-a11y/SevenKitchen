@@ -75,7 +75,8 @@ function isManual(path: string): boolean {
   return isManualDraftPath(path, props.manualFields ?? [])
 }
 
-const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const aiTag = (path: string) =>
+  aiFieldTag(props.aiSnapshot, path, props.manualFields ?? [])
 
 function updateEnabled(value: boolean): void {
   props.markManual?.('procurement.enabled')

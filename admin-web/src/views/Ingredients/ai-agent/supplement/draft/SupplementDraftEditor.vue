@@ -358,6 +358,7 @@ import {
   requiredMissingRows,
   type DraftSectionKey
 } from './requiredFields'
+import { stillMissingPaths } from './draftMissing'
 
 const props = defineProps<{
   draft: SupplementDraftView | null
@@ -535,19 +536,15 @@ function countBySection(paths: readonly string[]): Record<SectionKey, number> {
   return counts
 }
 
-/** AI 自己说没找到的字段，按区块计数（导航角标）。 */
-const missingBySection = computed<Record<SectionKey, number>>(() => {
-  const missing = props.draft?.aiSnapshot?.missing
-  if (!Array.isArray(missing)) return countBySection([])
-  const paths: string[] = []
-  for (const entry of missing) {
-    if (entry && typeof entry === 'object' && 'fieldPath' in entry) {
-      const path = (entry as { fieldPath?: unknown }).fieldPath
-      if (typeof path === 'string') paths.push(path)
-    }
-  }
-  return countBySection(paths)
-})
+/**
+ * AI 自己说没找到、且**现在还是空的**字段，按区块计数（导航角标）。
+ * 人把那一项补上后角标就消失，不会一直挂着「缺 N」。
+ */
+const missingBySection = computed<Record<SectionKey, number>>(() =>
+  countBySection(
+    stillMissingPaths(props.draft?.payload, props.draft?.aiSnapshot?.missing)
+  )
+)
 
 /** 人改过的字段，按区块计数（导航角标）。 */
 const manualBySection = computed<Record<SectionKey, number>>(() =>

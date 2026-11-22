@@ -158,7 +158,8 @@ function isManual(path: string): boolean {
   return isManualDraftPath(path, manual.value)
 }
 
-const aiTag = (path: string) => aiFieldTag(props.aiSnapshot, path)
+const aiTag = (path: string) =>
+  aiFieldTag(props.aiSnapshot, path, props.manualFields ?? [])
 const missingReason = (path: string) => aiMissingReason(props.aiSnapshot, path)
 
 function updateCategory(value: string): void {

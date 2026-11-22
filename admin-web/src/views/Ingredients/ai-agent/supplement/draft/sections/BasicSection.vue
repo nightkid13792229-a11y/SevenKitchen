@@ -486,8 +486,11 @@ const aiTags = computed<Record<string, AiTag>>(() => {
   const fields = props.aiSnapshot?.fields
   if (!isRecord(fields)) return {}
   const tags: Record<string, AiTag> = {}
+  const manual = props.manualFields ?? []
   for (const [path, raw] of Object.entries(fields)) {
     if (!isRecord(raw)) continue
+    // 人改过的字段不显示 AI 来源徽标（理由见 aiFieldMeta.aiFieldTag）
+    if (isManualDraftPath(path, manual)) continue
     const source = typeof raw.source === 'string' ? raw.source : ''
     const label = SOURCE_LABELS[source]
     if (!label) continue

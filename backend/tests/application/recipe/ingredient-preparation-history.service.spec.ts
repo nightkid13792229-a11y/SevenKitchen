@@ -56,12 +56,68 @@ function createService(
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue(methodRows),
     },
+    ingredientNutritionPreparationHistory: {
+      findUnique: jest.fn(),
+      upsert: jest.fn(),
+    },
   } as any;
   const service = new IngredientPreparationHistoryService(prisma);
   return { service, prisma };
 }
 
 describe('IngredientPreparationHistoryService', () => {
+  it('reads and writes the latest preparation per ingredient + profile', async () => {
+    const { service, prisma } = createService([]);
+    prisma.ingredientNutritionPreparationHistory.findUnique.mockResolvedValue({
+      text: '生/打碎',
+      usedAt: NEW,
+    });
+
+    await expect(
+      service.getLatestTextForProfile('ing-1', 'food-raw'),
+    ).resolves.toBe('生/打碎');
+    expect(
+      prisma.ingredientNutritionPreparationHistory.findUnique,
+    ).toHaveBeenCalledWith({
+      where: {
+        ingredientId_nutritionFoodId: {
+          ingredientId: 'ing-1',
+          nutritionFoodId: 'food-raw',
+        },
+      },
+      select: { text: true },
+    });
+
+    await service.rememberProfileText('ing-1', 'food-raw', '生/去骨');
+    expect(
+      prisma.ingredientNutritionPreparationHistory.upsert,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          ingredientId_nutritionFoodId: {
+            ingredientId: 'ing-1',
+            nutritionFoodId: 'food-raw',
+          },
+        },
+        update: expect.objectContaining({ text: '生/去骨', source: 'MANUAL' }),
+      }),
+    );
+  });
+
+  it('returns no profile history when the pair has no confirmed record', async () => {
+    const { service, prisma } = createService([]);
+    prisma.ingredientNutritionPreparationHistory.findUnique.mockResolvedValue(
+      null,
+    );
+
+    await expect(
+      service.getLatestTextForProfile('ing-1', 'food-raw'),
+    ).resolves.toBeNull();
+    await expect(service.getProfileHistory('ing-1', 'food-raw')).resolves.toEqual(
+      [],
+    );
+  });
+
   it('includes PUBLIC non-custom recipe items', async () => {
     const { service } = createService([catalogRow('去皮', NEW)]);
 

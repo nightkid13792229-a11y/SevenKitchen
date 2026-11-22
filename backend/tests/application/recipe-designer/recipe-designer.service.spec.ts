@@ -132,6 +132,8 @@ describe('RecipeDesignerService', () => {
   const preparationHistory = {
     getLatestText: jest.fn(),
     getLatestTextMap: jest.fn(),
+    getLatestTextForProfile: jest.fn(),
+    rememberProfileText: jest.fn(),
   };
   const adminAccess = { userId: 'admin-1', role: 'ADMIN' };
 
@@ -176,6 +178,7 @@ describe('RecipeDesignerService', () => {
     prisma.recipeItem.findMany.mockResolvedValue([]);
     preparationHistory.getLatestText.mockResolvedValue(null);
     preparationHistory.getLatestTextMap.mockResolvedValue(new Map());
+    preparationHistory.getLatestTextForProfile.mockResolvedValue(null);
     prisma.nutritionFood.findUnique.mockResolvedValue(null);
     prisma.preparationMethod.findMany.mockResolvedValue([]);
     prisma.dogBreed.findUnique.mockResolvedValue(null);
@@ -1541,7 +1544,7 @@ describe('RecipeDesignerService', () => {
     });
     // 历史原文是「生重」，本次选择的档案是熟制；代码不再自动改写，只保留原文，
     // 由编辑器的黄字提示 / AI 复核状态是否一致。
-    preparationHistory.getLatestText.mockResolvedValue(
+    preparationHistory.getLatestTextForProfile.mockResolvedValue(
       '生重、打碎、充分搅拌',
     );
     prisma.designRecipeItem.create.mockResolvedValue(
@@ -1562,8 +1565,9 @@ describe('RecipeDesignerService', () => {
       'staff-1',
     );
 
-    expect(preparationHistory.getLatestText).toHaveBeenCalledWith(
+    expect(preparationHistory.getLatestTextForProfile).toHaveBeenCalledWith(
       'ingredient-pumpkin',
+      'food-cooked',
     );
     expect(prisma.designRecipeItem.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1721,6 +1725,50 @@ describe('RecipeDesignerService', () => {
     );
   });
 
+  it('auto-fills preparation from the new nutrition profile when switching profile', async () => {
+    prisma.designRecipeItem.findUnique.mockResolvedValue({
+      id: 'item-1',
+      ingredientId: 'ing-1',
+      nutritionFoodId: 'food-cooked',
+      preparationMethod: '熟/打碎',
+      ingredient: { type: 'FOOD' },
+      designRecipe: {
+        id: 'design-1',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      },
+    });
+    prisma.nutritionFood.findUnique.mockResolvedValue({
+      id: 'food-raw',
+      mappings: [{ ingredientId: 'ing-1' }],
+    });
+    preparationHistory.getLatestTextForProfile.mockResolvedValue('生/打碎');
+    prisma.designRecipeItem.update.mockResolvedValue(
+      item({ nutritionFoodId: 'food-raw', preparationMethod: '生/打碎' }),
+    );
+
+    await service.updateItem(
+      'item-1',
+      { nutritionFoodId: 'food-raw' },
+      'staff-1',
+    );
+
+    expect(preparationHistory.getLatestTextForProfile).toHaveBeenCalledWith(
+      'ing-1',
+      'food-raw',
+    );
+    expect(prisma.designRecipeItem.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          nutritionFoodId: 'food-raw',
+          preparationMethod: '生/打碎',
+        }),
+      }),
+    );
+  });
+
   it('defaults a new design item to the latest recipe preparation method for that ingredient', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
@@ -1728,7 +1776,7 @@ describe('RecipeDesignerService', () => {
     prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
       id: 'mapping-1',
     });
-    preparationHistory.getLatestText.mockResolvedValue('蒸熟、压泥');
+    preparationHistory.getLatestTextForProfile.mockResolvedValue('蒸熟、压泥');
     prisma.designRecipeItem.create.mockResolvedValue(
       item({
         ingredientId: 'ingredient-mussel',
@@ -1754,6 +1802,45 @@ describe('RecipeDesignerService', () => {
       }),
       select: expect.any(Object),
     });
+  });
+
+  it('leaves preparation blank when the selected profile has no history', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({
+      id: 'mapping-1',
+    });
+    preparationHistory.getLatestTextForProfile.mockResolvedValue(null);
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+        preparationMethod: null,
+      }),
+    );
+
+    await service.addItem(
+      'design-1',
+      {
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+        weightG: 100,
+      } as any,
+      'staff-1',
+    );
+
+    expect(preparationHistory.getLatestTextForProfile).toHaveBeenCalledWith(
+      'ingredient-mussel',
+      'food-raw',
+    );
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          preparationMethod: null,
+        }),
+      }),
+    );
   });
 
   it('rejects design items when the selected ingredient is not mapped to the nutrition profile', async () => {

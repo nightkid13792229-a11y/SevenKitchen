@@ -23,7 +23,6 @@ describe('edit_recipe · update_item 换营养档案', () => {
             op: 'update_item',
             itemId: 'item-1',
             nutritionFoodId: 'nf-raw',
-            preparationMethod: '生',
           },
         ],
       },
@@ -36,7 +35,6 @@ describe('edit_recipe · update_item 换营养档案', () => {
         op: 'update_item',
         itemId: 'item-1',
         nutritionFoodId: 'nf-raw',
-        preparationMethod: '生',
       },
     ]);
   });

@@ -127,10 +127,15 @@ export const recipeApi = {
   getIngredientPreparationMethodHistory: (
     ingredientId: string,
     limit?: number,
+    nutritionFoodId?: string,
   ) => {
+    const params = {
+      ...(limit ? { limit } : {}),
+      ...(nutritionFoodId ? { nutritionFoodId } : {}),
+    };
     return request.get<IngredientPreparationMethodHistoryItem[]>(
       `/admin/ingredients/${ingredientId}/preparation-method-history`,
-      limit ? { params: { limit } } : undefined,
+      Object.keys(params).length > 0 ? { params } : undefined,
     );
   },
 

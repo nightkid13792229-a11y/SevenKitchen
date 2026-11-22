@@ -39,7 +39,7 @@ describe('RecipeDraftPort editRecipe · update_item / 补剂目标', () => {
     };
   }
 
-  it('update_item 写预处理并返回旧 → 新，供界面提示用新的/用旧的', async () => {
+  it('update_item 写预处理并返回旧 → 新记录', async () => {
     const { port, designer, access } = createPort();
 
     const results = await port.editRecipe([

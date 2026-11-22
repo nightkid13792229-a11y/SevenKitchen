@@ -11,7 +11,10 @@ import {
   Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { IngredientPreparationHistoryService } from './ingredient-preparation-history.service';
+import {
+  IngredientPreparationHistoryService,
+  type IngredientPreparationHistoryEntry,
+} from './ingredient-preparation-history.service';
 import { normalizeImageUrlProtocol } from '../../utils/image-url.util';
 import { Prisma, RecipeSeriesBusinessStatus } from '@prisma/client';
 import {
@@ -2111,12 +2114,17 @@ export class RecipeService {
   async getIngredientPreparationMethodHistory(
     ingredientId: string,
     limit?: number,
+    nutritionFoodId?: string,
   ): Promise<IngredientPreparationMethodHistoryDto[]> {
-    const entries =
-      (await this.ingredientPreparationHistoryService?.getHistory(
-        ingredientId,
-        limit,
-      )) ?? [];
+    const entries: IngredientPreparationHistoryEntry[] =
+      (nutritionFoodId
+        ? await (
+            this.ingredientPreparationHistoryService as any
+          )?.getProfileHistory?.(ingredientId, nutritionFoodId, limit)
+        : await this.ingredientPreparationHistoryService?.getHistory(
+            ingredientId,
+            limit,
+          )) ?? [];
 
     return entries.map((entry) => ({
       text: entry.text,

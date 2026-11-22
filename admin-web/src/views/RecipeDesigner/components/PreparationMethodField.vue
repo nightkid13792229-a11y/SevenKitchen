@@ -55,6 +55,7 @@ const props = withDefaults(
     modelValue?: string | null
     label?: string | null
     ingredientId?: string | null
+    nutritionFoodId?: string | null
     placeholder?: string
     tabindex?: string | number
   }>(),
@@ -62,6 +63,7 @@ const props = withDefaults(
     modelValue: '',
     label: '',
     ingredientId: '',
+    nutritionFoodId: '',
     placeholder: PREPARATION_FIELD_PLACEHOLDER,
     tabindex: -1
   }
@@ -108,12 +110,14 @@ watch(
 
 async function loadHistory() {
   const ingredientId = String(props.ingredientId ?? '').trim()
+  const nutritionFoodId = String(props.nutritionFoodId ?? '').trim()
   if (!ingredientId) {
     historyTexts.value = []
     return
   }
 
-  const cached = historyCache.get(ingredientId)
+  const cacheKey = `${ingredientId}|${nutritionFoodId}`
+  const cached = historyCache.get(cacheKey)
   if (cached) {
     historyTexts.value = cached
     return
@@ -122,13 +126,14 @@ async function loadHistory() {
   try {
     const items = await recipeApi.getIngredientPreparationMethodHistory(
       ingredientId,
-      3
+      3,
+      nutritionFoodId || undefined,
     )
     const texts = (items ?? [])
       .map((item) => String(item.text ?? '').trim())
       .filter(Boolean)
       .slice(0, 3)
-    historyCache.set(ingredientId, texts)
+    historyCache.set(cacheKey, texts)
     historyTexts.value = texts
   } catch {
     historyTexts.value = []

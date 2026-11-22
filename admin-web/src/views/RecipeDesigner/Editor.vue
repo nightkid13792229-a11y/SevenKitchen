@@ -227,6 +227,7 @@
                           :model-value="element.preparationMethod || ''"
                           :label="element.preparationMethodLabel || ''"
                           :ingredient-id="element.ingredientId"
+                          :nutrition-food-id="element.nutritionFoodId"
                           :tabindex="-1"
                           @change="(value: string | null) => onPreparationMethodChange(element, value)"
                         />
@@ -1033,8 +1034,13 @@ function itemPreparationText(item: DesignerItem): string {
 
 /** 部位 / 状态 / 预处理的称重口径与所选营养档案不一致时给出提示 */
 function itemPreparationHint(item: DesignerItem): string | null {
+  if (isSupplementItem(item)) return null
+  const text = itemPreparationText(item)
+  if (!text) {
+    return '该原料 + 营养档案还没有预处理记录，请补充'
+  }
   return preparationBasisMismatchHint(
-    itemPreparationText(item),
+    text,
     item.nutritionFood?.preparationState ?? null
   )
 }

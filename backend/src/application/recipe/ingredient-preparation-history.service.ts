@@ -81,6 +81,89 @@ export class IngredientPreparationHistoryService {
     return this.aggregateEntries(entries, limit);
   }
 
+  /** 按“原料 + 营养档案”取初始化/人工确认的最近写法。 */
+  async getLatestTextForProfile(
+    ingredientId: string,
+    nutritionFoodId: string,
+  ): Promise<string | null> {
+    const ingredient = ingredientId?.trim();
+    const nutritionFood = nutritionFoodId?.trim();
+    if (!ingredient || !nutritionFood) return null;
+    const row =
+      await this.prisma.ingredientNutritionPreparationHistory.findUnique({
+        where: {
+          ingredientId_nutritionFoodId: {
+            ingredientId: ingredient,
+            nutritionFoodId: nutritionFood,
+          },
+        },
+        select: { text: true },
+      });
+    return row?.text?.trim() || null;
+  }
+
+  /** 手动编辑框的候选：只取当前原料+档案的最近一条。 */
+  async getProfileHistory(
+    ingredientId: string,
+    nutritionFoodId: string,
+    limit?: number,
+  ): Promise<IngredientPreparationHistoryEntry[]> {
+    const ingredient = ingredientId?.trim();
+    const nutritionFood = nutritionFoodId?.trim();
+    if (!ingredient || !nutritionFood) return [];
+    const row =
+      await this.prisma.ingredientNutritionPreparationHistory.findUnique({
+        where: {
+          ingredientId_nutritionFoodId: {
+            ingredientId: ingredient,
+            nutritionFoodId: nutritionFood,
+          },
+        },
+        select: { text: true, usedAt: true },
+      });
+    if (!row?.text?.trim()) return [];
+    return [
+      {
+        text: row.text.trim(),
+        usageCount: 1,
+        lastUsedAt: row.usedAt,
+      },
+    ].slice(0, Math.max(1, Number(limit ?? 1)));
+  }
+
+  /** 人工保存预处理时，把“原料+档案”的最新值写回初始化表。 */
+  async rememberProfileText(
+    ingredientId: string,
+    nutritionFoodId: string,
+    text: string,
+    source = 'MANUAL',
+  ): Promise<void> {
+    const ingredient = ingredientId?.trim();
+    const nutritionFood = nutritionFoodId?.trim();
+    const normalized = text?.trim();
+    if (!ingredient || !nutritionFood || !normalized) return;
+    await this.prisma.ingredientNutritionPreparationHistory.upsert({
+      where: {
+        ingredientId_nutritionFoodId: {
+          ingredientId: ingredient,
+          nutritionFoodId: nutritionFood,
+        },
+      },
+      create: {
+        ingredientId: ingredient,
+        nutritionFoodId: nutritionFood,
+        text: normalized,
+        source,
+        usedAt: new Date(),
+      },
+      update: {
+        text: normalized,
+        source,
+        usedAt: new Date(),
+      },
+    });
+  }
+
   async getLatestText(ingredientId: string): Promise<string | null> {
     const [first] = await this.getHistory(ingredientId, 1);
     return first?.text ?? null;

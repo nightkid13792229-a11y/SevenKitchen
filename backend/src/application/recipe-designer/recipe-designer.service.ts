@@ -6992,6 +6992,7 @@ export class RecipeDesignerService {
       await this.resolveDesignItemPreparationMethod(
         dto.preparationMethod,
         ingredientId,
+        dto.nutritionFoodId,
       );
     const preparationData = {
       preparationMethod: resolvedPreparationMethod,
@@ -7064,19 +7065,21 @@ export class RecipeDesignerService {
   ) {
     const context = normalizeRecipeDesignerAccessContext(access);
     const draft = await this.assertItemEditableByUser(itemId, context);
+    const currentItem = await this.prisma.designRecipeItem.findUnique({
+      where: { id: itemId },
+      select: {
+        ingredientId: true,
+        nutritionFoodId: true,
+        preparationMethod: true,
+        ingredient: { select: { type: true } },
+      },
+    });
+    if (!currentItem) {
+      throw new NotFoundException(`Design recipe item ${itemId} not found`);
+    }
 
     if (dto.nutritionFoodId) {
-      const current = await this.prisma.designRecipeItem.findUnique({
-        where: { id: itemId },
-        select: {
-          ingredientId: true,
-          nutritionFoodId: true,
-          ingredient: { select: { type: true } },
-        },
-      });
-      if (!current) {
-        throw new NotFoundException(`Design recipe item ${itemId} not found`);
-      }
+      const current = currentItem;
       if (current.nutritionFoodId !== dto.nutritionFoodId) {
         const profile = await this.prisma.nutritionFood.findUnique({
           where: { id: dto.nutritionFoodId },
@@ -7193,13 +7196,28 @@ export class RecipeDesignerService {
       }
     }
 
+    const targetNutritionFoodId =
+      dto.nutritionFoodId ?? currentItem.nutritionFoodId ?? null;
+    const nutritionFoodChanged =
+      Boolean(dto.nutritionFoodId) &&
+      String(dto.nutritionFoodId) !== String(currentItem.nutritionFoodId ?? '');
+    let resolvedPreparationMethod: string | null;
+    if (dto.preparationMethod === undefined && !nutritionFoodChanged) {
+      // 没换档案、也没人工改预处理：保留原值，不重复写历史。
+      resolvedPreparationMethod = this.normalizePreparationMethod(
+        currentItem.preparationMethod,
+      );
+    } else {
+      resolvedPreparationMethod =
+        await this.resolveDesignItemPreparationMethod(
+          dto.preparationMethod,
+          currentItem.ingredientId,
+          targetNutritionFoodId,
+        );
+    }
     const preparationData =
-      dto.preparationMethod !== undefined
-        ? {
-            preparationMethod: this.normalizePreparationMethod(
-              dto.preparationMethod,
-            ),
-          }
+      dto.preparationMethod !== undefined || nutritionFoodChanged
+        ? { preparationMethod: resolvedPreparationMethod }
         : {};
 
     const data = {
@@ -7268,15 +7286,27 @@ export class RecipeDesignerService {
     const ingredientChanged =
       String(ingredientId ?? '').trim() !==
       String(current.ingredientId ?? '').trim();
-    // 换原料时不能沿用旧原料的部位/状态/预处理；没有显式传入就按新原料历史重新带出。
-    const preparationMethod =
-      dto.preparationMethod ??
-      (ingredientChanged ? undefined : current.preparationMethod);
-    const resolvedPreparationMethod =
-      await this.resolveDesignItemPreparationMethod(
-        preparationMethod,
-        ingredientId,
+    const nutritionFoodChanged =
+      String(dto.nutritionFoodId ?? '').trim() !==
+      String(current.nutritionFoodId ?? '').trim();
+    // 换原料/档案时不能沿用旧写法；没有显式传入就按新组合带出。
+    let resolvedPreparationMethod: string | null;
+    if (
+      dto.preparationMethod === undefined &&
+      !ingredientChanged &&
+      !nutritionFoodChanged
+    ) {
+      resolvedPreparationMethod = this.normalizePreparationMethod(
+        current.preparationMethod,
       );
+    } else {
+      resolvedPreparationMethod =
+        await this.resolveDesignItemPreparationMethod(
+          dto.preparationMethod,
+          ingredientId,
+          dto.nutritionFoodId,
+        );
+    }
     const preparationData = {
       preparationMethod: resolvedPreparationMethod,
     };
@@ -7725,7 +7755,7 @@ export class RecipeDesignerService {
   /**
    * 给 Agent 读该原料最近一次用过的预处理写法。
    *
-   * Agent 改了预处理时，用它和当前/历史写法比对，提示人工选“用新的/用旧的”。
+   * 用于内部/历史候选读取；预处理确认卡已移除。
    * 没有历史或服务未注入时返回 null，不阻断。
    */
   async getLatestPreparationMethodText(
@@ -11123,9 +11153,19 @@ export class RecipeDesignerService {
   private async resolveDesignItemPreparationMethod(
     explicitPreparationMethod: string | null | undefined,
     ingredientId: string | null,
+    nutritionFoodId: string | null | undefined,
   ) {
     // 补剂不维护这个字段；显式传入也忽略，避免后续又被历史带出。
     if (ingredientId && (await this.isIngredientIdSupplement(ingredientId))) {
+      return null;
+    }
+
+    // null / 空字符串是人工明确清空：不要再用档案历史自动填回来。
+    if (
+      explicitPreparationMethod === null ||
+      (typeof explicitPreparationMethod === 'string' &&
+        !explicitPreparationMethod.trim())
+    ) {
       return null;
     }
 
@@ -11133,20 +11173,32 @@ export class RecipeDesignerService {
       explicitPreparationMethod,
     );
     if (normalizedExplicit) {
-      // 人工显式填写的内容不做改写
+      // 人工显式填写的内容不做改写，并记为该原料+档案的最近写法。
+      try {
+        await (
+          this.ingredientPreparationHistoryService as any
+        )?.rememberProfileText?.(
+          ingredientId ?? '',
+          nutritionFoodId ?? '',
+          normalizedExplicit,
+          'MANUAL',
+        );
+      } catch (error) {
+        this.logger.warn(
+          `预处理历史写回失败（不阻断保存）：${(error as Error)?.message ?? String(error)}`,
+        );
+      }
       return normalizedExplicit;
     }
 
-    if (!ingredientId) {
+    if (!ingredientId || !nutritionFoodId) {
       return null;
     }
 
-    // 自动带出只取历史原文；状态是否与营养档案一致由黄字提示/AI 复核，
-    // 代码不再自动改写「生重/熟重/干重」。
-    const fallback =
-      await this.ingredientPreparationHistoryService?.getLatestText(
-        ingredientId,
-      );
+    // 只按“原料 + 营养档案”取最近写法；没有记录就留空，不拿原料级历史或别的档案兜底。
+    const fallback = await (
+      this.ingredientPreparationHistoryService as any
+    )?.getLatestTextForProfile?.(ingredientId, nutritionFoodId);
     return this.normalizePreparationMethod(fallback);
   }
 

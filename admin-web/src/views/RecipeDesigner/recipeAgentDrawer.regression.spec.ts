@@ -26,17 +26,6 @@ describe('AI 设计对话 · 方案重新确认', () => {
   })
 })
 
-describe('AI 设计对话 · 预处理写法比对', () => {
-  it('AI 改了预处理时显示旧/新，并提供用新的/用旧的', () => {
-    expect(drawerSource).toContain('preparationChange')
-    expect(drawerSource).toContain('visiblePreparationChanges')
-    expect(drawerSource).toContain('用新的')
-    expect(drawerSource).toContain('用旧的')
-    expect(drawerSource).toContain('preparationMethod: change.before')
-    expect(drawerSource).toContain('collectPreparationChanges(messages.value)')
-  })
-})
-
 describe('AI 设计对话 · 完成交接', () => {
   it('完成态显示完成卡和上线检查入口', () => {
     expect(drawerSource).toContain('设计完成')

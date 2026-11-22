@@ -87,6 +87,13 @@ export interface FoodCandidate {
   category: string | null;
   preparationState: string | null;
   isPrimary: boolean;
+  /** 同一原料的营养档案（生/熟/油等）；按制作步骤选对应状态。 */
+  profiles?: Array<{
+    nutritionFoodId: string;
+    name: string;
+    preparationState: string | null;
+    isPrimary: boolean;
+  }>;
   nutrientMatch?: {
     nutrientKey: string;
     label: string;
@@ -114,6 +121,7 @@ export interface FoodNameMatch {
   category: string | null;
   preparationState: string | null;
   isPrimary: boolean;
+  profiles?: FoodCandidate['profiles'];
 }
 
 export interface AssessmentGap {
@@ -319,6 +327,7 @@ export class RecipeDraftPort {
           category: candidate.category,
           preparationState: candidate.preparationState,
           isPrimary: candidate.isPrimary,
+          profiles: candidate.profiles,
         });
       }
     }
@@ -384,6 +393,17 @@ export class RecipeDraftPort {
         category: row.category ?? primary.category ?? null,
         preparationState: primary.preparationStateLabel ?? null,
         isPrimary: Boolean(primary.isPrimary),
+        profiles: profiles.map((profile) => ({
+          nutritionFoodId: String(profile.nutritionFoodId),
+          name: String(
+            profile.displayNameZh ?? profile.name ?? row.name ?? '',
+          ),
+          preparationState:
+            profile.preparationStateLabel ??
+            profile.preparationState ??
+            null,
+          isPrimary: Boolean(profile.isPrimary),
+        })),
         nutrientMatch: primary.nutrientMatch ?? row.nutrientMatch ?? null,
       });
       if (candidates.length >= limit) break;

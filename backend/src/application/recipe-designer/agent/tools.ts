@@ -125,7 +125,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'find_food',
       description:
-        '按关键词或营养素找原料。返回两组：foods（食材，优先看）和 supplements（补剂，只返回已开启生产/采购的）；每条带营养素含量、单位和基准。一次最多 8 条。',
+        '按关键词或营养素找原料。返回两组：foods（食材，优先看）和 supplements（补剂，只返回已开启生产/采购的）；每条带营养素含量、单位和基准，以及 profiles（生/熟等营养档案）。选档案时按制作步骤选对应状态：需预煮的谷物/豆类/淀粉类/高草酸蔬菜选熟档案并按熟重。一次最多 8 条。',
       parameters: {
         type: 'object',
         properties: {
@@ -153,6 +153,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
       description:
         '修改当前草稿的原料。一次可传多个操作，按顺序执行并逐条回报结果。' +
         '预处理方式按“部位/状态/处理”写，斜杠分隔，不写原料名；原料名已含部位/状态的那一段直接省略；不写预煮/煮熟/蒸/烤等加热动作，加热放制作步骤。' +
+        '营养档案状态必须与制作步骤/克数口径一致：需预煮的原料选熟档案并按熟重，不需要预煮的选生档案并按生重。' +
         '补剂目标只传 fieldPath（营养素字段），具体数值由系统按档案计算。',
       parameters: {
         type: 'object',
@@ -174,7 +175,11 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
                     'remove',
                   ],
                 },
-                nutritionFoodId: { type: 'string' },
+                nutritionFoodId: {
+                  type: 'string',
+                  description:
+                    '从 profiles 里选与制作步骤/克数口径一致的档案；需预煮的谷物/豆类/淀粉类/高草酸蔬菜选熟档案并按熟重。',
+                },
                 ingredientId: { type: 'string' },
                 itemId: { type: 'string' },
                 weightG: { type: 'number', minimum: 0 },

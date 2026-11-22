@@ -86,3 +86,52 @@ describe('RecipeDraftPort.findFoods / findFoodGroups', () => {
     expect(groups.supplementTotal).toBe(1);
   });
 });
+
+describe('RecipeDraftPort · 生熟营养档案', () => {
+  it('同一原料返回生/熟两套档案，供模型按制作步骤选择', async () => {
+    const designer = {
+      listIngredientOptions: jest.fn().mockResolvedValue({
+        data: [
+          {
+            id: 'rice',
+            name: '大米',
+            type: 'FOOD',
+            procurementEnabled: true,
+            nutritionProfiles: [
+              {
+                nutritionFoodId: 'raw-rice',
+                displayNameZh: '大米（生）',
+                preparationStateLabel: '生',
+                isPrimary: true,
+              },
+              {
+                nutritionFoodId: 'cooked-rice',
+                displayNameZh: '米饭（熟）',
+                preparationStateLabel: '熟',
+                isPrimary: false,
+              },
+            ],
+          },
+        ],
+        total: 1,
+      }),
+    };
+    const port = new RecipeDraftPort(designer as any, {} as any, 'draft');
+    const candidates = await port.findFoods({ search: '大米' });
+
+    expect(candidates[0]?.profiles).toEqual([
+      {
+        nutritionFoodId: 'raw-rice',
+        name: '大米（生）',
+        preparationState: '生',
+        isPrimary: true,
+      },
+      {
+        nutritionFoodId: 'cooked-rice',
+        name: '米饭（熟）',
+        preparationState: '熟',
+        isPrimary: false,
+      },
+    ]);
+  });
+});

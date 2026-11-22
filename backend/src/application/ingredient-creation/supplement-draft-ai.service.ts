@@ -290,11 +290,19 @@ export class SupplementDraftAiService {
       manualFields,
     );
 
+    // 等价组推荐要能看见"这次标签里有什么营养素"，但它的数值**不落库**：
+    // 首轮分析是模型的阅读结果，只当推荐线索用；真正写进档案的数值仍由
+    // 起草模型按字段单位给（2026-11-23）。
+    const recommendationPayload = withNutrientHints(
+      provisional,
+      intake.analysis?.nutrients ?? [],
+    );
+
     const [context, recommendations] = await Promise.all([
       this.review.buildContext(provisional),
       // 全新草稿的 payload 还是空的，必须按「草稿现值 + 本次事实」推荐，
       // 不能按 id 再读持久化草稿，否则候选全是 MISSING。
-      this.review.recommendGroupsForPayload(provisional),
+      this.review.recommendGroupsForPayload(recommendationPayload),
     ]);
 
     const groupCandidates: SupplementDraftPromptGroupCandidate[] =
@@ -307,9 +315,12 @@ export class SupplementDraftAiService {
         reason: candidate.reason,
       }));
 
-    const allowedFields = listSupplementTargetFields().map(
-      (field) => field.fieldPath,
-    );
+    const nutrientFields = listSupplementTargetFields().map((field) => ({
+      fieldPath: field.fieldPath,
+      label: field.label,
+      unit: field.unit,
+    }));
+    const allowedFields = nutrientFields.map((field) => field.fieldPath);
     const parseContext: SupplementAiParseContext = {
       allowedFields,
       allowedTags: [...ALLOWED_TAGS],
@@ -328,7 +339,7 @@ export class SupplementDraftAiService {
       config: context.config,
       provisionalDraft: provisional,
       manualFields,
-      allowedFields,
+      nutrientFields,
       allowedTags: parseContext.allowedTags,
       allowedTimings: parseContext.allowedTimings,
       allowedNoSaleReasons: parseContext.allowedNoSaleReasons,
@@ -628,8 +639,10 @@ function buildSupplementDraftAiFacts(
   const analysis = intake.analysis;
   const front = intake.front;
 
-  // 1) 解析器/链接的确定性事实（优先级最高）：
-  //    营养素、每份量、商品页价格/品牌/规格、标签原文。
+  // 1) 链接/读图的确定性事实（优先级最高）：
+  //    每份量、商品页价格/品牌/规格、标签原文。
+  //    营养素**不在这里出**：数值与单位换算统一由起草模型按字段单位给出，
+  //    避免“解析器读到的 mg 被当成 IU 写死、模型又不许覆盖”（2026-11-23）。
   const linkBrand = trimText(link?.brand);
   const linkModel = trimText(link?.productModel);
   put(basic, 'basic', 'brand', linkBrand);
@@ -650,31 +663,8 @@ function buildSupplementDraftAiFacts(
   // 商品页主图是确定性事实：DIY 展示图由它兜底，AI 不能改成别的图。
   put(diy, 'diy', 'imageUrl', trimText(link?.imageUrl));
 
-  // 营养素：标签解析器是原文口径；为空才退到商品页读出的营养素。
-  const nutrientMap: Record<string, number> = {};
-  const parserNutrients =
-    intake.nutrients.length > 0 ? intake.nutrients : (link?.nutrients ?? []);
-  for (const nutrient of parserNutrients) {
-    if (trimText(nutrient.fieldPath) && Number.isFinite(nutrient.value)) {
-      nutrientMap[nutrient.fieldPath] = nutrient.value;
-    }
-  }
-  // 首轮分析补上解析器漏掉的字段（同一字段已有解析值时不覆盖）。
-  for (const nutrient of analysis?.nutrients ?? []) {
-    if (
-      trimText(nutrient.fieldPath) &&
-      Number.isFinite(nutrient.value) &&
-      !(nutrient.fieldPath in nutrientMap)
-    ) {
-      nutrientMap[nutrient.fieldPath] = nutrient.value;
-    }
-  }
-  if (Object.keys(nutrientMap).length > 0) {
-    nutrition.servingNutrients = nutrientMap;
-    for (const fieldPath of Object.keys(nutrientMap)) {
-      paths.push(`nutrition.servingNutrients.${fieldPath}`);
-    }
-  }
+  // 营养素：只由起草模型出（见【允许的营养字段】里的字段单位）。
+  // 代码不再从标签文本里抠数字，避免单位口径在这里被写死。
 
   put(nutrition, 'nutrition', 'labelText', trimText(intake.labelText));
   if (!has(nutrition, 'labelText')) {
@@ -734,17 +724,9 @@ function buildSupplementDraftAiFacts(
     if (analysis.labelNames.length > 0) {
       put(label, 'label', 'labelNames', uniqueStrings(analysis.labelNames));
     }
-    const defaultTargets = analysis.defaultTargetFields.filter((fieldPath) =>
-      Object.prototype.hasOwnProperty.call(nutrientMap, fieldPath),
-    );
-    if (defaultTargets.length > 0) {
-      put(
-        nutrition,
-        'nutrition',
-        'defaultTargetFields',
-        uniqueStrings(defaultTargets),
-      );
-    }
+    // 默认目标营养素不在这里定：营养数值由起草模型给，
+    // 目标项由模型的 decisions（或合并时的兜底）从已填营养素里选，
+    // 否则会出现“目标项指向一个还没填的字段”。
   }
 
   // 3) 正面图兜底（原文规则；分析/链接都没有时才用，仍然算事实，AI 不覆盖）。
@@ -795,6 +777,35 @@ function buildSupplementDraftAiFacts(
   }
 
   return { facts, paths: [...new Set(paths)] };
+}
+
+/**
+ * 给等价组推荐用的临时载荷补上"这次读到的营养素"。
+ *
+ * 只补草稿里还没有的字段，不改已有值；返回值只用于推荐，不写库。
+ */
+function withNutrientHints(
+  payload: SupplementDraftPayload,
+  nutrients: readonly { fieldPath: string; value: number }[],
+): SupplementDraftPayload {
+  if (nutrients.length === 0) {
+    return payload;
+  }
+  const servingNutrients = { ...payload.nutrition.servingNutrients };
+  for (const nutrient of nutrients) {
+    if (
+      nutrient.fieldPath &&
+      Number.isFinite(nutrient.value) &&
+      nutrient.value > 0 &&
+      !(nutrient.fieldPath in servingNutrients)
+    ) {
+      servingNutrients[nutrient.fieldPath] = nutrient.value;
+    }
+  }
+  return {
+    ...payload,
+    nutrition: { ...payload.nutrition, servingNutrients },
+  };
 }
 
 /** 当前草稿 + 确定性事实（跳过 manualFields）；事实里的营养素整组替换。 */

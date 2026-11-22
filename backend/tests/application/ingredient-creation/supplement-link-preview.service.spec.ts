@@ -46,15 +46,15 @@ describe('读商品页', () => {
     });
   });
 
-  it('读到的正文照样能解析出每份几粒与营养素', async () => {
+  it('读到的正文带出每份几粒；营养素留给模型按字段单位读', async () => {
     const { service } = build(() => ({ title: 'x', content: LABEL }));
 
     const preview = await service.preview('https://www.iherb.com/pr/x/1');
 
     expect(preview.servingUnitsPerDose).toBe(4);
-    expect(preview.nutrients).toEqual(
-      expect.arrayContaining([expect.objectContaining({ fieldPath: 'fattyAcids.epa', value: 80 })])
-    );
+    // 2026-11-23 起代码不再拆营养素（避免 mg/IU 口径写死），只把标签原文交给模型
+    expect(preview.nutrients).toEqual([]);
+    expect(preview.labelText).toContain('EPA (Eicosapentaenoic Acid)80 mg');
   });
 
   it('不在白名单里的网站直接拒，不发请求', async () => {

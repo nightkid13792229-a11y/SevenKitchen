@@ -417,7 +417,10 @@ function promptInput(): SupplementDraftPromptInput {
     config: { shopEnabled: true, equivalenceEnabled: false },
     provisionalDraft,
     manualFields: ['basic.name', 'nutrition.servingNutrients.fattyAcids.epa'],
-    allowedFields: ['fattyAcids.epa', 'crudeProtein'],
+    nutrientFields: [
+      { fieldPath: 'fattyAcids.epa', label: 'EPA', unit: 'mg' },
+      { fieldPath: 'crudeProtein', label: '粗蛋白', unit: 'g' },
+    ],
     allowedTags: ['油脂类', '蛋白质类'],
     allowedTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
     allowedNoSaleReasons: ['SELF_MADE', 'BULK', 'NO_SUPPLY', 'UNDECIDED'],
@@ -520,6 +523,20 @@ describe('buildSupplementDraftPrompt', () => {
     for (const platform of SUPPLEMENT_AI_DIY_PLATFORMS) {
       expect(prompt).toContain(platform);
     }
+  });
+
+  it('pins each nutrient field to its unit and spells out the conversion rules', () => {
+    const prompt = buildSupplementDraftPrompt(promptInput());
+
+    expect(prompt).toContain('- fattyAcids.epa ｜ EPA ｜ mg');
+    expect(prompt).toContain('维生素 E 1 mg = 1.49 IU');
+    expect(prompt).toContain('维生素 D 1 μg = 40 IU');
+    expect(prompt).toContain('维生素 A 1 μg RAE = 3.33 IU');
+    expect(prompt).toContain('1 g = 1000 mg');
+    expect(prompt).toContain('先换算');
+    expect(prompt).toContain('%DV');
+    expect(prompt).toContain('换算不出来');
+    expect(prompt).toContain('不要直接抄标签数字');
   });
 
   it('states the no-invention, JSON-only and no-applicability rules', () => {

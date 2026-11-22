@@ -13,7 +13,6 @@ function ctx(overrides: Partial<AnalysisContext> = {}): AnalysisContext {
     materialCatalog: ['鱼油'],
     nutrientLabel: '铁',
     saltNameZh: '甘氨酸',
-    parsedNutrients: [{ fieldPath: 'minerals.iron', value: 18, unit: 'mg' }],
     allowedFields: [{ fieldPath: 'minerals.iron', label: '铁', unit: 'mg' }],
     allowedTags: ['矿物质', '维生素'],
     allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
@@ -54,23 +53,31 @@ describe('validateAnalysis', () => {
     expect(dropped.some((item) => item.field === 'priceCny')).toBe(true);
   });
 
-  it('营养素与原文解析不一致时按原文填，并说明模型写了什么', () => {
+  it('营养素按模型给的值收，不再和代码解析结果对账', () => {
     const { result, dropped } = validateAnalysis(
-      { nutrients: [{ fieldPath: 'minerals.iron', value: 180, unit: 'mg' }] },
+      { nutrients: [{ fieldPath: 'minerals.iron', value: 18, unit: 'mg' }] },
       ctx(),
     );
     expect(result.nutrients).toEqual([
       { fieldPath: 'minerals.iron', value: 18, unit: 'mg' },
     ]);
-    expect(dropped[0].reason).toContain('已按原文');
+    expect(dropped).toHaveLength(0);
   });
 
-  it('模型漏掉的营养素按原文补上', () => {
-    const { result, dropped } = validateAnalysis({ nutrients: [] }, ctx());
-    expect(result.nutrients).toEqual([
-      { fieldPath: 'minerals.iron', value: 18, unit: 'mg' },
+  it('不允许的营养素字段直接忽略', () => {
+    const { result, dropped } = validateAnalysis(
+      {
+        nutrients: [
+          { fieldPath: 'minerals.iron', value: 18, unit: 'mg' },
+          { fieldPath: 'minerals.gold', value: 1, unit: 'mg' },
+        ],
+      },
+      ctx(),
+    );
+    expect(result.nutrients.map((row) => row.fieldPath)).toEqual([
+      'minerals.iron',
     ]);
-    expect(dropped.some((item) => item.reason.includes('补上'))).toBe(true);
+    expect(dropped.some((item) => item.reason.includes('不是允许'))).toBe(true);
   });
 
   it('基准单位与剂型冲突时按剂型纠正（粉 → G）', () => {
@@ -107,7 +114,6 @@ describe('validateAnalysis · 原料目录', () => {
       materialCatalog: ['鱼油'],
       nutrientLabel: '鱼油',
       saltNameZh: null,
-      parsedNutrients: [],
       allowedFields: [{ fieldPath: 'fattyAcids.epa', label: 'EPA', unit: 'mg' }],
       frontText: 'NOW Foods 鱼油 ¥168.00'
     });
@@ -128,7 +134,6 @@ describe('validateAnalysis · 标签名清洗', () => {
       materialCatalog: ['鱼油'],
       nutrientLabel: '鱼油',
       saltNameZh: null,
-      parsedNutrients: [],
       allowedFields: []
     });
     const { result, dropped } = validateAnalysis(
@@ -157,6 +162,16 @@ describe('buildAnalysisPrompt', () => {
     expect(prompt).toContain('FEED_MATERIAL');
     expect(prompt).toContain('minerals.iron');
     expect(prompt).toContain('化学形态名');
+  });
+
+  it('把字段单位和换算口径写进提示词（mg → IU 由模型算）', () => {
+    const prompt = buildAnalysisPrompt(ctx());
+    expect(prompt).toContain('minerals.iron（铁，单位 mg）');
+    expect(prompt).toContain('1 mg = 1.49 IU');
+    expect(prompt).toContain('μg = 40 IU');
+    expect(prompt).toContain('μg RAE = 3.33 IU');
+    expect(prompt).toContain('%DV');
+    expect(prompt).toContain('不要直接抄标签数字');
   });
 });
 

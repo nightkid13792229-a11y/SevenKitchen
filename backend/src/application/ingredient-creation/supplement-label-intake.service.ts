@@ -2,7 +2,6 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { SupplementLabelVisionService } from './supplement-label-vision.service';
 import {
   extractServingSize,
-  parseSupplementLabel,
 } from '../../domain/ingredient/supplement-label-parser';
 import {
   extractFrontFields,
@@ -50,10 +49,17 @@ export interface LabelIntakeResult {
   labelText: string;
   front: FrontFields;
   servingUnitsPerDose: number | null;
+  /**
+   * 首轮分析（模型）读到的营养素，已经按字段单位换算。
+   *
+   * 2026-11-23 起**代码不再从标签文本里抠数值**：这里只是模型的阅读结果，
+   * 供旧向导预填；新起草流程只把它当等价组推荐线索，真正落库的数值由起草
+   * 模型按字段单位再给一次。
+   */
   nutrients: { fieldPath: string; value: number; unit: string; rawName: string }[];
-  /** 有值但认不出名字的行，原样交回去让人补 */
+  /** 认不出名字的行；现在由模型在分析结果里报，这里保留空数组兼容旧界面 */
   unrecognized: string[];
-  /** 建议的原料名（取第一个认出来的营养素的中文名，如「铜」）；没有就是 null */
+  /** 建议的原料名（取模型第一个认出来的营养素的中文名，如「铜」）；没有就是 null */
   suggestedName: string | null;
   /** 每瓶多少粒（从正面规格里读，读不出就是 null）——用来预填「换算倍数」 */
   perBottleUnits: number | null;
@@ -107,7 +113,6 @@ export class SupplementLabelIntakeService {
     const labelText = String(labelResult.text ?? '');
     const frontFields = extractFrontFields(frontText);
 
-    const parsed = parseSupplementLabel(labelText);
     const frontFieldsForServing = extractFrontFields(frontText);
     const servingSize = extractServingSize(labelText);
     // 剂型决定「每份」按什么记：胶囊看个数，粉看克，液体看毫升
@@ -117,19 +122,7 @@ export class SupplementLabelIntakeService {
         : frontFieldsForServing.physicalForm === 'LIQUID'
           ? servingSize.milliliters
           : servingSize.count;
-    const suggestedName = parsed.nutrients[0]
-      ? nutrientChineseLabel(parsed.nutrients[0].fieldPath)
-      : null;
-
-    const catalogMatches = suggestedName ? this.catalog.lookup(suggestedName, 8) : [];
-    const catalogSuggestion =
-      catalogMatches.find((entry) => entry.exact) ??
-      (catalogMatches.length === 1 ? catalogMatches[0] : null);
-
-    this.logger.log(
-      `[label-intake] nutrients=${parsed.nutrients.length} unrecognized=${parsed.unrecognized.length} ` +
-        `serving=${servingUnitsPerDose ?? 'none'}`,
-    );
+    const saltNameZh = detectSaltNameZh(labelText);
 
     // 两本目录**全量**给模型：翻译、匹配都让它自己做，代码不再维护中文名映射
     const analysis = await this.judge({
@@ -142,13 +135,28 @@ export class SupplementLabelIntakeService {
         label: field.label,
         unit: field.unit,
       })),
-      nutrientLabel: suggestedName,
-      saltNameZh: detectSaltNameZh(labelText),
-      parsedNutrients: parsed.nutrients,
+      nutrientLabel: null,
+      saltNameZh,
       // 标签分组与前端 `supplementNutrientGroups` 的标题一一对应
       allowedTags: ['矿物质', '维生素', '脂肪酸', '氨基酸', '基础营养'],
       allowedAddTimings: ['BEFORE_MIXING', 'BEFORE_MEAL'],
     });
+
+    // 建议名只用于查目录：取模型第一个认出来的营养素；模型没给就留空。
+    const suggestedName = analysis?.result.nutrients[0]
+      ? nutrientChineseLabel(analysis.result.nutrients[0].fieldPath)
+      : null;
+    const catalogMatches = suggestedName
+      ? this.catalog.lookup(suggestedName, 8)
+      : [];
+    const catalogSuggestion =
+      catalogMatches.find((entry) => entry.exact) ??
+      (catalogMatches.length === 1 ? catalogMatches[0] : null);
+
+    this.logger.log(
+      `[label-intake] nutrients=${analysis?.result.nutrients.length ?? 0} ` +
+        `serving=${servingUnitsPerDose ?? 'none'}`,
+    );
 
     // 产品规格直接采用模型写的「一句话」，代码不再拼接
     const packSpec = analysis?.result.productModel ?? null;
@@ -196,11 +204,16 @@ export class SupplementLabelIntakeService {
       labelText,
       front: frontFields,
       servingUnitsPerDose,
-      nutrients: parsed.nutrients,
-      unrecognized: parsed.unrecognized,
+      nutrients: (analysis?.result.nutrients ?? []).map((nutrient) => ({
+        fieldPath: nutrient.fieldPath,
+        value: nutrient.value,
+        unit: nutrient.unit,
+        rawName: nutrientChineseLabel(nutrient.fieldPath),
+      })),
+      unrecognized: [],
       suggestedName,
       perBottleUnits: analysis?.result.perBottleUnits ?? null,
-      saltNameZh: detectSaltNameZh(labelText),
+      saltNameZh,
       catalog: {
         query: suggestedName ?? '',
         matches: catalogMatches,

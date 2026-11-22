@@ -724,7 +724,7 @@ function applyAnalysis(result: SupplementLabelIntakeDto): void {
   if (analysis.addTiming) {
     draft.addTiming = analysis.addTiming
   }
-  // 营养素以"模型 + 原文核对后"的结果为准（含模型漏掉、原文补上的项）
+  // 营养素以模型的阅读结果为准（已按字段单位换算）；代码不再拿正则结果覆盖
   if ((analysis.nutrients ?? []).length > 0) {
     const merged: Record<string, number> = { ...draft.servingNutrients }
     for (const item of analysis.nutrients) {

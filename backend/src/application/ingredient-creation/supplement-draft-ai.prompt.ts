@@ -25,6 +25,19 @@ export interface SupplementDraftPromptLinkPreviewNutrient {
 }
 
 /**
+ * 允许的营养字段：给模型看的**字段单位**。
+ *
+ * 少了单位，模型只能照抄标签上的数字（2026-11-23：`Vitamin E 134.2 mg`
+ * 被当成 134.2 IU 填进去，实际应是 200 IU）。单位换算由模型做，代码只提供
+ * “这个字段收什么单位”。
+ */
+export interface SupplementDraftPromptNutrientField {
+  fieldPath: string;
+  label: string;
+  unit: string;
+}
+
+/**
  * 商品链接预览（结构对齐 `SupplementLinkPreview`，字段都可缺省）。
  *
  * 这里不直接 import 那个服务类型：提示词不该依赖 Nest 服务，Task 8
@@ -69,7 +82,8 @@ export interface SupplementDraftPromptInput {
   provisionalDraft: SupplementDraftPayload;
   /** 人已经改过的字段路径（`manualFields`）；提示词要求模型不要覆盖。 */
   manualFields: string[];
-  allowedFields: string[];
+  /** 允许的营养字段：带中文名和**字段单位**，模型据此换算。 */
+  nutrientFields: SupplementDraftPromptNutrientField[];
   allowedTags: string[];
   allowedTimings: string[];
   allowedNoSaleReasons: string[];
@@ -195,10 +209,15 @@ export function buildSupplementDraftPrompt(
     '【两本目录的规范名（只用于核对标签名称）】',
     formatList(input.catalogNames),
     '',
-    '【允许的营养字段（fieldPath）】',
-    input.allowedFields.length > 0
-      ? input.allowedFields.map((field) => `- ${field}`).join('\n')
+    '【允许的营养字段（fieldPath ｜ 名称 ｜ 这个字段的单位）】',
+    input.nutrientFields.length > 0
+      ? input.nutrientFields
+          .map(
+            (field) => `- ${field.fieldPath} ｜ ${field.label} ｜ ${field.unit}`,
+          )
+          .join('\n')
       : '（无）',
+    '说明：营养素的数值一律填「这个字段的单位」下的值；标签单位不同时先换算（见规则 9）。',
     '',
     '【允许的标签词表（tagNames）】',
     formatList(input.allowedTags),
@@ -245,6 +264,14 @@ export function buildSupplementDraftPrompt(
     '6. 不看 dogAllowed / 适用范围：不要判断能不能给狗吃，不生成任何适用性门禁或提醒。',
     '7. 只输出一个 JSON 对象：只输出 JSON，不要加 markdown 代码块、不要解释、不要前后缀。',
     '8. 人已经改过的字段以人的值为准，不要覆盖；如果你认为不同，把新值放 fields 并在 reason 里说明，或写进 warnings/missing，让人决定。',
+    '9. 单位换算（营养数值）：先看【允许的营养字段】里这个字段的单位，再把标签上的量换算成该单位后填。不要因为标签上写的是 mg 就原样填进 IU 字段。',
+    '   · 换算过程必须写进 reason：原值 + 原单位 + 换算依据 + 结果。例：「标签写 Vitamin E 134.2 mg；美国标签的 mg 已是 α-生育酚当量，1 mg = 1.49 IU，134.2 × 1.49 ≈ 200 IU；与 895% DV 吻合」。',
+    '   · 常用换算：维生素 E 1 mg = 1.49 IU；维生素 D 1 μg = 40 IU；维生素 A 1 μg RAE = 3.33 IU；1 g = 1000 mg，1 mg = 1000 μg。',
+    '   · 维生素 E 的括号里写了 tocopheryl acetate 也只按 1.49 算：美国标签的 mg 是 α-生育酚当量，不是化合物重量。',
+    '   · 用标签上的 %DV 反算校验（美国每日参考值：维生素 E 15 mg、维生素 D 20 μg、维生素 A 900 μg RAE）。对不上就写 warnings，不要硬填。',
+    '   · 换算不出来（缺形态、单位看不懂、既不是重量也不是 IU）：这一项不要填，写进 missing 说明缺什么，让人补；绝对不要直接抄标签数字。',
+    '   · 同一数值只能填进一个单位口径的字段；不要同时填 mg 与 IU 两个字段来“都占上”。',
+    '   · 【当前草稿】里已有的营养数值如果和你的换算对不上，以你按标签换算的结果为准（人改过的字段除外），并在 reason 里说明原值错在哪。',
     '',
     '字段条目格式：',
     '- source 只能是：LABEL、FRONT、LINK、CATALOG、RULE、INFERENCE；',

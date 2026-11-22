@@ -4,7 +4,7 @@
       <div>
         <h4 class="draft-nutrition__title">每份含量</h4>
         <p class="draft-nutrition__desc">
-          照标签填每份的含量；每 1 个基准单位的折算值由系统算，不用手填，也不用写每粒值。
+          照标签读每份的含量，但数值要换成括号里的单位再填（标签写 mg、这里要 IU 时先换算）；每 1 个基准单位的折算值由系统算，不用手填，也不用写每粒值。
         </p>
       </div>
       <el-checkbox v-model="showAll" class="draft-nutrition__toggle">

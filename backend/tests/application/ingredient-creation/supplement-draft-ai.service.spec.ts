@@ -127,9 +127,15 @@ function aiReply(
     ...overrides.decisions,
   };
 
+  const fields = {
+    // 营养素只由起草模型给：默认让它按字段单位填锌 50 mg。
+    'nutrition.servingNutrients.minerals.zinc': field(50),
+    ...overrides.fields,
+  };
+
   return {
     text: JSON.stringify({
-      fields: overrides.fields ?? {},
+      fields,
       decisions,
       missing: [],
       warnings: [],
@@ -169,9 +175,8 @@ function makeIntake(overrides: IntakeOverrides = {}): LabelIntakeResult {
     frontText: 'NOW FOODS\nZinc 50 mg\n250 Tablets',
     labelText: 'Supplement Facts\nServing Size 2 Tablets\nZinc 50 mg',
     servingUnitsPerDose: 2,
-    nutrients: [
-      { fieldPath: 'minerals.zinc', value: 50, unit: 'mg', rawName: 'Zinc' },
-    ],
+    // 旧向导用的预填数据；起草流程不用它（数值只认起草模型）
+    nutrients: [],
     unrecognized: [],
     suggestedName: '锌',
     perBottleUnits: 250,
@@ -468,11 +473,19 @@ describe('SupplementDraftAiService', () => {
     const provisional = review.buildContext.mock.calls[0][0];
     expect(provisional.basic.name).toBe('甘氨酸锌');
     expect(provisional.basic.servingUnitsPerDose).toBe(2);
-    expect(provisional.nutrition.servingNutrients['minerals.zinc']).toBe(50);
+    // 营养素不再由代码解析成事实：起草模型才是唯一写入方
+    expect(provisional.nutrition.servingNutrients).toEqual({});
     expect(provisional.evidence.frontImageUrl).toBe(FRONT_IMAGE);
     expect(provisional.evidence.labelImageUrl).toBe(LABEL_IMAGE);
-    // 组推荐必须用「草稿现值 + 本次事实」的临时载荷，而不是按 id 再读空草稿。
-    expect(review.recommendGroupsForPayload).toHaveBeenCalledWith(provisional);
+    // 组推荐用「草稿现值 + 本次事实 + 首轮分析读到的营养素」的临时载荷，
+    // 但那些营养素只做推荐线索，不写进 provisional。
+    const recommendationInput =
+      review.recommendGroupsForPayload.mock.calls[0][0];
+    expect(recommendationInput.basic.name).toBe('甘氨酸锌');
+    expect(recommendationInput.nutrition.servingNutrients['minerals.zinc']).toBe(
+      50,
+    );
+    expect(provisional.nutrition.servingNutrients).toEqual({});
     expect(review.recommendGroups).not.toHaveBeenCalled();
 
     expect(vision.analyze).toHaveBeenCalledTimes(1);
@@ -487,6 +500,49 @@ describe('SupplementDraftAiService', () => {
     expect(draftService.update).toHaveBeenCalledTimes(1);
     expect(lastSnapshot().status).toBe('OK');
     expect(result.id).toBe('draft-1');
+  });
+
+  it('营养数值只由模型按字段单位填：标签 mg 换算成 IU 后落库', async () => {
+    intake.read.mockResolvedValue(
+      makeIntake({
+        labelText:
+          'Supplement Facts\nServing Size 1 Softgel\nVitamin E 134.2 mg 895%',
+        analysis: {
+          nutrients: [
+            { fieldPath: 'vitamins.vitaminE', value: 134.2, unit: 'mg' },
+          ],
+        },
+      }),
+    );
+    vision.analyze.mockResolvedValue(
+      aiReply({
+        fields: {
+          'nutrition.servingNutrients.vitamins.vitaminE': field(
+            200,
+            'LABEL',
+            'HIGH',
+            '标签 134.2 mg；美国标签的 mg 是 α-生育酚当量，1 mg = 1.49 IU，134.2 × 1.49 ≈ 200 IU',
+          ),
+        },
+        decisions: { defaultTargetFields: ['vitamins.vitaminE'] },
+      }),
+    );
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    const prompt = vision.analyze.mock.calls[0][0];
+    // 字段单位必须出现在提示词里，模型才知道往 IU 字段填
+    expect(prompt).toContain('vitamins.vitaminE ｜ 维生素 E ｜ IU');
+    expect(prompt).toContain('1 mg = 1.49 IU');
+    expect(prompt).toContain('Vitamin E 134.2 mg');
+    // 标签原文原样进提示词，换算由模型做
+    expect(prompt).toContain('不要因为标签上写的是 mg 就原样填进 IU 字段');
+
+    const payload = lastPayload();
+    expect(payload.nutrition.servingNutrients['vitamins.vitaminE']).toBe(200);
+    expect(payload.nutrition.defaultTargetFields).toEqual([
+      'vitamins.vitaminE',
+    ]);
   });
 
   it('有商品链接：读链接，价格/品牌/规格/主图进入事实', async () => {
@@ -558,6 +614,7 @@ describe('SupplementDraftAiService', () => {
         fields: {
           'basic.name': field('AI 起的名字'),
           'retail.shelfLifeMonths': field(24),
+          'nutrition.servingNutrients.minerals.zinc': field(50),
         },
       }),
     );
@@ -589,7 +646,8 @@ describe('SupplementDraftAiService', () => {
     expect(payload.basic.name).toBe('甘氨酸锌');
     expect(payload.basic.purchaseUnit).toBe('瓶');
     expect(payload.basic.productionLossRate).toBe(1.05);
-    expect(payload.nutrition.servingNutrients['minerals.zinc']).toBe(50);
+    // 模型没跑通：营养数值留空（不再由解析器兜底写死），提醒人重试/对照标签
+    expect(payload.nutrition.servingNutrients).toEqual({});
 
     const snapshot = lastSnapshot();
     expect(snapshot.status).toBe('PARTIAL');
@@ -687,7 +745,7 @@ describe('SupplementDraftAiService', () => {
     expect(input).not.toHaveProperty('evidenceId');
   });
 
-  it('合并优先级：manualFields > 解析/链接事实 > 首轮分析 > 决策模型', async () => {
+  it('合并优先级：manualFields > 链接/每份量事实 > 首轮分析 > 起草模型（营养素只认起草模型）', async () => {
     currentDraft = draftView(makePayload({ name: '人改名称' }), {
       manualFields: ['basic.name'],
     });
@@ -726,9 +784,10 @@ describe('SupplementDraftAiService', () => {
     const payload = lastPayload();
     // manualFields 最高
     expect(payload.basic.name).toBe('人改名称');
-    // 解析器事实 > 首轮分析 > 决策模型
+    // 每份量仍是代码读的确定性事实
     expect(payload.basic.servingUnitsPerDose).toBe(2);
-    expect(payload.nutrition.servingNutrients['minerals.zinc']).toBe(50);
+    // 营养数值只认起草模型（首轮分析的 60 只用于等价组推荐，不落库）
+    expect(payload.nutrition.servingNutrients['minerals.zinc']).toBe(70);
     // 链接事实 > 首轮分析 > 决策模型
     expect(payload.basic.currentPricePerPurchaseUnit).toBe(99);
     expect(payload.basic.brand).toBe('NOW Foods');
@@ -817,17 +876,14 @@ describe('SupplementDraftAiService', () => {
     currentDraft = draftView(makePayload());
     intake.read.mockResolvedValue(
       makeIntake({
-        analysis: null,
+        // 首轮分析（模型）读到的营养素只当等价组推荐线索，不落库
+        analysis: {
+          nutrients: [{ fieldPath: 'fattyAcids.epa', value: 650, unit: 'mg' }],
+          physicalForm: 'CAPSULE',
+          unitDisplayLabel: '粒',
+        },
         suggestedName: null,
         servingUnitsPerDose: 1,
-        nutrients: [
-          {
-            fieldPath: 'fattyAcids.epa',
-            value: 650,
-            unit: 'mg',
-            rawName: 'EPA',
-          },
-        ],
         front: {
           brandCandidate: null,
           productModel: null,
@@ -1011,7 +1067,6 @@ describe('SupplementDraftAiService', () => {
         analysis: null,
         suggestedName: null,
         servingUnitsPerDose: null,
-        nutrients: [],
         detectedPriceCny: null,
         front: {
           brandCandidate: null,

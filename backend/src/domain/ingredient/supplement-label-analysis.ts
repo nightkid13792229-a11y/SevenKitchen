@@ -21,8 +21,6 @@ export interface AnalysisContext {
   nutrientLabel: string | null;
   /** 从标签里认出的盐型（甘氨酸 / 硫酸 …） */
   saltNameZh: string | null;
-  /** 正则解析出来的营养素，用来交叉核对 */
-  parsedNutrients: { fieldPath: string; value: number; unit: string }[];
   /** 允许的字段路径 + 中文名 + 单位（模型要按这个单位给值） */
   allowedFields: { fieldPath: string; label: string; unit: string }[];
   allowedTags: string[];
@@ -156,7 +154,9 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
     });
   }
 
-  // 营养素：字段必须允许，数值必须和正则解析的结果一致（有的话）
+  // 营养素：字段必须在允许清单里、数值必须大于 0。
+  // 2026-11-23 起不再和"正则解析结果"对账：代码里没有可靠的换算口径，
+  // 数值与单位由起草模型按字段单位给，这里只做白名单过滤。
   const nutrients: AnalysisResult['nutrients'] = [];
   const rawNutrients = Array.isArray(source.nutrients) ? source.nutrients : [];
   for (const item of rawNutrients) {
@@ -170,28 +170,7 @@ export function validateAnalysis(raw: unknown, ctx: AnalysisContext): AnalysisOu
     if (value === null || value <= 0) {
       continue;
     }
-    const parsed = ctx.parsedNutrients.find((row) => row.fieldPath === fieldPath);
-    if (parsed && Math.abs(parsed.value - value) > 0.001) {
-      notes.push({
-        field: 'nutrients',
-        reason: `模型写 ${value}${String(entry.unit ?? '')}，原文解析是 ${parsed.value}${parsed.unit}，已按原文`,
-        value: `${fieldPath}=${value}`
-      });
-      nutrients.push({ fieldPath, value: parsed.value, unit: parsed.unit });
-      continue;
-    }
     nutrients.push({ fieldPath, value, unit: String(entry.unit ?? '') });
-  }
-  // 模型漏掉的、原文里明明有的营养素，补上
-  for (const parsed of ctx.parsedNutrients) {
-    if (!nutrients.some((row) => row.fieldPath === parsed.fieldPath)) {
-      nutrients.push({ fieldPath: parsed.fieldPath, value: parsed.value, unit: parsed.unit });
-      notes.push({
-        field: 'nutrients',
-        reason: '模型没提到这一项，已按原文补上',
-        value: `${parsed.fieldPath}=${parsed.value}${parsed.unit}`
-      });
-    }
   }
 
   // 每 1 个基准单位的含量：模型自己算，代码只核对除得回去
@@ -374,6 +353,12 @@ export function buildAnalysisPrompt(ctx: AnalysisContext): string {
     '',
     '11. nutrients：按下面的字段和**它自己的单位**给值。',
     '    标签单位不同要先换算（Taurine 875 mg 而字段单位是 g → 0.875）。',
+    '    · 维生素 E：美国标签按 mg 标的是 α-生育酚当量，1 mg = 1.49 IU；',
+    '      括号里写 tocopheryl acetate 也一样，不要改用 1.36。',
+    '    · 维生素 D：1 μg = 40 IU；维生素 A：1 μg RAE = 3.33 IU；',
+    '      1 g = 1000 mg，1 mg = 1000 μg。',
+    '    · 用 %DV 反算校验（美国每日参考值：维生素 E 15 mg、维生素 D 20 μg、维生素 A 900 μg RAE）。',
+    '    · 换算不出来（缺形态、单位看不懂）就写 null，**不要直接抄标签数字**。',
     '    只填标签上明确写了含量的项：',
     fieldLines,
     '',

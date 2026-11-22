@@ -4,11 +4,7 @@ import {
   type DeepSeekRuntimeConfig
 } from '../nutrition-governance/agent-provider-config.service';
 import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.service';
-import {
-  extractServingUnits,
-  parseSupplementLabel,
-  type ParsedNutrient
-} from '../../domain/ingredient/supplement-label-parser';
+import { extractServingUnits } from '../../domain/ingredient/supplement-label-parser';
 
 /**
  * 贴一个商品链接，把它读成补剂档案的初稿。
@@ -258,7 +254,6 @@ export class SupplementLinkPreviewService {
     const target = this.toPriceFriendlyUrl(this.assertAllowed(url));
     const text = await this.fetchThroughProxy(target);
 
-    const parsed = parseSupplementLabel(text);
     const productName = this.extractProductName(text);
     return {
       productUrl: target.toString(),
@@ -268,15 +263,10 @@ export class SupplementLinkPreviewService {
       productModel: extractProductModelFromTitle(productName),
       imageUrl: extractProductImage(text),
       servingUnitsPerDose: extractServingUnits(text),
-      nutrients: parsed.nutrients.map(
-        (nutrient: ParsedNutrient): LinkPreviewNutrient => ({
-          fieldPath: nutrient.fieldPath,
-          value: nutrient.value,
-          unit: nutrient.unit,
-          rawName: nutrient.rawName
-        })
-      ),
-      unrecognized: parsed.unrecognized,
+      // 营养素不再在这里拆：数值与单位换算统一由起草模型按字段单位给。
+      // 这里只把标签原文带出去，模型照着原文读（2026-11-23）。
+      nutrients: [],
+      unrecognized: [],
       labelText: this.extractLabelText(text)
     };
   }

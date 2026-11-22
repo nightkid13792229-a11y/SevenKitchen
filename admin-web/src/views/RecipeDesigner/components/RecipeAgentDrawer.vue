@@ -29,9 +29,14 @@
     </template>
 
     <div class="agent-body">
-      <div ref="scrollRef" class="agent-messages" v-loading="loading">
+      <div
+        ref="scrollRef"
+        class="agent-messages"
+        v-loading="loading"
+        @scroll="handleScroll"
+      >
         <el-empty
-          v-if="!loading && visibleMessages.length === 0"
+          v-if="!loading && visibleMessages.length === 0 && toolMessages.length === 0"
           :image-size="64"
           description="告诉它这份食谱是做什么的，它自己取数、自己评估。"
         />
@@ -42,27 +47,37 @@
           class="agent-row"
           :class="`agent-row--${message.role.toLowerCase()}`"
         >
-          <template v-if="message.role === 'TOOL'">
-            <details class="agent-tool">
-              <summary>{{ message.toolName || "工具" }} · 执行记录</summary>
-              <pre class="agent-tool__body">{{ message.content }}</pre>
-            </details>
-          </template>
-          <template v-else>
-            <span class="agent-who">{{
-              message.role === "USER" ? "我" : "AI"
-            }}</span>
-            <div class="agent-bubble">
-              {{ formatMessageContent(message.content) }}
-            </div>
-          </template>
+          <span class="agent-who">{{
+            message.role === "USER" ? "我" : "AI"
+          }}</span>
+          <div class="agent-bubble">
+            {{ formatMessageContent(message.content) }}
+          </div>
         </div>
+
+        <details v-if="toolMessages.length" class="agent-tool-log">
+          <summary>
+            执行记录 · {{ toolMessages.length }} 条（点击展开）
+          </summary>
+          <div class="agent-tool-log__list">
+            <div
+              v-for="message in toolMessages"
+              :key="message.id"
+              class="agent-tool-log__item"
+            >
+              <div class="agent-tool-log__name">
+                {{ message.toolName || "工具" }}
+              </div>
+              <pre class="agent-tool-log__body">{{ message.content }}</pre>
+            </div>
+          </div>
+        </details>
 
         <div v-if="session?.lastError" class="agent-error">
           {{ session.lastError }}
         </div>
 
-        <div v-if="session?.plan" ref="planRef" class="agent-plan">
+        <div v-if="session?.plan" class="agent-plan">
           <div class="agent-plan__title">
             营养方案{{ session.planConfirmedAt ? "（已确认）" : "（待确认）" }}
           </div>
@@ -771,12 +786,16 @@ async function applyPreparationChange(
 const visibleMessages = computed(() =>
   messages.value.filter(
     (message) =>
+      message.role !== "TOOL" &&
       !(
         message.role === "ASSISTANT" &&
         (message.content.startsWith("【方案待确认】") ||
           message.content.startsWith("【选材待确认】"))
       ),
   ),
+);
+const toolMessages = computed(() =>
+  messages.value.filter((message) => message.role === "TOOL"),
 );
 const input = ref("");
 const sending = ref(false);
@@ -817,8 +836,7 @@ function sendAskOption(option: string) {
 const rematching = ref(false);
 const loading = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
-const planRef = ref<HTMLElement | null>(null);
-const previousPlanSummary = ref<string | null>(null);
+const stickToBottom = ref(true);
 let timer: number | null = null;
 let lastEditMessageId: string | null = null;
 const previousStatus = ref<string | null>(null);
@@ -853,14 +871,20 @@ const statusType = computed(() => {
 async function loadSession() {
   if (!props.draftId) return;
   const result = await recipeDesignerApi.getAgentSession(props.draftId);
+  const scrollElement = scrollRef.value;
+  const wasNearBottom = scrollElement
+    ? isNearBottom(scrollElement)
+    : stickToBottom.value;
+  const previousScrollTop = scrollElement?.scrollTop ?? 0;
   session.value = result?.session ?? null;
   messages.value = result?.messages ?? [];
   await nextTick();
-  if (session.value?.phase === "PLAN" && session.value.plan && planRef.value) {
-    // 方案卡在消息流末尾；滚到卡片顶部，先看到数值约束表。
-    planRef.value.scrollIntoView({ block: "start" });
-  } else {
-    scrollToBottom();
+  const nextScrollElement = scrollRef.value;
+  if (wasNearBottom) {
+    scrollToBottom(true);
+  } else if (nextScrollElement) {
+    // 用户正在看上面的内容：轮询刷新时保持原来的滚动位置，不要强制拉到底部。
+    nextScrollElement.scrollTop = previousScrollTop;
   }
   syncTimer();
 
@@ -906,8 +930,9 @@ async function send() {
     createdAt: new Date().toISOString(),
   });
   input.value = "";
+  stickToBottom.value = true;
   await nextTick();
-  scrollToBottom();
+  scrollToBottom(true);
   try {
     await recipeDesignerApi.startAgentRun(props.draftId, text);
     await loadSession();
@@ -1051,7 +1076,20 @@ function handleOpen() {
   void loadSession();
 }
 
-function scrollToBottom() {
+function isNearBottom(element: HTMLElement, threshold = 96): boolean {
+  return (
+    element.scrollHeight - element.scrollTop - element.clientHeight <= threshold
+  );
+}
+
+function handleScroll() {
+  const element = scrollRef.value;
+  if (!element) return;
+  stickToBottom.value = isNearBottom(element);
+}
+
+function scrollToBottom(force = false) {
+  if (!force && !stickToBottom.value) return;
   const element = scrollRef.value;
   if (element) element.scrollTop = element.scrollHeight;
 }
@@ -1142,6 +1180,44 @@ watch(
 }
 .agent-row--user .agent-bubble {
   background: var(--el-color-primary-light-9);
+}
+.agent-tool-log {
+  margin: 6px 0 10px;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+  background: #fafafa;
+}
+.agent-tool-log summary {
+  padding: 7px 9px;
+  font-size: 12px;
+  color: #606266;
+  cursor: pointer;
+  user-select: none;
+}
+.agent-tool-log__list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 0 9px 8px;
+}
+.agent-tool-log__item {
+  padding: 6px 0;
+  border-top: 1px dashed #ebeef5;
+}
+.agent-tool-log__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 2px;
+}
+.agent-tool-log__body {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-size: 11px;
+  line-height: 1.5;
+  color: #909399;
 }
 .agent-tool {
   font-size: 12px;

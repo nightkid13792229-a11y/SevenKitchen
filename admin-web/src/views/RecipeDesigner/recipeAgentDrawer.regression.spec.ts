@@ -130,3 +130,20 @@ describe('AI 设计对话 · 选材硬边界与手动添加', () => {
     expect(drawerSource).toContain('让 AI 判断并加入')
   })
 })
+
+describe('AI 设计对话 · 滚动与执行记录', () => {
+  it('运行中轮询不强行拉到底部，用户在看上面时保持位置', () => {
+    expect(drawerSource).toContain('@scroll="handleScroll"')
+    expect(drawerSource).toContain('stickToBottom')
+    expect(drawerSource).toContain('isNearBottom')
+    expect(drawerSource).toContain('previousScrollTop')
+    expect(drawerSource).toContain('scrollToBottom(true)')
+  })
+
+  it('工具调用收进一个可展开的执行记录，不再每个占一行', () => {
+    expect(drawerSource).toContain('const toolMessages = computed')
+    expect(drawerSource).toContain('agent-tool-log')
+    expect(drawerSource).toContain('执行记录 ·')
+    expect(drawerSource).not.toContain('<details class="agent-tool">')
+  })
+})

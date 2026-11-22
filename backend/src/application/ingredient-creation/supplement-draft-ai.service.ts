@@ -346,9 +346,20 @@ export class SupplementDraftAiService {
     });
 
     let aiDraft: SupplementAiDraft | null = null;
+    let replyTruncated = false;
     try {
       const reply = await this.vision.analyze(prompt);
+      replyTruncated = reply?.truncated === true;
       aiDraft = reply ? parseSupplementAiDraft(reply.text, parseContext) : null;
+      if (reply && !aiDraft) {
+        // 空结果最常见的原因是输出被 max_tokens 截断成半截 JSON；
+        // 留一段原文，下次能直接看出是截断还是模型没按格式回。
+        this.logger.warn(
+          `[supplement-draft-ai] 模型返回的不是可解析 JSON` +
+            `（${replyTruncated ? '输出被截断' : '格式不对'}，finish 之后 ${reply.text.length} 字）：` +
+            reply.text.slice(0, 200),
+        );
+      }
     } catch (error) {
       // 决策模型不可用：确定性事实照样保存，草稿留给人补。
       this.logger.warn(
@@ -392,8 +403,9 @@ export class SupplementDraftAiService {
     if (!aiDraft) {
       warnings.push({
         code: 'AI_DRAFT_UNAVAILABLE',
-        message:
-          'AI 没有返回可用的起草结果，已先保存能确定的字段；可以重试，不影响已有草稿',
+        message: replyTruncated
+          ? 'AI 这次写的内容太长被截断，没读全；重试一次，还不行就对照标签手填营养栏'
+          : 'AI 没有返回可用的起草结果，已先保存能确定的字段；可以重试，不影响已有草稿',
       });
     }
 

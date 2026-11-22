@@ -61,3 +61,36 @@ describe('读标签图', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('文本判断', () => {
+  it('输出被截断时带 truncated 标记，交给上层说人话', async () => {
+    const { service } = build({
+      choices: [
+        { finish_reason: 'length', message: { content: '{"fields": {"basic.name"' } }
+      ]
+    });
+
+    const reply = await service.analyze('prompt');
+
+    expect(reply?.truncated).toBe(true);
+    expect(reply?.text).toContain('"fields"');
+  });
+
+  it('HTTP 失败时返回 null，不把异常抛给整条链路', async () => {
+    const providerConfig = {
+      getEnabledDeepSeekRuntimeConfig: jest.fn(async () => ({
+        baseUrl: 'https://api.deepseek.com',
+        apiKey: 'k',
+        model: 'deepseek-v4-flash'
+      }))
+    } as unknown as AgentProviderConfigService;
+    global.fetch = jest.fn(async () => ({
+      ok: false,
+      status: 429,
+      text: async () => 'rate limited'
+    })) as unknown as typeof fetch;
+
+    const service = new SupplementLabelVisionService(providerConfig);
+    await expect(service.analyze('prompt')).resolves.toBeNull();
+  });
+});

@@ -79,7 +79,10 @@ interface IntakeMock {
 }
 
 interface VisionMock {
-  analyze: jest.Mock<Promise<{ text: string; model: string } | null>, [string]>;
+  analyze: jest.Mock<
+    Promise<{ text: string; model: string; truncated?: boolean } | null>,
+    [string]
+  >;
 }
 
 interface LinkPreviewMock {
@@ -390,7 +393,7 @@ describe('SupplementDraftAiService', () => {
     };
     vision = {
       analyze: jest.fn<
-        Promise<{ text: string; model: string } | null>,
+        Promise<{ text: string; model: string; truncated?: boolean } | null>,
         [string]
       >(() => Promise.resolve(aiReply())),
     };
@@ -662,6 +665,25 @@ describe('SupplementDraftAiService', () => {
         (warning) => warning.code === 'AI_DRAFT_UNAVAILABLE',
       ),
     ).toBe(true);
+  });
+
+  it('模型输出被截断：记 PARTIAL，并明确提示“重试或手填”', async () => {
+    vision.analyze.mockResolvedValue({
+      text: '{"fields": {"nutrition.servingNutrients.vitamins.vitaminE": 200',
+      model: 'mock-model',
+      truncated: true,
+    });
+
+    await service.fill({ userId: 'u1' }, 'draft-1', FILL_INPUT);
+
+    const payload = lastPayload();
+    expect(payload.nutrition.servingNutrients).toEqual({});
+    const snapshot = lastSnapshot();
+    expect(snapshot.status).toBe('PARTIAL');
+    const warning = snapshot.warnings.find(
+      (item) => item.code === 'AI_DRAFT_UNAVAILABLE',
+    );
+    expect(warning?.message).toContain('截断');
   });
 
   it('recommendCreate=false 只记进 aiSnapshot，不丢草稿/状态/名称', async () => {

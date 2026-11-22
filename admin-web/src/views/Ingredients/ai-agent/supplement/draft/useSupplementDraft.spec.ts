@@ -363,6 +363,38 @@ describe('在飞请求的草稿归属', () => {
     scope.stop()
   })
 
+  it('AI 起草 PARTIAL：把后端提醒显示出来，不装作成功', async () => {
+    const draftA = draftView('draft-a')
+    draftA.payload.evidence.frontImageUrl = 'https://example.com/front.png'
+    draftA.payload.evidence.labelImageUrl = 'https://example.com/label.png'
+    api.get.mockResolvedValueOnce(draftA)
+    const { state, scope } = setup('draft-a')
+    await state.load()
+
+    const partial = draftView('draft-a')
+    partial.payload.evidence.frontImageUrl = 'https://example.com/front.png'
+    partial.payload.evidence.labelImageUrl = 'https://example.com/label.png'
+    partial.aiSnapshot = {
+      status: 'PARTIAL',
+      fields: {},
+      decisions: {} as never,
+      proposedDecisions: {} as never,
+      missing: [],
+      warnings: [
+        {
+          code: 'AI_DRAFT_UNAVAILABLE',
+          message: 'AI 这次写的内容太长被截断，没读全；重试一次'
+        }
+      ]
+    }
+    api.aiFill.mockResolvedValueOnce(partial)
+
+    await state.runAi()
+
+    expect(state.error.value).toContain('截断')
+    scope.stop()
+  })
+
   it('已 manual 的字段在 AI 期间被改也不丢，合并后标脏并补存', async () => {
     const draftA = draftView('draft-a')
     draftA.manualFields = ['evidence.selectionNote']

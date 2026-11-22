@@ -573,6 +573,12 @@ export function useSupplementDraft(draftId: Ref<string | null>) {
       } else if (changedDuringAi) {
         error.value =
           'AI 起草期间检测到草稿改动但缺少人改标记，请逐项核对 AI 结果'
+      } else if (updated.aiSnapshot?.status === 'PARTIAL') {
+        // 起草没跑通时页面不能像“成功”一样安静：把后端的提醒原样抛出来，
+        // 否则用户只会看到表单是空的，不知道是模型失败还是自己没填。
+        error.value =
+          updated.aiSnapshot.warnings[0]?.message ??
+          'AI 没有读出可用内容，草稿已保留；可以重试或对照标签手填'
       }
       verification.value = updated.verification
       review.value = null

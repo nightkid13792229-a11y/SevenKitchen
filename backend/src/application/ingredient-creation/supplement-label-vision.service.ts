@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AgentProviderConfigService } from '../nutrition-governance/agent-provider-config.service';
 import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.service';
 
@@ -17,7 +17,10 @@ import { INGREDIENT_INTAKE_AGENT_PURPOSE } from './ingredient-creation-intake.se
 
 const CHAT_PATH = '/chat/completions';
 const TIMEOUT_MS = 60_000;
-const MAX_TOKENS = 1200;
+/** 抄字：标签行多时要留够，否则最后几行会被截掉。 */
+const OCR_MAX_TOKENS = 2500;
+/** 起草：模型要回一大段 JSON（逐字段带理由，营养数值还要写换算算式）。 */
+const DRAFT_MAX_TOKENS = 3000;
 const MAX_TEXT_CHARS = 8000;
 
 const PROMPT = [
@@ -37,6 +40,8 @@ export interface SupplementLabelVisionResult {
 
 @Injectable()
 export class SupplementLabelVisionService {
+  private readonly logger = new Logger(SupplementLabelVisionService.name);
+
   constructor(private readonly providerConfig: AgentProviderConfigService) {}
 
   /** 标签图：沿用同一套提示词。 */
@@ -72,7 +77,7 @@ export class SupplementLabelVisionService {
         body: JSON.stringify({
           model: runtime.model,
           temperature: 0,
-          max_tokens: MAX_TOKENS,
+          max_tokens: OCR_MAX_TOKENS,
           thinking: { type: 'disabled' },
           messages: [
             {
@@ -97,6 +102,12 @@ export class SupplementLabelVisionService {
       const choice = payload.choices?.[0];
       const content = choice?.message?.content;
       const text = typeof content === 'string' ? content.trim() : '';
+      if (text && choice?.finish_reason === 'length') {
+        // 截断不会报错，只会在标签末尾少几行——必须留一条日志，否则永远查不出来
+        this.logger.warn(
+          `[vision] 标签抄写被截断（max_tokens=${OCR_MAX_TOKENS}），末尾可能缺行：${url}`,
+        );
+      }
       if (!text) {
         // content 空基本就是被截断（思考吃掉了预算），如实报，不要返回半截
         throw new BadRequestException(
@@ -121,7 +132,9 @@ export class SupplementLabelVisionService {
    *
    * 与 read() 用同一条模型配置；失败不抛给整条链路——识别还在，判断可以退化成人工。
    */
-  async analyze(prompt: string): Promise<{ text: string; model: string } | null> {
+  async analyze(
+    prompt: string,
+  ): Promise<{ text: string; model: string; truncated?: boolean } | null> {
     const runtime = await this.providerConfig.getEnabledDeepSeekRuntimeConfig({
       purpose: INGREDIENT_INTAKE_AGENT_PURPOSE,
       fallbackToDefault: false
@@ -140,21 +153,44 @@ export class SupplementLabelVisionService {
         body: JSON.stringify({
           model: runtime.model,
           temperature: 0,
-          max_tokens: MAX_TOKENS,
+          max_tokens: DRAFT_MAX_TOKENS,
           thinking: { type: 'disabled' },
           messages: [{ role: 'user', content: prompt }]
         })
       });
       if (!response.ok) {
+        const body = await response.text().catch(() => '');
+        this.logger.warn(
+          `[vision] 判断请求失败：HTTP ${response.status} ${body.slice(0, 200)}`,
+        );
         return null;
       }
       const payload = (await response.json()) as {
-        choices?: { message?: { content?: unknown } }[];
+        choices?: {
+          finish_reason?: string;
+          message?: { content?: unknown };
+        }[];
       };
-      const content = payload.choices?.[0]?.message?.content;
+      const choice = payload.choices?.[0];
+      const finish = choice?.finish_reason;
+      const content = choice?.message?.content;
       const text = typeof content === 'string' ? content.trim() : '';
-      return text ? { text, model: runtime.model } : null;
-    } catch {
+      if (!text) {
+        this.logger.warn(
+          `[vision] 判断结果为空（finish_reason=${finish ?? 'null'}）`,
+        );
+        return null;
+      }
+      if (finish === 'length') {
+        this.logger.warn(
+          `[vision] 判断输出被截断（max_tokens=${DRAFT_MAX_TOKENS}，finish_reason=length）`,
+        );
+      }
+      return { text, model: runtime.model, truncated: finish === 'length' };
+    } catch (error) {
+      this.logger.warn(
+        `[vision] 判断请求异常：${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     } finally {
       clearTimeout(timer);

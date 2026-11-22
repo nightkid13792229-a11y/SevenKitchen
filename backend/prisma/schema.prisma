@@ -1083,6 +1083,7 @@ model Ingredient {
   priceHistories                IngredientPriceHistory[]
   allergenTags                  IngredientAllergenTag[]
   supplementPackagingRules      SupplementPackagingRule[]
+  nutritionPreparationHistories IngredientNutritionPreparationHistory[]
   equivalenceGroup              SupplementEquivalenceGroup?   @relation(fields: [equivalenceGroupId], references: [id], onDelete: SetNull)
 
   @@unique([name, brand, productModel])
@@ -4369,6 +4370,7 @@ model NutritionFood {
   mappings          NutritionFoodMapping[]
   recipeItems       RecipeItem[]
   designRecipeItems DesignRecipeItem[]
+  preparationHistories IngredientNutritionPreparationHistory[]
 
   @@unique([name, dataSource, version])
   @@index([category])
@@ -4376,6 +4378,29 @@ model NutritionFood {
   @@index([dataSource])
   @@index([displayNameZh])
   @@map("nutrition_food")
+}
+
+/// 原料 + 营养档案的最近一次预处理写法（初始化/人工确认）。
+///
+/// 与 `IngredientPreparationHistoryService` 从已发布/已交付食谱推导的历史不同：
+/// 这张表按“原料 + 档案”存一条确认值，供 Agent 自动带出预处理；
+/// 新档案没有记录时留空，不由代码猜。
+model IngredientNutritionPreparationHistory {
+  id              String   @id @default(uuid())
+  ingredientId    String   @map("ingredient_id")
+  nutritionFoodId String   @map("nutrition_food_id")
+  text            String   @db.VarChar(80)
+  usedAt          DateTime @default(now()) @map("used_at")
+  source          String   @default("INITIAL_CONFIRMATION") @map("source") @db.VarChar(40)
+  createdBy       String?  @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  ingredient      Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  nutritionFood   NutritionFood @relation(fields: [nutritionFoodId], references: [id], onDelete: Cascade)
+
+  @@unique([ingredientId, nutritionFoodId])
+  @@index([nutritionFoodId])
+  @@map("ingredient_nutrition_preparation_history")
 }
 
 /// 营养原料与采购原料的映射关系

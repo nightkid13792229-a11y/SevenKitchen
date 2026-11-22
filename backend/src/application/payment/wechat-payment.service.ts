@@ -2226,7 +2226,7 @@ export class WechatPaymentService {
   ): WechatOrderInfo {
     const productInfos = (order.items || []).map((item, index) => {
       const recipeId = item.recipeId || this.extractRecipeId(item.recipeSnapshot);
-      const title = this.extractRecipeName(item.recipeSnapshot) || 'SevenKitchen 鲜食';
+      const title = this.extractRecipeName(item.recipeSnapshot) || 'Setar赛文的食堂 鲜食';
       const coverImageUrl = this.extractRecipeCoverImage(item.recipeSnapshot);
       const path = recipeId
         ? `pages/recipe-detail/index?id=${recipeId}`
@@ -2261,7 +2261,7 @@ export class WechatPaymentService {
                   product_cnt: 1,
                   sale_price: totalFen,
                   path: `pages/order-detail/index?id=${outTradeNo}`,
-                  title: 'SevenKitchen 鲜食订单',
+                  title: 'Setar赛文的食堂 鲜食订单',
                 },
               ],
         pay_info: {
@@ -2318,7 +2318,7 @@ export class WechatPaymentService {
       quantityKg > 0 ? `${Number(quantityKg.toFixed(1))}kg` : '',
     ].filter(Boolean);
 
-    const description = `SevenKitchen ${parts.join(' ')}`.trim();
+    const description = `Setar赛文的食堂 ${parts.join(' ')}`.trim();
     return description.length > 127 ? description.slice(0, 127) : description;
   }
 

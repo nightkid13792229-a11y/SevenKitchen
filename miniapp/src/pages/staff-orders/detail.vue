@@ -1105,7 +1105,7 @@ const feePackageId = ref('')
 const shipment = ref<any>(null)
 const showShippingShareFallback = ref(false)
 const shippedShareOrderId = ref('')
-const shippedShareTitle = ref('SevenKitchen 已发货')
+const shippedShareTitle = ref('Setar赛文的食堂 已发货')
 const shippedShareImage = ref('')
 const shareToken = ref('')
 const shareTokenOrderId = ref('')
@@ -2234,7 +2234,7 @@ function getProductionPhotosShareDogName(): string {
     }
   })
   const dogNames = Array.from(names)
-  if (dogNames.length === 0) return 'SevenKitchen'
+  if (dogNames.length === 0) return 'Setar赛文的食堂'
   if (dogNames.length === 1) return dogNames[0]
   return `${dogNames[0]}等${dogNames.length}只狗狗`
 }
@@ -2545,7 +2545,7 @@ function onShipped(payload: {
   showShippingModal.value = false
   if (!payload.noShipping) {
     shippedShareOrderId.value = payload.orderId
-    shippedShareTitle.value = `SevenKitchen 已发货｜${payload.carrierName} ${payload.trackingNumber}`
+    shippedShareTitle.value = `Setar赛文的食堂 已发货｜${payload.carrierName} ${payload.trackingNumber}`
     shippedShareImage.value = payload.coverImageUrl || ''
     showShippingShareFallback.value = true
   }

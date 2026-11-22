@@ -209,7 +209,7 @@ export class ShippingNotificationService {
       template_id: templateId,
       page: `pages/order-shipping-notice/index?orderId=${order.id}`,
       data: {
-        thing2: { value: 'SevenKitchen订单' },
+        thing2: { value: 'Setar赛文的食堂订单' },
         thing5: { value: this.getCarrierName(order.carrierCode) },
         character_string1: { value: order.trackingNumber },
         time4: { value: this.formatWechatTime(order.shippedAt || new Date()) },

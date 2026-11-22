@@ -373,7 +373,7 @@ export class WechatShippingUploadService {
       .filter((name, index, all) => all.indexOf(name) === index);
 
     const desc =
-      names.length > 0 ? `补剂 · ${names.join('、')}` : 'SevenKitchen 补剂订单';
+      names.length > 0 ? `补剂 · ${names.join('、')}` : 'Setar赛文的食堂 补剂订单';
     return desc.slice(0, 120);
   }
 
@@ -917,7 +917,7 @@ export class WechatShippingUploadService {
       .map((item) => this.extractRecipeName(item.recipeSnapshot))
       .filter((name): name is string => Boolean(name));
 
-    const desc = names.length > 0 ? names.join('、') : 'SevenKitchen 鲜食订单';
+    const desc = names.length > 0 ? names.join('、') : 'Setar赛文的食堂 鲜食订单';
     return desc.slice(0, 120);
   }
 

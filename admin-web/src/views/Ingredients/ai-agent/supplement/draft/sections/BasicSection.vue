@@ -144,7 +144,7 @@
             />
           </el-select>
           <em class="draft-field__hint">
-            粉剂选克、液体选毫升、片剂/胶囊选个；营养按每 1 个基准单位折算
+            按实际计量选：按克/毫升/个都行；平勺、滴属于「个」，只要展示单位和基准 1:1。营养按每 1 个基准单位折算
           </em>
         </label>
 
@@ -424,11 +424,11 @@ function update<K extends keyof SupplementDraftBasic>(
 /** 基准单位选项；值仍是后端枚举，展示只给中文。 */
 const baseUnitOptions: Array<{ value: SupplementBaseUnit; label: string }> = [
   { value: 'PCS', label: '个（粒/片/胶囊）' },
-  { value: 'G', label: '克（粉类）' },
-  { value: 'ML', label: '毫升（液体）' }
+  { value: 'G', label: '克' },
+  { value: 'ML', label: '毫升' }
 ]
 
-/** 物理形态；决定基准单位是否对得上。 */
+/** 物理形态；只描述形态，不再决定基准单位。 */
 const physicalFormOptions: Array<{
   value: SupplementPhysicalForm
   label: string
@@ -440,9 +440,10 @@ const physicalFormOptions: Array<{
 ]
 
 /** 展示单位：去掉「份」——它不是 1:1 单位；保留「胶囊」。 */
-const displayUnitOptions = supplementUsageUnitOptions.filter(
-  (unit) => unit !== '份'
-)
+const displayUnitOptions = [
+  ...supplementUsageUnitOptions.filter((unit) => unit !== '份'),
+  '滴'
+]
 
 const unitLabel = computed(() => basic.value.unitDisplayLabel.trim() || '个基准单位')
 
@@ -456,13 +457,10 @@ const servingIsPcs = computed(() => basic.value.baseUnit === 'PCS')
 
 /** 粉/液体标每份小数，片/胶囊按整数；文案跟着形态变。 */
 const servingHint = computed(() => {
-  if (
-    basic.value.physicalForm === 'POWDER' ||
-    basic.value.physicalForm === 'LIQUID'
-  ) {
+  if (basic.value.baseUnit === 'G' || basic.value.baseUnit === 'ML') {
     return '标签上每份几克/几毫升就填几，可以带两位小数（如 0.9、2.5）'
   }
-  return '标签上「Serving Size」是几粒/几片/几胶囊就填几，必须是整数'
+  return '标签上「Serving Size」是几粒/几片/几平勺/几滴就填几，必须是整数'
 })
 
 function isRecord(value: unknown): value is Record<string, unknown> {

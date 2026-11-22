@@ -21,17 +21,6 @@ export interface DraftCompleteness {
   missing: string[];
 }
 
-/** 物理形态 → 应有的基准单位（spec §7.2）。 */
-const BASE_UNIT_BY_PHYSICAL_FORM: Record<
-  SupplementPhysicalForm,
-  SupplementBaseUnit
-> = {
-  POWDER: 'G',
-  TABLET: 'PCS',
-  CAPSULE: 'PCS',
-  LIQUID: 'ML',
-};
-
 function hasText(value: string): boolean {
   return value.trim().length > 0;
 }
@@ -58,9 +47,9 @@ export function computeDraftCompleteness(
 ): DraftCompleteness {
   const { basic, nutrition, label, retail, diy, equivalence } = payload;
 
-  const baseUnitFilled =
-    basic.physicalForm !== null &&
-    BASE_UNIT_BY_PHYSICAL_FORM[basic.physicalForm] === basic.baseUnit;
+  // 基准单位不再和物理形态硬绑定：粉剂可按平勺（PCS）、液体可按滴（PCS）。
+  // 形态没选时仍算 baseUnit 未填，避免空草稿白送一项。
+  const baseUnitFilled = basic.physicalForm !== null;
 
   const checks: Array<{ key: string; filled: boolean }> = [
     // ① 商品与基本信息

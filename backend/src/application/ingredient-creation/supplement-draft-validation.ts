@@ -31,6 +31,7 @@ export type SupplementDraftIssueCode =
   | 'PRODUCT_MODEL_TOO_LONG'
   | 'PURCHASE_CHANNEL_TOO_LONG'
   | 'UNIT_PHYSICAL_FORM_MISMATCH'
+  | 'PHYSICAL_FORM_REQUIRED'
   | 'UNIT_DISPLAY_MISMATCH'
   | 'SERVING_SIZE_REQUIRED'
   | 'SERVING_SIZE_NOT_INTEGER'
@@ -137,16 +138,6 @@ export interface SupplementDraftValidationContext {
   concentration: SupplementDraftConcentrationContext | null;
 }
 
-/** 物理形态 → 应有的基准单位（spec §7.2）。 */
-const BASE_UNIT_BY_PHYSICAL_FORM: Record<
-  SupplementPhysicalForm,
-  SupplementBaseUnit
-> = {
-  POWDER: 'G',
-  LIQUID: 'ML',
-  TABLET: 'PCS',
-  CAPSULE: 'PCS',
-};
 
 /** 与 DTO/领域词表同一套；服务端不引用前端常量。 */
 const ALLOWED_ADD_TIMINGS: readonly string[] = ['BEFORE_MIXING', 'BEFORE_MEAL'];
@@ -280,17 +271,15 @@ export function validateSupplementDraftBasics(
     });
   }
 
-  // ③ 单位与物理形态
-  const expectedBaseUnit = basic.physicalForm
-    ? BASE_UNIT_BY_PHYSICAL_FORM[basic.physicalForm]
-    : null;
-  if (!expectedBaseUnit || expectedBaseUnit !== basic.baseUnit) {
+  // ③ 物理形态 / 单位
+  // 基准单位只认 G / ML / PCS；粉剂也可以按「平勺」计、液体也可以按「滴」计，
+  // 只要展示单位和基准单位 1:1。不再强制粉=G、液体=ML。
+  if (!basic.physicalForm) {
     issues.push({
-      code: 'UNIT_PHYSICAL_FORM_MISMATCH',
+      code: 'PHYSICAL_FORM_REQUIRED',
       level: 'BLOCKER',
-      message:
-        '基准单位与物理形态不一致：粉剂用克（G）、液体用毫升（ML）、片/胶囊用粒（PCS）',
-      fieldPath: 'basic.baseUnit',
+      message: '请选择物理形态',
+      fieldPath: 'basic.physicalForm',
     });
   }
   if (!isSupplementUnitOneToOne(basic.unitDisplayLabel, basic.baseUnit)) {

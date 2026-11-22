@@ -93,7 +93,7 @@ describe('validateSupplementDraftBasics', () => {
     expect(issues.map((issue) => issue.code)).toEqual(
       expect.arrayContaining([
         'NAME_REQUIRED',
-        'UNIT_PHYSICAL_FORM_MISMATCH',
+        'PHYSICAL_FORM_REQUIRED',
         'NUTRIENT_EMPTY',
       ]),
     );
@@ -147,20 +147,9 @@ describe('validateSupplementDraftBasics', () => {
       'PURCHASE_CHANNEL_TOO_LONG',
     ],
     [
-      '物理形态与基准单位不一致',
-      {
-        basic: {
-          physicalForm: 'CAPSULE',
-          baseUnit: 'G',
-          unitDisplayLabel: 'g',
-        },
-      },
-      'UNIT_PHYSICAL_FORM_MISMATCH',
-    ],
-    [
       '没选物理形态',
       { basic: { physicalForm: null } },
-      'UNIT_PHYSICAL_FORM_MISMATCH',
+      'PHYSICAL_FORM_REQUIRED',
     ],
     [
       '胶囊每份 1.5 粒',
@@ -315,6 +304,32 @@ describe('validateSupplementDraftBasics', () => {
   });
 
   describe('允许的情形', () => {
+    it('粉剂可以按平勺计（PCS + 平勺）', () => {
+      expect(
+        issuesOf({
+          basic: {
+            physicalForm: 'POWDER',
+            baseUnit: 'PCS',
+            unitDisplayLabel: '平勺',
+            servingUnitsPerDose: 1,
+          },
+        }),
+      ).toEqual([]);
+    });
+
+    it('液体可以按滴计（PCS + 滴）', () => {
+      expect(
+        issuesOf({
+          basic: {
+            physicalForm: 'LIQUID',
+            baseUnit: 'PCS',
+            unitDisplayLabel: '滴',
+            servingUnitsPerDose: 4,
+          },
+        }),
+      ).toEqual([]);
+    });
+
     it('标签分类标签是选填：空数组不阻断', () => {
       expect(issuesOf({ label: { tagNames: [] } })).toEqual([]);
     });

@@ -13,7 +13,7 @@
 /** 库存基准单位；与 `isSupplementUnitOneToOne` 的入参保持一致。 */
 export type SupplementBaseUnit = 'PCS' | 'G' | 'ML';
 
-/** 物理形态；决定基准单位（粉=G、液体=ML、片/胶囊=PCS）。 */
+/** 物理形态；只描述形态，基准单位由实际计量方式决定。 */
 export type SupplementPhysicalForm = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID';
 
 /** 标签分类；合规字段，二选一。 */

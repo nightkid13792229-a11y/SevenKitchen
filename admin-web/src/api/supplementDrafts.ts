@@ -20,7 +20,7 @@ const BASE = '/admin/ingredient-creation/supplement-drafts'
 /** 库存基准单位；与后端 `SupplementBaseUnit` 一致。 */
 export type SupplementBaseUnit = 'PCS' | 'G' | 'ML'
 
-/** 物理形态；决定基准单位（粉=G、液体=ML、片/胶囊=PCS）。 */
+/** 物理形态；不再强制决定基准单位，展示单位与基准单位 1:1 即可。 */
 export type SupplementPhysicalForm = 'POWDER' | 'TABLET' | 'CAPSULE' | 'LIQUID'
 
 /** 标签分类；合规字段，二选一。 */
@@ -186,6 +186,7 @@ export type SupplementDraftIssueCode =
   | 'PRODUCT_MODEL_TOO_LONG'
   | 'PURCHASE_CHANNEL_TOO_LONG'
   | 'UNIT_PHYSICAL_FORM_MISMATCH'
+  | 'PHYSICAL_FORM_REQUIRED'
   | 'UNIT_DISPLAY_MISMATCH'
   | 'SERVING_SIZE_REQUIRED'
   | 'SERVING_SIZE_NOT_INTEGER'

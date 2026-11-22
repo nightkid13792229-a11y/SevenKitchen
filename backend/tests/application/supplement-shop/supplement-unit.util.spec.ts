@@ -5,6 +5,11 @@ import {
 } from '../../../src/application/supplement-shop/supplement-unit.util';
 
 describe('补剂单位 1:1 校验', () => {
+  it('滴也按 PCS 1:1，不换算成毫升', () => {
+    expect(isSupplementUnitOneToOne('滴', 'PCS')).toBe(true);
+    expect(toSupplementBaseQuantity('滴', 4, 'PCS', '维生素D3')).toBe(4);
+  });
+
   it('平勺按 PCS 1:1，不换算成克', () => {
     expect(isSupplementUnitOneToOne('平勺', 'PCS')).toBe(true);
     expect(isSupplementUnitOneToOne('片', 'PCS')).toBe(true);

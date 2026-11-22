@@ -1,7 +1,7 @@
 <template>
   <el-container class="main-layout">
     <el-aside width="224px" class="sidebar">
-      <div class="logo">七号厨房后台</div>
+      <div class="logo">Setar赛文的食堂</div>
 
       <div ref="searchWrapRef" class="sidebar-search">
         <el-input
@@ -118,7 +118,7 @@
       </div>
 
       <div class="sidebar-foot">
-        <span>七号厨房 · 内部后台</span>
+        <span>Setar赛文的食堂 · 内部后台</span>
       </div>
     </el-aside>
 

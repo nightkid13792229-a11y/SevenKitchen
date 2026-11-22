@@ -14,7 +14,7 @@
       </template>
 
       <el-alert
-        title="建议使用微信客服 + 企业微信接待。客服人员在企业微信回复客户，SevenKitchen 后台负责订单、售后、退款和差价处理。"
+        title="建议使用微信客服 + 企业微信接待。客服人员在企业微信回复客户，Setar赛文的食堂 后台负责订单、售后、退款和差价处理。"
         type="info"
         show-icon
         :closable="false"
@@ -142,7 +142,7 @@
         </el-form-item>
 
         <el-form-item label="普通咨询标题">
-          <el-input v-model="form.defaultCardTitleTemplate" class="field-control" placeholder="SevenKitchen 客服咨询" autocomplete="off" />
+          <el-input v-model="form.defaultCardTitleTemplate" class="field-control" placeholder="Setar赛文的食堂 客服咨询" autocomplete="off" />
           <div class="field-help">客户从非订单、非商品页面联系客服时使用。</div>
         </el-form-item>
 
@@ -328,7 +328,7 @@ const form = reactive({
   orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
   productCardTitleTemplate: '咨询商品 {productName}',
   productCardPathTemplate: '/pages/recipe-detail/index?recipeId={productId}',
-  defaultCardTitleTemplate: 'SevenKitchen 客服咨询',
+  defaultCardTitleTemplate: 'Setar赛文的食堂 客服咨询',
   defaultCardPathTemplate: '/pages/home/index',
   welcomeMessage: '',
   orderDetailDeliveryNote: '',
@@ -394,7 +394,7 @@ const applyConfig = (data: CustomerServiceConfig) => {
   form.orderCardPathTemplate = data.orderCardPathTemplate || '/pages/order-detail/index?id={orderId}';
   form.productCardTitleTemplate = data.productCardTitleTemplate || '咨询商品 {productName}';
   form.productCardPathTemplate = data.productCardPathTemplate || '/pages/recipe-detail/index?recipeId={productId}';
-  form.defaultCardTitleTemplate = data.defaultCardTitleTemplate || 'SevenKitchen 客服咨询';
+  form.defaultCardTitleTemplate = data.defaultCardTitleTemplate || 'Setar赛文的食堂 客服咨询';
   form.defaultCardPathTemplate = data.defaultCardPathTemplate || '/pages/home/index';
   form.welcomeMessage = data.welcomeMessage || '';
   form.orderDetailDeliveryNote = data.orderDetailDeliveryNote || '';

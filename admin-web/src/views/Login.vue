@@ -3,7 +3,7 @@
     <el-card class="login-card">
       <template #header>
         <div class="card-header">
-          <h2>七号厨房后台管理系统</h2>
+          <h2>Setar赛文的食堂 · 后台管理系统</h2>
         </div>
       </template>
 

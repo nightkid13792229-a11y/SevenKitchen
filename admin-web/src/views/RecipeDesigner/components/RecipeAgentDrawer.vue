@@ -766,6 +766,7 @@ const loading = ref(false);
 const scrollRef = ref<HTMLElement | null>(null);
 const stickToBottom = ref(true);
 let timer: number | null = null;
+let finalRefreshTimer: number | null = null;
 let lastEditMessageId: string | null = null;
 const previousStatus = ref<string | null>(null);
 
@@ -830,8 +831,20 @@ async function loadSession() {
   const status = session.value?.status ?? null;
   if (previousStatus.value === "RUNNING" && status !== "RUNNING") {
     emit("draft-changed");
+    // 后端可能在把 status 改成 WAITING_USER 的同一时刻才写入最后一条
+    // ASSISTANT 消息；这一轮轮询容易只拿到状态、拿不到回复。
+    // 停止轮询前再补拉一次，避免“执行记录有、AI 最后一句没显示”。
+    scheduleFinalRefresh();
   }
   previousStatus.value = status;
+}
+
+function scheduleFinalRefresh() {
+  if (finalRefreshTimer !== null) window.clearTimeout(finalRefreshTimer);
+  finalRefreshTimer = window.setTimeout(() => {
+    finalRefreshTimer = null;
+    void loadSession();
+  }, 600);
 }
 
 function syncTimer() {
@@ -1044,6 +1057,10 @@ onBeforeUnmount(() => {
   if (timer !== null) {
     window.clearInterval(timer);
     timer = null;
+  }
+  if (finalRefreshTimer !== null) {
+    window.clearTimeout(finalRefreshTimer);
+    finalRefreshTimer = null;
   }
 });
 

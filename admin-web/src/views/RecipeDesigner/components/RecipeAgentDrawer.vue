@@ -809,6 +809,7 @@ async function loadSession() {
   const previousScrollTop = scrollElement?.scrollTop ?? 0;
   session.value = result?.session ?? null;
   messages.value = result?.messages ?? [];
+  const isInitialLoad = lastAssistantMessageId === null;
   const lastAssistant = [...messages.value]
     .reverse()
     .find((message) => message.role === "ASSISTANT");
@@ -818,7 +819,7 @@ async function loadSession() {
   if (lastAssistant) lastAssistantMessageId = lastAssistant.id;
   await nextTick();
   const nextScrollElement = scrollRef.value;
-  if (wasNearBottom) {
+  if (wasNearBottom || isInitialLoad) {
     // 方案/选材卡在消息流末尾，直接滚到底会只看到卡片、看不到 AI 最后一句。
     // 有新助手回复时优先把这条回复滚到可视区顶部。
     const scrolledToReply =

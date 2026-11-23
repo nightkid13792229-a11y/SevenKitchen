@@ -78,7 +78,10 @@
           {{ session.lastError }}
         </div>
 
-        <div v-if="session?.plan" class="agent-plan">
+        <div
+          v-if="session?.plan && !session.planConfirmedAt"
+          class="agent-plan"
+        >
           <div class="agent-plan__title">
             营养方案{{ session.planConfirmedAt ? "（已确认）" : "（待确认）" }}
           </div>
@@ -209,7 +212,10 @@
           </div>
         </div>
 
-        <div v-if="session?.selection" class="agent-plan">
+        <div
+          v-if="session?.selection && !session.selectionConfirmedAt"
+          class="agent-plan"
+        >
           <div class="agent-plan__title">
             食材候选{{
               session.selectionConfirmedAt ? "（已确认）" : "（待确认）"

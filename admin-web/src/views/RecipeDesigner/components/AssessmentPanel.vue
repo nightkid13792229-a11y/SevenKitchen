@@ -173,6 +173,11 @@
           </tbody>
         </table>
       </div>
+      <!--
+        明细是「点开才算」的（后端要重算一遍，线上约 2 秒），这段空窗期必须说
+        「正在计算」。以前这里直接落到「数据缺失」，用户第一眼就以为坏了。
+      -->
+      <div v-else-if="contributorFetchPending" class="detail-empty">正在计算该营养素的原料贡献…</div>
       <div v-else class="detail-empty">该营养素暂无原料贡献明细（数据缺失）。</div>
       <template #footer>
         <div class="detail-footer">
@@ -238,7 +243,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search } from '@element-plus/icons-vue'
 import type { DesignRecipeAssessmentResult, GroupedAssessmentEntry } from '@/utils/recipeDesigner/assessmentTypes'
@@ -555,8 +560,77 @@ function toggleGroup(key: string) {
 /* ============ 点击弹窗：原料贡献明细 ============ */
 
 const detailVisible = ref(false)
-const detailLoading = ref(false)
 const activeEntry = ref<GroupedAssessmentEntry | null>(null)
+
+/**
+ * 贡献明细的加载态。
+ *
+ * ⚠️ 明细是**懒加载**的：列表响应里没有 contributors（见后端
+ * `toClientAssessmentResult`），点开某个营养素才走 `assessContributors`
+ * 重算一次。于是这里有两个容易踩的坑：
+ *
+ * 1. **空窗期不能显示「数据缺失」** —— 线上一次要算约 2 秒，用户会以为坏了；
+ * 2. **重算结果不能把已加载的明细冲掉** —— 在弹窗里点「应用」改用量、或改任何
+ *    原料都会让评估重算，而重算结果里没有 contributors。以前它直接把
+ *    `activeEntry` 换掉，表格就永久停在「数据缺失」，只能关掉弹窗重新点。
+ *
+ * 所以：`initialLoadPending` 只用于摘要区的转圈（背景刷新不闪烁），
+ * `contributorFetchPending` 用于判断要不要显示「正在计算」。
+ */
+const initialLoadPending = ref(0)
+const contributorFetchPending = ref(0)
+const detailLoading = computed(() => initialLoadPending.value > 0)
+
+/** 请求序号：只认最后一次，慢响应回来晚了就丢掉，别覆盖新结果 */
+let contributorRequestSeq = 0
+let contributorRefreshTimer: ReturnType<typeof setTimeout> | null = null
+/** 评估重算后再补拉明细的防抖窗口（连续改用量只拉一次） */
+const CONTRIBUTOR_REFRESH_DELAY_MS = 200
+
+/**
+ * 取某个营养素的原料贡献明细。
+ *
+ * `silent` = 背景刷新：表格里留着旧数据，回来再替换，不转圈、不清空。
+ */
+async function fetchContributors(
+  nutrientKey: string,
+  options: { silent?: boolean } = {}
+): Promise<void> {
+  if (!props.loadContributors) return
+  const seq = ++contributorRequestSeq
+  contributorFetchPending.value += 1
+  if (!options.silent) initialLoadPending.value += 1
+  try {
+    const contributors = await props.loadContributors(nutrientKey)
+    if (seq !== contributorRequestSeq) return
+    const entry = activeEntry.value
+    if (!entry || entry.nutrientKey !== nutrientKey) return
+    activeEntry.value = { ...entry, contributors }
+  } catch {
+    // 明细是「锦上添花」：失败时保留已经加载出来的内容，首次加载则停在空态
+  } finally {
+    contributorFetchPending.value = Math.max(contributorFetchPending.value - 1, 0)
+    if (!options.silent) {
+      initialLoadPending.value = Math.max(initialLoadPending.value - 1, 0)
+    }
+  }
+}
+
+/** 评估重算之后，等抖动停下来再补拉一次，让明细跟着新用量更新 */
+function scheduleContributorRefresh(): void {
+  if (contributorRefreshTimer) clearTimeout(contributorRefreshTimer)
+  contributorRefreshTimer = setTimeout(() => {
+    contributorRefreshTimer = null
+    const entry = activeEntry.value
+    if (!detailVisible.value || !entry) return
+    void fetchContributors(entry.nutrientKey, { silent: true })
+  }, CONTRIBUTOR_REFRESH_DELAY_MS)
+}
+
+onBeforeUnmount(() => {
+  if (contributorRefreshTimer) clearTimeout(contributorRefreshTimer)
+  contributorRefreshTimer = null
+})
 
 const detailTitle = computed(() => {
   const entry = activeEntry.value
@@ -744,16 +818,27 @@ function findEntryByKey(entry: GroupedAssessmentEntry): GroupedAssessmentEntry |
   )
 }
 
-/** 用量修改应用后，评估重算 → 弹窗跟随最新数据刷新 */
+/**
+ * 用量修改应用后，评估重算 → 弹窗跟随最新数据刷新。
+ *
+ * ⚠️ 重算结果里**没有**原料贡献明细（列表响应为了体积把它删了）。
+ * 所以这里必须把已经加载出来的明细带过去，再在后台补拉一次：
+ * 否则每次改用量，表格都会变成「数据缺失」且永远不回来（2026-11-23 线上）。
+ */
 watch(
   () => props.assessment,
   () => {
     if (!detailVisible.value || !activeEntry.value) return
+    const loadedContributors = activeEntry.value.contributors ?? []
     const next = findEntryByKey(activeEntry.value)
-    if (next) {
-      activeEntry.value = next
-      clearWeightDrafts()
-    }
+    if (!next) return
+    const keepLoaded = loadedContributors.length > 0 && !next.contributors?.length
+    activeEntry.value = keepLoaded
+      ? { ...next, contributors: loadedContributors }
+      : next
+    clearWeightDrafts()
+    // 没有现成明细（含：首次请求还在路上）就补拉一次，保证拿到的是最新用量
+    if (!next.contributors?.length) scheduleContributorRefresh()
   }
 )
 
@@ -971,19 +1056,7 @@ async function openDetail(row: DisplayRow) {
   clearWeightDrafts()
   detailVisible.value = true
   if (row.entry.contributors?.length || !props.loadContributors) return
-  detailLoading.value = true
-  try {
-    const contributors = await props.loadContributors(row.entry.nutrientKey)
-    if (activeEntry.value?.nutrientKey !== row.entry.nutrientKey) return
-    activeEntry.value = {
-      ...activeEntry.value,
-      contributors
-    }
-  } catch {
-    // 明细加载失败不影响列表；弹窗保留空状态
-  } finally {
-    detailLoading.value = false
-  }
+  await fetchContributors(row.entry.nutrientKey)
 }
 </script>
 

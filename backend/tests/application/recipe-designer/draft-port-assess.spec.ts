@@ -198,3 +198,44 @@ describe('RecipeDraftPort · 缺数据与补剂剂量', () => {
     });
   });
 });
+
+describe('RecipeDraftPort · assess 缺口不再截断', () => {
+  it('不足超过 12 项时也返回全部明细', async () => {
+    const groupedEntries = Array.from({ length: 14 }, (_, index) => ({
+      nutrientKey: `nutrient-${index}`,
+      label: `营养${index}`,
+      status: 'DEFICIENT',
+      unit: 'mg',
+      currentValue: index,
+      minValue: 100 + index,
+      maxValue: 200 + index,
+    }));
+    const designer = {
+      assessDraftForAgent: jest.fn().mockResolvedValue({
+        assessment: {
+          overallStatus: 'NON_COMPLIANT',
+          totalEnergyKcal: 500,
+          summary: {
+            compliant: 20,
+            deficient: 14,
+            excess: 0,
+            missingData: 1,
+          },
+          groupedEntries,
+        },
+        contentRevision: 20,
+        allergenWarnings: [],
+      }),
+    };
+    const port = new RecipeDraftPort(
+      designer as any,
+      { userId: 'u1' } as any,
+      'draft-1',
+    );
+
+    const summary = await port.assess();
+
+    expect(summary.gaps).toHaveLength(14);
+    expect(summary.gaps[13]?.key).toBe('nutrient-13');
+  });
+});

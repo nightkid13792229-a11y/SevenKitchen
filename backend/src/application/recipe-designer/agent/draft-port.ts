@@ -24,6 +24,15 @@ import {
 
 type Access = Parameters<RecipeDesignerService['getDraft']>[1];
 
+/**
+ * 单次评估最多返回给模型的缺口明细数。
+ *
+ * 之前是 12：当评估出现 14 项不足时，模型只能看到 12 项，剩下 2 项
+ * 完全不知道是什么，导致补剂方案缺项、还要让用户先加补剂再重跑。
+ * 这里放宽到营养项总量级别（40），不再截断常见评估结果。
+ */
+const MAX_AGENT_ASSESSMENT_GAPS = 40;
+
 /** 读草稿时返回给模型的摘要（不是完整的草稿对象）。 */
 export interface DraftSummary {
   draftId: string;
@@ -632,7 +641,7 @@ export class RecipeDraftPort {
         const status = String(entry?.status ?? '');
         return status === 'DEFICIENT' || status === 'EXCESS';
       })
-      .slice(0, 12)
+      .slice(0, MAX_AGENT_ASSESSMENT_GAPS)
       .map((entry: any) => {
         const value = toNumber(entry.currentValue ?? entry.value);
         const min = toNumber(entry.minValue ?? entry.min);
@@ -742,7 +751,7 @@ export class RecipeDraftPort {
           !isAllMissing(entry)
         );
       })
-      .slice(0, 12)
+      .slice(0, MAX_AGENT_ASSESSMENT_GAPS)
       .map((entry) => {
         const value = toNumber(entry.currentValue ?? entry.value);
         const min = toNumber(entry.minValue ?? entry.min);
@@ -956,7 +965,7 @@ function readStoredAssessment(draft: any): {
       const status = String((entry as any)?.status ?? '');
       return status === 'DEFICIENT' || status === 'EXCESS';
     })
-    .slice(0, 12)
+    .slice(0, MAX_AGENT_ASSESSMENT_GAPS)
     .map((entry: any) => ({
       key: String(entry?.nutrientKey ?? entry?.key ?? ''),
       label: String(entry?.label ?? entry?.name ?? ''),

@@ -70,6 +70,29 @@ describe('findToolMessageOrderViolation', () => {
     );
   });
 
+  it('flags a system nudge inserted before the tool result', () => {
+    const messages: DeepSeekToolsMessage[] = [
+      assistantWithCalls(['a']),
+      { role: 'system', content: '请修正选材清单' },
+      toolMessage('a'),
+    ];
+
+    expect(findToolMessageOrderViolation(messages)).toContain(
+      'assistant tool_calls 之后出现了 system 消息',
+    );
+  });
+
+  it('accepts a system nudge after all tool results', () => {
+    const messages: DeepSeekToolsMessage[] = [
+      assistantWithCalls(['a', 'b']),
+      toolMessage('a'),
+      toolMessage('b'),
+      { role: 'system', content: '请修正选材清单' },
+    ];
+
+    expect(findToolMessageOrderViolation(messages)).toBeNull();
+  });
+
   it('returns null for ordinary conversations', () => {
     const messages: DeepSeekToolsMessage[] = [
       { role: 'system', content: 'system' },

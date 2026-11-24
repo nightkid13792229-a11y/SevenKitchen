@@ -1162,6 +1162,29 @@ export class RecipeAgentService implements OnModuleInit {
 
         await this.recordTool(sessionId, call, outcome);
 
+        /**
+         * 先把 tool 结果回填进本轮消息，再处理分支。
+         *
+         * 2026-11-24 线上事故：propose_selection 成功但清单里有 MISSING 时，
+         * 下面会 `continue` 去修正清单；原先 tool 结果是在分支之后才 push，
+         * 于是一条 assistant(tool_calls) 后面直接跟了 repair 的 system 提示，
+         * 下一轮请求被判「仍有 1 个 tool 结果未回填」。
+         *
+         * 现在无论分支是继续、返回还是 continue，结果都已经回填；
+         * 返回的分支不会再调模型，多一条 tool 消息没有副作用。
+         */
+        messages.push({
+          role: 'tool',
+          tool_call_id: call.id,
+          content: JSON.stringify(outcome),
+        });
+        if (images.length > 0) {
+          turnImages.push(...images);
+        }
+        if (contextImages.length > 0) {
+          turnContextImages.push(...contextImages);
+        }
+
         // 设计完成：显式收口，前端显示“已完成”和上线检查结果。
         if (call.function.name === 'finish' && outcome.ok) {
           const finishData = outcome.data as {
@@ -1353,19 +1376,6 @@ export class RecipeAgentService implements OnModuleInit {
             lastGapSignature = null;
             sameGapCount = 0;
           }
-        }
-
-        messages.push({
-          role: 'tool',
-          tool_call_id: call.id,
-          content: JSON.stringify(outcome),
-        });
-
-        if (images.length > 0) {
-          turnImages.push(...images);
-        }
-        if (contextImages.length > 0) {
-          turnContextImages.push(...contextImages);
         }
 
         if (pendingAsk) {

@@ -8508,6 +8508,15 @@ export class RecipeDesignerService {
     const productionStepsData = this.buildProductionStepsSnapshotData(
       draft.productionStepsJson,
     );
+    /**
+     * 2026-11-19 起 `Recipe.targetHealthTags` JSON 列已移除，健康标签改由
+     * `recipe_health_tag_assignment` 关联表承载。这里之前仍在传旧字段，
+     * Prisma 会直接拒绝整笔 create（"Unknown argument targetHealthTags"），
+     * 表现为「加入本单待提交」弹出一大段 Prisma invocation 报错。
+     */
+    const healthTagAssignments = this.buildPublishedHealthTagAssignments(
+      draft.targetHealthTags,
+    );
     const baseData = {
       name: this.resolvePrivateRecipeSnapshotDisplayName(
         draft,
@@ -8518,7 +8527,6 @@ export class RecipeDesignerService {
       productionLossRate: await this.resolveProductionLossRate(),
       batchLaborHours: PUBLISHED_RECIPE_BATCH_LABOR_HOURS,
       applicableLifeStages: this.resolvePublishedLifeStages(draft),
-      targetHealthTags: draft.targetHealthTags,
       /**
        * 私密定制食谱也要带完整 `report`。
        * 此前只写 legacy nutrients，导致小程序营养报告页只读
@@ -8560,6 +8568,12 @@ export class RecipeDesignerService {
           where: { id: existing.id },
           data: {
             ...baseData,
+            healthTagAssignments: {
+              deleteMany: {},
+              ...(healthTagAssignments
+                ? { create: healthTagAssignments.create }
+                : {}),
+            },
             items: {
               deleteMany: {},
               create: itemCreates,
@@ -8571,6 +8585,7 @@ export class RecipeDesignerService {
             recipeId: draft.id,
             version: 1,
             ...baseData,
+            ...(healthTagAssignments ? { healthTagAssignments } : {}),
           },
         });
   }

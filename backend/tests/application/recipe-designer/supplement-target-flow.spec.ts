@@ -840,6 +840,67 @@ describe('补剂显式目标设计器流程（Task 3）', () => {
       );
     });
 
+    it('writes health tags through the relation instead of the removed JSON column', async () => {
+      const draft = designDraft({ items: [foodItem()] });
+      prisma.recipe.create.mockResolvedValue({
+        id: 'private-row-2',
+        recipeId: 'private-recipe-2',
+        version: 1,
+      });
+
+      await (service as any).createOrUpdatePrivateRecipeSnapshot(draft, {
+        customerOwnerId: 'customer-1',
+        customOrderId: null,
+      });
+
+      const createData = prisma.recipe.create.mock.calls[0][0].data;
+      // 2026-11-24 回归：Recipe 表已没有 targetHealthTags 列，传了会整笔 create 失败
+      expect(createData).not.toHaveProperty('targetHealthTags');
+      expect(createData.healthTagAssignments).toEqual({
+        create: [{ healthTagId: 'JOINT' }],
+      });
+    });
+
+    it('replaces health tag assignments when refreshing an existing snapshot', async () => {
+      const draft = designDraft({ items: [foodItem()] });
+      prisma.recipe.findFirst.mockResolvedValue({
+        id: 'recipe-row-1',
+        recipeId: 'private-recipe-1',
+        version: 1,
+      });
+      prisma.recipe.update.mockResolvedValue({});
+
+      await (service as any).createOrUpdatePrivateRecipeSnapshot(draft, {
+        customerOwnerId: 'customer-1',
+        customOrderId: null,
+      });
+
+      const updateData = prisma.recipe.update.mock.calls[0][0].data;
+      expect(updateData).not.toHaveProperty('targetHealthTags');
+      expect(updateData.healthTagAssignments).toEqual({
+        deleteMany: {},
+        create: [{ healthTagId: 'JOINT' }],
+      });
+    });
+
+    it('clears stale assignments when the draft has no health tags', async () => {
+      const draft = designDraft({ items: [foodItem()], targetHealthTags: [] });
+      prisma.recipe.findFirst.mockResolvedValue({
+        id: 'recipe-row-1',
+        recipeId: 'private-recipe-1',
+        version: 1,
+      });
+      prisma.recipe.update.mockResolvedValue({});
+
+      await (service as any).createOrUpdatePrivateRecipeSnapshot(draft, {
+        customerOwnerId: 'customer-1',
+        customOrderId: null,
+      });
+
+      const updateData = prisma.recipe.update.mock.calls[0][0].data;
+      expect(updateData.healthTagAssignments).toEqual({ deleteMany: {} });
+    });
+
     it('hard-blocks private snapshots when a supplement has no target', async () => {
       const draft = designDraft({
         items: [foodItem(), fiberSupplementItem()],

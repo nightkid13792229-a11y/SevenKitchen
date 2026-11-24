@@ -2,6 +2,7 @@ import {
   PHASE_TOOL_BUDGET,
   forceProposeToolFor,
   phaseSystemLine,
+  toolsForForcedCall,
   toolsForPhase,
 } from '../../../src/application/recipe-designer/agent/phase-policy';
 
@@ -58,6 +59,18 @@ describe('recipe agent phase policy', () => {
     expect(tools).toContain('reopen_selection');
     expect(tools).not.toContain('propose_plan');
     expect(tools).not.toContain('propose_selection');
+  });
+
+  it('强制评估时把工具表收窄到只剩 assess', () => {
+    const tools = toolsForPhase('DESIGN', 'ORDER');
+    expect(tools.map((tool) => tool.function.name)).toContain('edit_recipe');
+
+    const forced = toolsForForcedCall(tools, 'assess');
+
+    expect(forced.map((tool) => tool.function.name)).toEqual(['assess']);
+    // 其它强制工具不动，仍保留完整工具表
+    expect(toolsForForcedCall(tools, 'ask')).toBe(tools);
+    expect(toolsForForcedCall(tools, null)).toBe(tools);
   });
 
   it('ORDER hides the product-line taxonomy tool in every phase', () => {

@@ -48,6 +48,23 @@ const SELECT_TOOLS = new Set([
   'revise_plan',
 ]);
 
+/**
+ * 强制某个工具时收窄工具表。
+ *
+ * 2026-11-24 线上事故：连续改 20 次后强制 assess，模型在长上下文里
+ * 两次无视 tool_choice，继续调 edit_recipe 微调同一克数；系统只能报
+ * “模型未调用 assess”。这里在强制评估时把写工具从工具表里拿掉，
+ * 模型没有别的可调，只能评估。
+ */
+export function toolsForForcedCall(
+  tools: DeepSeekToolDefinition[],
+  forcedTool: string | null,
+): DeepSeekToolDefinition[] {
+  if (forcedTool !== 'assess') return tools;
+  const only = tools.filter((tool) => tool.function.name === 'assess');
+  return only.length > 0 ? only : tools;
+}
+
 export function toolsForPhase(
   phase: AgentPhase,
   flow: 'ORDER' | 'CATALOG',

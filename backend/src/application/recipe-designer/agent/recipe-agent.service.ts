@@ -41,6 +41,7 @@ import {
   PHASE_TOOL_BUDGET,
   forceProposeToolFor,
   phaseSystemLine,
+  toolsForForcedCall,
   toolsForPhase,
   type AgentPhase,
 } from './phase-policy';
@@ -926,7 +927,7 @@ export class RecipeAgentService implements OnModuleInit {
             ? Math.max(config.requestTimeoutMs, 300_000)
             : config.requestTimeoutMs,
           messages,
-          tools,
+          tools: toolsForForcedCall(tools, forcedTool),
           thinking: thinkingEnabled ? 'enabled' : 'disabled',
           toolChoice: forcedTool
             ? { type: 'function', function: { name: forcedTool } }
@@ -994,6 +995,39 @@ export class RecipeAgentService implements OnModuleInit {
                 sessionId,
                 'ASSISTANT',
                 '连续检索没有结果，我先停在这里。请换一个关键词、指定文档，或告诉我下一步。',
+              );
+              await this.markWaiting(sessionId);
+              return;
+            } else if (forcedTool === 'assess') {
+              /**
+               * 模型两次都没执行强制评估：不要弹一条“模型未调用 assess”的
+               * 红字把用户挡在外面。服务端替它跑一次，把缺口说清楚，
+               * 然后交回用户决定下一步。
+               */
+              let assessmentText = '';
+              try {
+                const summary = await port.assess();
+                if (summary.isCompliant) {
+                  assessmentText = '当前配方评估已达标。';
+                } else {
+                  const gaps = summary.gaps
+                    .slice(0, 5)
+                    .map((gap) => {
+                      const unit = gap.unit ? ` ${gap.unit}` : '';
+                      const actual =
+                        gap.value == null ? '未知' : `${gap.value}${unit}`;
+                      return `${gap.label} ${actual}（目标 ${gap.min ?? '?'}–${gap.max ?? '?'}${unit}）`;
+                    })
+                    .join('；');
+                  assessmentText = `当前未达标，主要缺口：${gaps || '见评估面板'}。`;
+                }
+              } catch (error) {
+                assessmentText = `自动评估失败：${(error as Error)?.message ?? String(error)}。请手动重跑一次评估。`;
+              }
+              await this.appendMessage(
+                sessionId,
+                'ASSISTANT',
+                `连续修改 ${MAX_EDITS_BETWEEN_ASSESS} 次还没有评估，我先停在这里，并替你跑了一次评估：${assessmentText}请确认后回复“继续”，或直接告诉我下一处要改什么。`,
               );
               await this.markWaiting(sessionId);
               return;

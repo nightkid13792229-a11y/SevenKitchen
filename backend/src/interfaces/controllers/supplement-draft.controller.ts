@@ -3,7 +3,6 @@ import {
   Controller,
   Delete,
   Get,
-  NotFoundException,
   Param,
   Patch,
   Post,
@@ -28,18 +27,14 @@ import {
 } from '../dto/ingredient-creation/supplement-draft.dto';
 import { AdminGuard } from '../guards/role.guard';
 
-/** 开关关闭时统一 404，不暴露「功能存在但被关掉」。 */
-const FLOW_DISABLED_MESSAGE = '补剂草稿流程未开启';
-
 /**
  * 补剂草稿式建档 · 后台接口（spec §11）。
  *
- * 编排层只做三件事：开关检查、把当前用户传给服务、把结果包成统一响应。
+ * 编排层只做两件事：把当前用户传给服务、把结果包成统一响应。
  * 草稿私有性由 `SupplementDraftService` 的 `createdBy` 过滤保证；
  * 最终写入 / 校验 / 核验全部在服务层，控制器不碰 Prisma、不重算营养。
  *
- * `SUPPLEMENT_DRAFT_FLOW` 必须显式设为 `true` 才启用；未设置或 `false` 时
- * 所有路由 404（默认关，回滚到旧流程只需去掉这个变量）。
+ * 2026-11-24 起不再有开关：旧的两段式页面已删除，草稿式是补剂建档的唯一路径。
  */
 @ApiTags('Admin Supplement Draft')
 @ApiBearerAuth()
@@ -55,19 +50,11 @@ export class SupplementDraftController {
     private readonly verificationService: SupplementVerificationService,
   ) {}
 
-  private assertFlowEnabled(): void {
-    // spec §13：默认关，只有显式 true 才启用新流程。
-    if (process.env.SUPPLEMENT_DRAFT_FLOW !== 'true') {
-      throw new NotFoundException(FLOW_DISABLED_MESSAGE);
-    }
-  }
-
   // ---------- 草稿 CRUD ----------
 
   @Get()
   @ApiOperation({ summary: '我的补剂草稿列表（DRAFT，最近编辑在前）' })
   async list(@CurrentUser() user: RequestUser) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(await this.draftService.list(user.userId));
   }
 
@@ -77,7 +64,6 @@ export class SupplementDraftController {
     @CurrentUser() user: RequestUser,
     @Body() dto: CreateSupplementDraftDto,
   ) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.draftService.create(user.userId, dto),
     );
@@ -91,7 +77,6 @@ export class SupplementDraftController {
     @CurrentUser() user: RequestUser,
     @Param('id') id: string,
   ) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.verificationService.getVerification(user.userId, id),
     );
@@ -104,14 +89,12 @@ export class SupplementDraftController {
     @Param('id') id: string,
     @Body() dto: AiFillSupplementDraftDto,
   ) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(await this.aiService.fill(user, id, dto));
   }
 
   @Post(':id/validate')
   @ApiOperation({ summary: '最终校验预览（阻断项 / 提醒项）' })
   async validate(@CurrentUser() user: RequestUser, @Param('id') id: string) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.reviewService.validate(user.userId, id),
     );
@@ -124,7 +107,6 @@ export class SupplementDraftController {
     @Param('id') id: string,
     @Body() dto: FinalizeSupplementDraftDto,
   ) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.finalizeService.finalize(
         { id: user.userId, name: user.userId },
@@ -137,7 +119,6 @@ export class SupplementDraftController {
   @Post(':id/reverify')
   @ApiOperation({ summary: '只重跑功能核验（不写数据）' })
   async reverify(@CurrentUser() user: RequestUser, @Param('id') id: string) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.verificationService.reverify(user.userId, id),
     );
@@ -149,7 +130,6 @@ export class SupplementDraftController {
     @CurrentUser() user: RequestUser,
     @Param('id') id: string,
   ) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.reviewService.recommendGroups(user.userId, id),
     );
@@ -160,7 +140,6 @@ export class SupplementDraftController {
   @Get(':id')
   @ApiOperation({ summary: '读草稿（只能读自己的）' })
   async get(@CurrentUser() user: RequestUser, @Param('id') id: string) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(await this.draftService.get(id, user.userId));
   }
 
@@ -171,7 +150,6 @@ export class SupplementDraftController {
     @Param('id') id: string,
     @Body() dto: UpdateSupplementDraftDto,
   ) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.draftService.update(id, user.userId, dto),
     );
@@ -180,7 +158,6 @@ export class SupplementDraftController {
   @Delete(':id')
   @ApiOperation({ summary: '放弃草稿（软删除）' })
   async discard(@CurrentUser() user: RequestUser, @Param('id') id: string) {
-    this.assertFlowEnabled();
     return ApiResponseDto.success(
       await this.draftService.discard(id, user.userId),
     );

@@ -9,13 +9,9 @@
             跑完一轮后右侧出现「原料档案 / 营养档案」，你核对、改完，
             两页各跑一次核验，才能授权写入正式库。
           </template>
-          <template v-else-if="supplementDraftFlowEnabled">
-            先在 DSH 里跑「补剂选品」Skill 定形态、比价、挑好商品，再回到这里建档：
-            AI 起草 → 草稿 → 最后确认写入，写入后逐项核验。
-          </template>
           <template v-else>
             先在 DSH 里跑「补剂选品」Skill 定形态、比价、挑好商品，再回到这里建档：
-            传正面图和标签图（或手填）、把选品依据贴进来，写完后点「确认可用」才会进配方。
+            AI 起草 → 草稿 → 最后确认写入，写入后逐项核验。
           </template>
         </p>
       </div>
@@ -39,7 +35,7 @@
         !state.draftId &&
         draftOptions.length > 0 &&
         !draftLoading &&
-        !(supplementDraftFlowEnabled && line === 'SUPPLEMENT')
+        line !== 'SUPPLEMENT'
       "
       class="draft-resume-card"
       shadow="never"
@@ -99,17 +95,9 @@
       </el-card>
     </div>
 
-    <!--
-      补剂线：开关打开时走新草稿流程（AI 起草 → 草稿 → 最后确认写入 → 逐项核验）；
-      默认关，旧的两段式流程（建档 → 上架）保留可回滚。
-    -->
+    <!-- 补剂线只有草稿式这一段：AI 起草 → 草稿 → 最后确认写入 → 逐项核验。 -->
     <div v-else-if="line === 'SUPPLEMENT'" class="supplement-pane">
-      <template v-if="supplementDraftFlowEnabled">
-        <SupplementDraftFlow />
-      </template>
-      <template v-else>
-        <SupplementFlow />
-      </template>
+      <SupplementDraftFlow />
     </div>
 
     <div v-else class="ai-agent-layout">
@@ -1407,9 +1395,7 @@ import {
   type IngredientLine,
   type LineEntryState
 } from './lineEntry'
-import SupplementFlow from './supplement/steps/SupplementFlow.vue'
 import SupplementDraftFlow from './supplement/draft/SupplementDraftFlow.vue'
-import { isSupplementDraftFlowEnabled } from './supplement/draft/featureFlag'
 import type {
   AuthorizeBlockedReason,
   AuthorizeResult,
@@ -1664,13 +1650,6 @@ const entryState = reactive<LineEntryState>(
 
 const lineDecision = computed(() => resolveLineEntry(toLineEntryInput(entryState)))
 const line = computed(() => lineDecision.value.line)
-/**
- * 补剂线走新草稿流程还是旧的两段式流程。
- *
- * 构建时开关，默认关；关闭时旧 SupplementFlow 仍然可达，便于回滚。
- * 打开后不读旧的 `supplement-flow-v4` 会话快照，也不做迁移。
- */
-const supplementDraftFlowEnabled = isSupplementDraftFlowEnabled()
 /** 还没建草稿、也没在跑，才允许改主意。 */
 const canSwitchLine = computed(
   () => entryState.locked === null && !state.running && !state.draftId

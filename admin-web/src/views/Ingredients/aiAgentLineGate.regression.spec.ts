@@ -23,9 +23,12 @@ describe('AI 添加原料 · 线路闸门', () => {
     expect(page).toContain('这次添加的是哪一类原料')
   })
 
-  it('选补剂落到三步工作台，而不是偷偷按食材跑', () => {
-    // 2026-11-20 起只有一版：三步流程；旧的三栏页已下线
-    expect(page).toContain('<SupplementFlow />')
+  it('选补剂只落到草稿式流程，而不是偷偷按食材跑', () => {
+    // 2026-11-24 起旧的两段式页（建档 → 上架）已删除，构建开关一并拆掉；
+    // 补剂线只剩草稿式这一条：AI 起草 → 草稿 → 最后确认写入 → 逐项核验。
+    expect(page).toContain('<SupplementDraftFlow />')
+    expect(page).not.toContain('<SupplementFlow />')
+    expect(page).not.toContain('supplementDraftFlowEnabled')
     expect(page).not.toContain('SupplementWorkbench')
     expect(page).not.toContain('补剂线还没开放')
     // 入口卡上也不能再挂着「暂未开放」——否则没人会点进来

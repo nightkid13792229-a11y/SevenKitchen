@@ -788,9 +788,12 @@ interface SupplementWriteVerification {
 - 新增 `supplement_creation_draft` 表和枚举。
 - **必须改 `supplement_label_evidence.serving_units_per_dose` 的类型**：当前 schema 是 `Int`，而粉/液体每份是 0.9 g / 2.5 ml。写入 `0.9` 时 Prisma 会拒绝或截断，导致粉/液体建档在证据那一步失败。改成 `Float` 或 `Decimal(10,4)`，配 migration 和测试；旧的整数数据不受影响。
 - 同一条迁移要覆盖旧 `POST /supplements` 路径：它现在也把 0.9 写进这个 Int 列；不修的话，旧接口对粉/液体同样是坏的。
-- 旧 Web 页面（两段式）保留一个版本，用开关控制：
-  - 后端 env `SUPPLEMENT_DRAFT_FLOW=true`、admin-web 构建变量 `VITE_SUPPLEMENT_DRAFT_FLOW=true` 时新页面走草稿；
-  - 两边同值，默认关；验证通过后再开；关闭时回旧流程。
+- ~~旧 Web 页面（两段式）保留一个版本，用开关控制~~（**2026-11-24 已按此条收尾**）：
+  - 原先是「后端 env `SUPPLEMENT_DRAFT_FLOW` + admin-web 构建变量 `VITE_SUPPLEMENT_DRAFT_FLOW`，两边同值、默认关」；
+  - 2026-11-24 起旧两段式页面（建档 → 上架）与两个开关**一并删除**，补剂建档只剩草稿式这一条路径；
+  - 回滚方式改为 `git revert` 后重新发布，不再有运行时开关。
+  - 踩过的坑：开关只在后端打开、打包时没传前端变量时，前端整段新页面会被构建期剔掉，
+    线上看着就是「退回旧页面」；拆开关是为了不再有这种两边不同值。
 - 旧的 `sessionStorage` 快照 `supplement-flow-v4` 不再使用；上线时清掉即可（不影响正式数据）。
 - 旧的 `POST /supplements` 保留，供旧客户端/回滚；新流程只调 `finalize`。
 - 已有补剂原料不迁移；仍用现有上架清单/原料库。

@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  NotFoundException,
   RequestMethod,
   ValidationPipe,
 } from '@nestjs/common';
@@ -32,9 +31,6 @@ const user: RequestUser = {
   customerId: 'admin-1',
   role: 'ADMIN',
 };
-
-/** 原始开关值：用例会临时改写 env，结束后必须还原。 */
-const originalFlowFlag = process.env.SUPPLEMENT_DRAFT_FLOW;
 
 function createMocks() {
   return {
@@ -68,16 +64,6 @@ describe('SupplementDraftController', () => {
       mocks.finalizeService as unknown as SupplementFinalizeService,
       mocks.verificationService as unknown as SupplementVerificationService,
     );
-    // 普通用例先显式打开（默认关，只有 true 才启用）
-    process.env.SUPPLEMENT_DRAFT_FLOW = 'true';
-  });
-
-  afterEach(() => {
-    if (originalFlowFlag === undefined) {
-      delete process.env.SUPPLEMENT_DRAFT_FLOW;
-    } else {
-      process.env.SUPPLEMENT_DRAFT_FLOW = originalFlowFlag;
-    }
   });
 
   /* ---------------------------------------------------------------- */
@@ -293,37 +279,26 @@ describe('SupplementDraftController', () => {
   });
 
   /* ---------------------------------------------------------------- */
-  /* 开关                                                              */
+  /* 不再有开关                                                        */
   /* ---------------------------------------------------------------- */
 
-  it('SUPPLEMENT_DRAFT_FLOW 未设置或 false 时所有路由 404，且不调用服务', async () => {
-    // ① 未设置（默认关）
+  it('草稿接口不看环境变量：SUPPLEMENT_DRAFT_FLOW 没设也照常工作', async () => {
+    // 2026-11-24 拆掉了旧的 404 门禁：旧页面已删除，草稿式是唯一路径。
+    // 这条用例守住「不要又把功能藏到某个默认关的开关后面」。
+    const saved = process.env.SUPPLEMENT_DRAFT_FLOW;
     delete process.env.SUPPLEMENT_DRAFT_FLOW;
 
-    await expect(controller.list(user)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    await expect(controller.list(user)).rejects.toThrow('补剂草稿流程未开启');
-    await expect(controller.finalize(user, 'draft-1', {})).rejects.toThrow(
-      '补剂草稿流程未开启',
-    );
-    await expect(controller.getVerification(user, 'draft-1')).rejects.toThrow(
-      NotFoundException,
-    );
+    try {
+      await controller.list(user);
 
-    // ② 显式 false
-    process.env.SUPPLEMENT_DRAFT_FLOW = 'false';
-
-    await expect(controller.list(user)).rejects.toBeInstanceOf(
-      NotFoundException,
-    );
-    await expect(controller.finalize(user, 'draft-1', {})).rejects.toThrow(
-      '补剂草稿流程未开启',
-    );
-
-    expect(mocks.draftService.list).not.toHaveBeenCalled();
-    expect(mocks.finalizeService.finalize).not.toHaveBeenCalled();
-    expect(mocks.verificationService.getVerification).not.toHaveBeenCalled();
+      expect(mocks.draftService.list).toHaveBeenCalledWith('admin-1');
+    } finally {
+      if (saved === undefined) {
+        delete process.env.SUPPLEMENT_DRAFT_FLOW;
+      } else {
+        process.env.SUPPLEMENT_DRAFT_FLOW = saved;
+      }
+    }
   });
 
   /* ---------------------------------------------------------------- */

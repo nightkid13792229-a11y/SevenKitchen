@@ -7,6 +7,7 @@
  */
 import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
+import type { AgentNutritionProfileRead } from '../recipe-designer.service';
 import { AgentToolError, type RecipeEditOp } from './agent-types';
 import type {
   AssessmentTargetOverride,
@@ -158,6 +159,13 @@ export interface AssessmentGap {
     missing?: boolean;
     missingAsZero?: boolean;
   }>;
+}
+
+/** 试算批次信息：让模型知道这次算的是多大批次。 */
+export interface AssessmentBatch {
+  itemCount: number;
+  totalWeightG: number;
+  energyKcal: number | null;
 }
 
 export interface AssessmentSummary {
@@ -634,48 +642,11 @@ export class RecipeDraftPort {
       this.access,
       resolution.overrides,
     );
-    const raw = result?.assessment ?? null;
-    const groups = Array.isArray(raw?.groupedEntries) ? raw.groupedEntries : [];
-    const gaps = groups
-      .filter((entry: any) => {
-        const status = String(entry?.status ?? '');
-        return status === 'DEFICIENT' || status === 'EXCESS';
-      })
-      .slice(0, MAX_AGENT_ASSESSMENT_GAPS)
-      .map((entry: any) => {
-        const value = toNumber(entry.currentValue ?? entry.value);
-        const min = toNumber(entry.minValue ?? entry.min);
-        const max = toNumber(entry.maxValue ?? entry.max);
-        const status = String(entry.status ?? '');
-        return {
-          key: String(entry.nutrientKey ?? entry.key ?? ''),
-          label: String(entry.label ?? entry.name ?? ''),
-          status,
-          value,
-          min,
-          max,
-          unit: String(entry.unit ?? ''),
-          deficit:
-            status === 'DEFICIENT' && min !== null && value !== null
-              ? Math.max(0, min - value)
-              : status === 'EXCESS' && max !== null && value !== null
-                ? Math.max(0, value - max)
-                : null,
-        };
-      });
-    return {
-      assessment: raw?.summary
-        ? {
-            isCompliant:
-              raw.isCompliant === true ||
-              String(raw.overallStatus ?? '').toUpperCase() === 'COMPLIANT',
-            counts: raw.summary,
-            gaps,
-          }
-        : null,
-      overrides: resolution.overrides,
-      unsupported: resolution.unsupported,
-    };
+    return this.projectPlanAssessment(
+      result?.assessment ?? null,
+      resolution.overrides,
+      resolution.unsupported,
+    );
   }
 
   /** 跑评估，只回缺口和一个总数；不回全量明细。 */
@@ -690,6 +661,82 @@ export class RecipeDraftPort {
       this.access,
       targetOverrides,
     );
+    return this.toAssessmentSummary(result);
+  }
+
+  /**
+   * 试算：用候选原料 + 克数跑一遍评估，**不写草稿**。
+   * 与 assess 的区别只有两点：原料来自参数而不是草稿；不落评估结果。
+   */
+  async previewAssessment(
+    items: Array<{ nutritionFoodId: string; weightG: number }>,
+  ): Promise<AssessmentSummary & { batch: AssessmentBatch }> {
+    const result: any = await this.designer.assessNutritionItemsForAgent(
+      this.draftId,
+      this.access,
+      items,
+    );
+    const summary = this.toAssessmentSummary({
+      assessment: result?.assessment,
+      contentRevision: result?.contentRevision,
+      allergenWarnings: [],
+    });
+    return {
+      ...summary,
+      batch: {
+        itemCount: items.length,
+        totalWeightG: Number(result?.totalWeightG ?? 0),
+        energyKcal: summary.totalEnergyKcal,
+      },
+    };
+  }
+
+  /** 方案专属试算：用方案覆盖后的目标再跑一遍，不写回草稿。 */
+  async previewPlanAssessment(
+    items: Array<{ nutritionFoodId: string; weightG: number }>,
+    plan: AgentNutritionPlan,
+  ): Promise<{
+    assessment: any | null;
+    overrides: AssessmentTargetOverride[];
+    unsupported: Array<{ key: string; reason: string }>;
+  }> {
+    const targets = await this.getAssessmentTargets();
+    const resolution = buildPlanTargetOverrides(plan, targets);
+    if (resolution.overrides.length === 0) {
+      return {
+        assessment: null,
+        overrides: [],
+        unsupported: resolution.unsupported,
+      };
+    }
+    const result: any = await this.designer.assessNutritionItemsForAgent(
+      this.draftId,
+      this.access,
+      items,
+      resolution.overrides,
+    );
+    return this.projectPlanAssessment(
+      result?.assessment ?? null,
+      resolution.overrides,
+      resolution.unsupported,
+    );
+  }
+
+  /** 读原料营养档案（只读，已验证）；支持按档案 id 或原料 id。 */
+  async readNutritionProfiles(input: {
+    nutritionFoodIds?: string[];
+    ingredientId?: string;
+    fields?: string[];
+  }): Promise<AgentNutritionProfileRead[]> {
+    return this.designer.readNutritionProfilesForAgent(
+      this.draftId,
+      this.access,
+      input,
+    );
+  }
+
+  /** 把评估引擎结果投影成模型看得懂的摘要；assess 与试算共用。 */
+  private toAssessmentSummary(result: any): AssessmentSummary {
     const assessment = result?.assessment ?? {};
     const summary = assessment.summary ?? {};
     const groups: any[] = Array.isArray(assessment.groupedEntries)
@@ -850,6 +897,59 @@ export class RecipeDraftPort {
       missingData,
       allergens,
       warnings,
+    };
+  }
+
+  /** 方案专属评估的投影（只留缺口，不重复通用计数）。 */
+  private projectPlanAssessment(
+    raw: any,
+    overrides: AssessmentTargetOverride[],
+    unsupported: Array<{ key: string; reason: string }>,
+  ): {
+    assessment: any | null;
+    overrides: AssessmentTargetOverride[];
+    unsupported: Array<{ key: string; reason: string }>;
+  } {
+    const groups = Array.isArray(raw?.groupedEntries) ? raw.groupedEntries : [];
+    const gaps = groups
+      .filter((entry: any) => {
+        const status = String(entry?.status ?? '');
+        return status === 'DEFICIENT' || status === 'EXCESS';
+      })
+      .slice(0, MAX_AGENT_ASSESSMENT_GAPS)
+      .map((entry: any) => {
+        const value = toNumber(entry.currentValue ?? entry.value);
+        const min = toNumber(entry.minValue ?? entry.min);
+        const max = toNumber(entry.maxValue ?? entry.max);
+        const status = String(entry.status ?? '');
+        return {
+          key: String(entry.nutrientKey ?? entry.key ?? ''),
+          label: String(entry.label ?? entry.name ?? ''),
+          status,
+          value,
+          min,
+          max,
+          unit: String(entry.unit ?? ''),
+          deficit:
+            status === 'DEFICIENT' && min !== null && value !== null
+              ? Math.max(0, min - value)
+              : status === 'EXCESS' && max !== null && value !== null
+                ? Math.max(0, value - max)
+                : null,
+        };
+      });
+    return {
+      assessment: raw?.summary
+        ? {
+            isCompliant:
+              raw.isCompliant === true ||
+              String(raw.overallStatus ?? '').toUpperCase() === 'COMPLIANT',
+            counts: raw.summary,
+            gaps,
+          }
+        : null,
+      overrides,
+      unsupported,
     };
   }
 

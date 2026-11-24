@@ -3,12 +3,13 @@ import { AGENT_TOOLS } from './tools';
 import { CFCT_CLASS_PROMPT } from '../../../domain/recipe-designer/cfct-classes';
 
 /**
- * 三阶段的工具白名单（2026-11-20）。
+ * 三阶段的工具白名单（2026-11-20；2026-11-24 加营养档案与试算）。
  *
  * 硬闸不靠提示词：阶段不对，写工具根本不出现在模型面前。
  *   PLAN   → 只读 + ask + propose_plan
- *   SELECT → 只读（不含 find_food）+ ask + propose_selection
- *            选食材先按营养/忌口，库里有没有由后端提交后匹配，避免被库存牵着走。
+ *   SELECT → 只读（不含 find_food）+ ask + propose_selection + 营养档案/试算
+ *            选食材先按营养/忌口，库里有没有由后端提交后匹配，避免被库存牵着走；
+ *            试算只用于“这套搭配够不够”，不改草稿。
  *   DESIGN → 全部
  */
 export type AgentPhase = 'PLAN' | 'SELECT' | 'DESIGN';
@@ -17,6 +18,7 @@ const READ_TOOLS = new Set([
   'read_design_context',
   'read_draft',
   'read_taxonomy',
+  'read_nutrition_profile',
   'ask',
   'kb_catalog',
   'kb_find',
@@ -38,6 +40,8 @@ const SELECT_TOOLS = new Set([
   'read_design_context',
   'ask',
   'match_food_name',
+  'read_nutrition_profile',
+  'preview_assessment',
   'propose_selection',
   'revise_plan',
 ]);

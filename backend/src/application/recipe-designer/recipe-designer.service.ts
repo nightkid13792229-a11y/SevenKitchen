@@ -28,6 +28,7 @@ import {
 } from '@prisma/client';
 import { nutritionDataToNutritionProfile } from '../nutrition-standard/nutrient-value-resolver';
 import {
+  NUTRITION_FIELD_CATALOG,
   findAnyNutritionField,
   findNutritionField,
   getNutritionProfileFieldValue,
@@ -208,6 +209,35 @@ export interface DesignDraftNamingFacts {
   fatPercentDm: number | null;
   proteinPercentDm: number | null;
   lifeStageLabels: string[];
+}
+
+/** Agent 读一份原料营养档案时的投影（只含已验证档案）。 */
+export interface AgentNutritionProfileRead {
+  nutritionFoodId: string;
+  ingredientId: string | null;
+  name: string;
+  preparationState: string | null;
+  preparationStateLabel: string | null;
+  category: string;
+  dataSource: string;
+  status: string;
+  verifiedAt: string | null;
+  /** 档案原始基准，如 PER_100_G / PER_SERVING。 */
+  basis: string;
+  basisLabel: string;
+  /** 能否按每 100 克换算（体积/份装档案缺密度或份重时为 false）。 */
+  per100gAvailable: boolean;
+  nutrients: Array<{
+    fieldPath: string;
+    label: string;
+    unit: string;
+    valuePer100g: number;
+  }>;
+  missingCount: number;
+  missingFields: string[];
+  missingLabels: string[];
+  note?: string;
+  defaultSupplementTargets?: Prisma.JsonValue | null;
 }
 
 /** 「最近吃过的食材」时间窗口（天）允许范围 */
@@ -7835,6 +7865,283 @@ export class RecipeDesignerService {
   }
 
   /**
+   * Agent 读原料营养档案：按每 100 克口径返回一组字段，带单位与生/熟状态。
+   *
+   * 只回**已验证**的档案；未验证/不存在都直接报错，避免模型拿半份数据算。
+   * 支持按 `nutritionFoodId` 精确取 1–3 份，或按 `ingredientId` 取该原料的全部档案
+   * （生/熟/油等），方便 Agent 在“同一原料不同状态”之间比较。
+   */
+  async readNutritionProfilesForAgent(
+    id: string,
+    access: RecipeDesignerAccessInput,
+    input: {
+      nutritionFoodIds?: string[];
+      ingredientId?: string;
+      fields?: string[];
+    },
+  ): Promise<AgentNutritionProfileRead[]> {
+    // 仍然先过草稿权限，避免这个只读入口被拿来跨单取数。
+    await this.getDraft(id, access);
+
+    const requestedFields = Array.from(
+      new Set(
+        (Array.isArray(input.fields) ? input.fields : [])
+          .map((field) => String(field ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const catalog = requestedFields.length
+      ? NUTRITION_FIELD_CATALOG.filter((field) =>
+          requestedFields.some(
+            (query) =>
+              query === field.fieldPath ||
+              query === field.fieldKey ||
+              query === field.label,
+          ),
+        )
+      : NUTRITION_FIELD_CATALOG;
+    if (catalog.length === 0) {
+      throw new BadRequestException(
+        `没有匹配的营养字段：${requestedFields.join('、')}；可传 fieldPath（如 minerals.zinc）、fieldKey（zinc）或中文名（锌）`,
+      );
+    }
+
+    const nutritionFoodIds = Array.from(
+      new Set(
+        (Array.isArray(input.nutritionFoodIds) ? input.nutritionFoodIds : [])
+          .map((value) => String(value ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+    const ingredientId = String(input.ingredientId ?? '').trim();
+
+    if (nutritionFoodIds.length === 0 && !ingredientId) {
+      throw new BadRequestException(
+        'nutritionFoodIds 或 ingredientId 至少给一个',
+      );
+    }
+    if (nutritionFoodIds.length > 3) {
+      throw new BadRequestException('一次最多读 3 份营养档案');
+    }
+
+    let ids = nutritionFoodIds;
+    if (ids.length === 0) {
+      const mappings = await this.prisma.nutritionFoodMapping.findMany({
+        where: {
+          ingredientId,
+          nutritionFood: { status: NutritionFoodStatus.VERIFIED },
+        },
+        orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        take: 5,
+        select: { nutritionFoodId: true },
+      });
+      ids = mappings.map((mapping) => mapping.nutritionFoodId);
+      if (ids.length === 0) {
+        throw new BadRequestException(
+          `原料 ${ingredientId} 没有已验证的营养档案；请先在原料库补档案`,
+        );
+      }
+    }
+
+    const foods = await this.prisma.nutritionFood.findMany({
+      where: {
+        id: { in: ids },
+        status: NutritionFoodStatus.VERIFIED,
+      },
+      select: {
+        id: true,
+        name: true,
+        displayNameZh: true,
+        category: true,
+        dataSource: true,
+        status: true,
+        verifiedAt: true,
+        nutritionData: true,
+        preparationState: true,
+        preparationStateLabel: true,
+        defaultSupplementTargets: true,
+      },
+    });
+    const foodById = new Map(foods.map((food) => [food.id, food]));
+    const unavailable = ids.filter((foodId) => !foodById.has(foodId));
+    if (unavailable.length > 0) {
+      throw new BadRequestException(
+        `档案不存在或未验证：${unavailable.join('、')}；只能读已验证档案`,
+      );
+    }
+
+    return ids.map((foodId) => {
+      const food = foodById.get(foodId)!;
+      const profile = this.toNutritionProfile(food.nutritionData);
+      const meta = (profile as { meta?: { rawBasisType?: string } } | null)
+        ?.meta;
+      const rawBasisType = meta?.rawBasisType ?? null;
+      const nutrients: AgentNutritionProfileRead['nutrients'] = [];
+      const missingFields: string[] = [];
+      const missingLabels: string[] = [];
+      for (const field of catalog) {
+        const read = profile
+          ? readProfileValuePer100g(profile, field.fieldPath)
+          : { valuePer100g: null, missing: true };
+        if (read.missing || read.valuePer100g === null) {
+          missingFields.push(field.fieldKey);
+          missingLabels.push(field.label);
+          continue;
+        }
+        nutrients.push({
+          fieldPath: field.fieldPath,
+          label: field.label,
+          unit: field.unit,
+          valuePer100g: roundNutritionValue(read.valuePer100g),
+        });
+      }
+
+      return {
+        nutritionFoodId: food.id,
+        ingredientId: ingredientId || null,
+        name: food.displayNameZh ?? food.name,
+        preparationState: food.preparationState ?? null,
+        preparationStateLabel:
+          food.preparationStateLabel ?? food.preparationState ?? null,
+        category: String(food.category),
+        dataSource: food.dataSource,
+        status: String(food.status),
+        verifiedAt: toIsoDateTimeText(food.verifiedAt),
+        basis: rawBasisType ?? 'UNKNOWN',
+        basisLabel: nutritionBasisLabel(rawBasisType),
+        per100gAvailable: canReadPer100g(profile, rawBasisType),
+        nutrients,
+        missingCount: missingFields.length,
+        missingFields: missingFields.slice(0, 12),
+        missingLabels: missingLabels.slice(0, 12),
+        ...(profile
+          ? {}
+          : { note: '档案数据不可读，请让原料管理员检查该营养档案' }),
+        ...(food.defaultSupplementTargets
+          ? { defaultSupplementTargets: food.defaultSupplementTargets }
+          : {}),
+      };
+    });
+  }
+
+  /**
+   * Agent 试算：用「候选原料 + 克数」直接跑一遍营养评估，**不写草稿**。
+   *
+   * 选材阶段还没有正式克数，Agent 可以用一份试算批次（如总量 1000g）估算比例；
+   * 配方阶段也可以先比较方案再落地。补剂不在这里试算：补剂的份/粒换算与
+   * 目标字段绑定太强，必须在正式配方里用 `assess` 验证。
+   */
+  async assessNutritionItemsForAgent(
+    id: string,
+    access: RecipeDesignerAccessInput,
+    rawItems: Array<{ nutritionFoodId: string; weightG: number }>,
+    targetOverrides?: AssessmentTargetOverride[],
+  ): Promise<{
+    contentRevision: number;
+    assessment: DesignRecipeAssessmentResult;
+    totalWeightG: number;
+  }> {
+    const draft = await this.getDraft(id, access);
+
+    const items = new Map<string, number>();
+    for (const raw of Array.isArray(rawItems) ? rawItems : []) {
+      const nutritionFoodId = String(raw?.nutritionFoodId ?? '').trim();
+      const weightG = Number(raw?.weightG);
+      if (!nutritionFoodId) {
+        throw new BadRequestException('nutritionFoodId 不能为空');
+      }
+      if (!Number.isFinite(weightG) || weightG <= 0) {
+        throw new BadRequestException(
+          `「${nutritionFoodId}」的 weightG 必须是大于 0 的数字`,
+        );
+      }
+      if (weightG > 10000) {
+        throw new BadRequestException(
+          `「${nutritionFoodId}」的 weightG 超过 10000g，请传一份合理的试算批次`,
+        );
+      }
+      items.set(nutritionFoodId, (items.get(nutritionFoodId) ?? 0) + weightG);
+    }
+    if (items.size === 0) {
+      throw new BadRequestException('items 至少给一个食材');
+    }
+    if (items.size > 30) {
+      throw new BadRequestException('试算一次最多 30 个食材');
+    }
+
+    const foods = await this.prisma.nutritionFood.findMany({
+      where: {
+        id: { in: Array.from(items.keys()) },
+        status: NutritionFoodStatus.VERIFIED,
+      },
+      select: {
+        id: true,
+        name: true,
+        displayNameZh: true,
+        category: true,
+        nutritionData: true,
+      },
+    });
+    const foodById = new Map(foods.map((food) => [food.id, food]));
+    const unavailable = Array.from(items.keys()).filter(
+      (foodId) => !foodById.has(foodId),
+    );
+    if (unavailable.length > 0) {
+      throw new BadRequestException(
+        `档案不存在或未验证：${unavailable.join('、')}；只能试算已验证档案`,
+      );
+    }
+
+    const assessmentItems = Array.from(items.entries()).map(
+      ([nutritionFoodId, weightG]) => {
+        const food = foodById.get(nutritionFoodId)!;
+        if (food.category === NutritionFoodCategory.SUPPLEMENT) {
+          throw new BadRequestException(
+            `「${food.displayNameZh ?? food.name}」是补剂，试算只支持食材；补剂请先加进配方再用 assess 验证`,
+          );
+        }
+        const profile = this.toNutritionProfile(food.nutritionData);
+        if (!profile) {
+          throw new BadRequestException(
+            `「${food.displayNameZh ?? food.name}」营养档案数据不可读，无法试算`,
+          );
+        }
+        return {
+          id: food.id,
+          name: food.displayNameZh ?? food.name,
+          ingredientType: IngredientType.FOOD,
+          weightG,
+          nutritionProfile: profile,
+        };
+      },
+    );
+
+    if (!draft.fediafDogScenario) {
+      throw new BadRequestException(
+        '草稿还没有营养阶段（FEDIAF 场景），无法试算',
+      );
+    }
+    const targets = this.applyAssessmentTargetOverrides(
+      await this.targetProvider.getTargets(draft.fediafDogScenario),
+      targetOverrides,
+    );
+    const assessment = assessRecipeDraft({
+      scenario: draft.fediafDogScenario,
+      items: assessmentItems,
+      targets,
+    });
+
+    return {
+      contentRevision: draft.contentRevision,
+      assessment,
+      totalWeightG: assessmentItems.reduce(
+        (sum, item) => sum + item.weightG,
+        0,
+      ),
+    };
+  }
+
+  /**
    * 配方里有没有这只狗过敏的食材（2026-10-04 第一期）。
    *
    * 改造前营养评估**完全不读过敏** —— 一份含鸡肉的配方
@@ -13329,4 +13636,46 @@ function monthsSince(
     (now.getMonth() - date.getMonth());
   if (now.getDate() < date.getDate()) months -= 1;
   return Math.max(0, months);
+}
+
+/** 营养值最多保留 6 位小数，避免 0.020000000000000018 这类噪声进上下文。 */
+function roundNutritionValue(value: number): number {
+  if (!Number.isFinite(value)) return value;
+  return Math.round(value * 1e6) / 1e6;
+}
+
+function nutritionBasisLabel(rawBasisType: string | null): string {
+  switch (rawBasisType) {
+    case 'PER_100_G':
+      return '每 100 克';
+    case 'PER_1_G':
+      return '每 1 克（已换算为每 100 克）';
+    case 'PER_100_ML':
+      return '每 100 毫升（已按密度换算为每 100 克）';
+    case 'PER_1_ML':
+      return '每 1 毫升（已按密度换算为每 100 克）';
+    case 'PER_SERVING':
+      return '每份（已按份重换算为每 100 克）';
+    default:
+      return '基准未知';
+  }
+}
+
+/** 体积/份装档案只有在密度/份重齐全时才能换算成每 100 克。 */
+function canReadPer100g(
+  profile: NutritionProfile | null,
+  rawBasisType: string | null,
+): boolean {
+  if (!profile || !rawBasisType) return false;
+  if (rawBasisType === 'PER_100_G' || rawBasisType === 'PER_1_G') return true;
+  const meta = (profile as { meta?: Record<string, unknown> }).meta ?? {};
+  const density = Number(meta.densityGPerMl);
+  const servingWeight = Number(meta.servingWeightG);
+  if (rawBasisType === 'PER_100_ML' || rawBasisType === 'PER_1_ML') {
+    return Number.isFinite(density) && density > 0;
+  }
+  if (rawBasisType === 'PER_SERVING') {
+    return Number.isFinite(servingWeight) && servingWeight > 0;
+  }
+  return false;
 }

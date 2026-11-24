@@ -1,7 +1,8 @@
 /**
- * 11 个工具（2026-10-31 重建；2026-11-11 移除旧知识库检索/引用工具；
+ * 食谱 Agent 的工具表（2026-10-31 重建；2026-11-11 移除旧知识库检索/引用工具；
  * 2026-11-12 接入知识库 v3 的 catalog / find / read；
- * 2026-11-19 增加 read_design_context，首轮强制调用）。
+ * 2026-11-19 增加 read_design_context，首轮强制调用；
+ * 2026-11-24 增加 read_nutrition_profile 与 preview_assessment）。
  *
  * 原则：工具的数量和返回体积，就是模型的"操作规程"。
  * 所以不加"你必须先…"的说明，而是让工具本身只回这一步需要的东西。
@@ -149,6 +150,69 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'read_nutrition_profile',
+      description:
+        '查看原料营养档案（只读）。传 nutritionFoodId（来自 find_food / match_food_name / read_draft）看一份；传 ingredientId 看该原料全部生/熟档案。默认按每 100 克返回全部营养素、单位、生熟状态与来源；fields 可只查指定项（fieldPath 如 minerals.zinc、fieldKey 如 zinc、或中文名如 锌）。一次最多 3 份。',
+      parameters: {
+        type: 'object',
+        properties: {
+          nutritionFoodIds: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 3,
+            items: { type: 'string' },
+          },
+          ingredientId: {
+            type: 'string',
+            description: '原料库 id；返回该原料的全部已验证档案（最多 5 份）',
+          },
+          fields: {
+            type: 'array',
+            maxItems: 20,
+            items: { type: 'string' },
+            description: '可选：只返回这些营养字段',
+          },
+        },
+        required: [],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'preview_assessment',
+      description:
+        '不改草稿，用候选食材 + 克数试算营养评估：返回过没过、缺口、缺数据与能量。选材阶段还没有正式克数，用一份试算批次（如总量 1000g）估算比例；配方阶段可先比较两三个方案再落地。只算营养，不含过敏/忌口；补剂不支持试算，补剂请加进配方后用 assess 验证。',
+      parameters: {
+        type: 'object',
+        properties: {
+          items: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 30,
+            items: {
+              type: 'object',
+              properties: {
+                nutritionFoodId: {
+                  type: 'string',
+                  description: '来自 find_food / match_food_name 的档案 id',
+                },
+                weightG: { type: 'number', minimum: 0.1, maximum: 10000 },
+              },
+              required: ['nutritionFoodId', 'weightG'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['items'],
+        additionalProperties: false,
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'edit_recipe',
       description:
         '修改当前草稿的原料。一次可传多个操作，按顺序执行并逐条回报结果。' +
@@ -250,7 +314,7 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
     function: {
       name: 'assess',
       description:
-        '在当前内容上跑营养评估。只回：过没过、各项计数、还差的项（最多 12 条）、命中的过敏原。配方定稿前必须跑通；没跑过就不算完成。',
+        '对当前草稿跑正式营养评估，并写回评估结果：过没过、各项计数、还差的项、命中的过敏原。配方定稿前必须跑通；只想试算候选搭配、不改草稿时用 preview_assessment。',
       parameters: NO_ARGS,
     },
   },
@@ -431,6 +495,94 @@ export async function executeTool(
         );
       }
 
+      case 'read_nutrition_profile': {
+        const nutritionFoodIds = Array.isArray(args.nutritionFoodIds)
+          ? args.nutritionFoodIds
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+          : [];
+        const ingredientId =
+          typeof args.ingredientId === 'string' ? args.ingredientId.trim() : '';
+        const fields = Array.isArray(args.fields)
+          ? args.fields
+              .filter((item): item is string => typeof item === 'string')
+              .map((item) => item.trim())
+              .filter(Boolean)
+              .slice(0, 20)
+          : [];
+        if (nutritionFoodIds.length === 0 && !ingredientId) {
+          return fail(
+            'INVALID_ARGUMENT',
+            'nutritionFoodIds 或 ingredientId 至少给一个',
+          );
+        }
+        const profiles = await context.port.readNutritionProfiles({
+          nutritionFoodIds,
+          ingredientId: ingredientId || undefined,
+          fields,
+        });
+        const summary = profiles
+          .map((profile) => {
+            const state = profile.preparationStateLabel
+              ? `（${profile.preparationStateLabel}）`
+              : '';
+            const basis = profile.per100gAvailable
+              ? ''
+              : '；该档案无法换算每 100 克';
+            return `${profile.name}${state}：${profile.nutrients.length} 项有值、缺 ${profile.missingCount} 项${basis}`;
+          })
+          .join('；');
+        return ok(
+          profiles,
+          profiles.length === 0
+            ? '没有读到营养档案'
+            : `读到 ${profiles.length} 份营养档案。${summary}`,
+        );
+      }
+
+      case 'preview_assessment': {
+        const rawItems = Array.isArray(args.items) ? args.items : [];
+        if (rawItems.length === 0) {
+          return fail('INVALID_ARGUMENT', 'items 至少给一个食材');
+        }
+        const items: Array<{ nutritionFoodId: string; weightG: number }> = [];
+        for (const [index, entry] of rawItems.entries()) {
+          if (!isRecord(entry)) {
+            return fail('INVALID_ARGUMENT', `第 ${index + 1} 个食材格式不正确`);
+          }
+          const nutritionFoodId =
+            typeof entry.nutritionFoodId === 'string'
+              ? entry.nutritionFoodId.trim()
+              : '';
+          const weightG = Number(entry.weightG);
+          if (!nutritionFoodId) {
+            return fail(
+              'INVALID_ARGUMENT',
+              `第 ${index + 1} 个食材缺少 nutritionFoodId`,
+            );
+          }
+          if (!Number.isFinite(weightG) || weightG <= 0) {
+            return fail(
+              'INVALID_ARGUMENT',
+              `第 ${index + 1} 个食材的 weightG 必须大于 0`,
+            );
+          }
+          items.push({ nutritionFoodId, weightG });
+        }
+        const summary = await context.port.previewAssessment(items);
+        const planResult = context.plan
+          ? await context.port.previewPlanAssessment(items, context.plan)
+          : null;
+        const result = planResult
+          ? { ...summary, planAssessment: planResult }
+          : summary;
+        return ok(
+          result,
+          `试算 ${summary.batch.itemCount} 项 / 共 ${summary.batch.totalWeightG}g（仅营养，不含过敏/忌口）；${summarizeAssessment(summary)}${summarizePlanAssessment(planResult)}`,
+        );
+      }
+
       case 'edit_recipe': {
         const ops = Array.isArray(args.ops) ? args.ops : [];
         if (ops.length === 0) {
@@ -532,21 +684,9 @@ export async function executeTool(
         const planResult = context.plan
           ? await context.port.assessPlan(context.plan)
           : null;
-        const planAssessment = planResult?.assessment as any;
-        const planCompliant =
-          planAssessment?.isCompliant ?? planAssessment?.summary?.isCompliant;
-        const planText = planResult
-          ? planAssessment
-            ? `；方案专属评估：${planCompliant ? '通过' : '未通过'}${
-                planResult.unsupported.length > 0
-                  ? `（${planResult.unsupported.length} 条方案约束需 Agent/人工判断）`
-                  : ''
-              }`
-            : '；方案专属评估：无引擎可自动计算的约束'
-          : '';
         return ok(
           planResult ? { ...summary, planAssessment: planResult } : summary,
-          summarizeAssessment(summary) + planText,
+          summarizeAssessment(summary) + summarizePlanAssessment(planResult),
         );
       }
 
@@ -859,6 +999,32 @@ function summarizeAssessment(summary: {
     parts.push(`⚠ 命中过敏原：${summary.allergens.join('、')}`);
   }
   return parts.join('；');
+}
+
+function summarizePlanAssessment(
+  planResult:
+    | {
+        assessment: unknown;
+        unsupported: Array<{ key: string; reason: string }>;
+      }
+    | null
+    | undefined,
+): string {
+  if (!planResult) return '';
+  const planAssessment = planResult.assessment as {
+    isCompliant?: boolean;
+    summary?: { isCompliant?: boolean };
+  } | null;
+  if (!planAssessment) {
+    return '；方案专属评估：无引擎可自动计算的约束';
+  }
+  const compliant =
+    planAssessment.isCompliant ?? planAssessment.summary?.isCompliant;
+  const unsupported =
+    planResult.unsupported.length > 0
+      ? `（${planResult.unsupported.length} 条方案约束需 Agent/人工判断）`
+      : '';
+  return `；方案专属评估：${compliant ? '通过' : '未通过'}${unsupported}`;
 }
 
 function readText(value: unknown): string | undefined {

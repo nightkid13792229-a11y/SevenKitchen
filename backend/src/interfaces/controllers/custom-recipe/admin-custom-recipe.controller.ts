@@ -1523,6 +1523,55 @@ export class AdminCustomRecipeController {
     );
   }
 
+  /**
+   * 售后改稿：一键重新交付并完成售后（2026-11-24）。
+   *
+   * 后台「上线检查」里的「重新交付给顾客」走这里：
+   * 交付快照 / 槽位状态 / 售后结单在服务层一次做完，
+   * 控制器只补一条交付通知（与 `redeliver-batch` 同一口径，发失败不影响结果）。
+   *
+   * 只有管理员：这是给顾客换版本 + 发通知的终局动作。
+   */
+  @Post('aftersales/:id/redeliver')
+  @UseGuards(AdminGuard)
+  @ApiOperation({
+    summary: 'Redeliver an aftersale revision and resolve the aftersale',
+  })
+  async redeliverAftersaleRevision(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body('handleNote') handleNote?: string,
+  ) {
+    const result = await this.aftersaleService.redeliverAftersaleRevision({
+      aftersaleId: id,
+      handlerId: this.currentOperatorId(req),
+      handleNote,
+    });
+
+    /**
+     * 与批量交付同一个兜底：交付事务已经完成，不能因为一条消息
+     * 或一次 openid 查询失败就给后台回 500。
+     */
+    try {
+      const order = await this.customRecipeService.getOrderByOrderId(
+        result.orderId,
+      );
+      const openid = order?.customer?.wechatOpenid;
+      if (openid && this.wechatService) {
+        await this.wechatService.sendCustomRecipeOrderNotification(
+          openid,
+          result.orderId,
+          'DELIVERED',
+          result.selectedRecipes[0]?.recipeId,
+        );
+      }
+    } catch (error) {
+      console.error('[CustomRecipe] 售后重新交付通知发送失败:', error);
+    }
+
+    return ApiResponseDto.success({ ...result, status: 'DELIVERED' });
+  }
+
   /** 受理 */
   @Post('aftersales/:id/accept')
   @ApiOperation({ summary: 'Accept an aftersale request' })

@@ -3,11 +3,18 @@ import { Optional,
   ConflictException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
-import { CustomRecipeStatus, Prisma } from '@prisma/client';
+import {
+  CustomRecipeStatus,
+  OrderRecipeDesignStatus,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { CustomRecipeConfigService } from './custom-recipe-config.service';
+import { CustomRecipeDeliveryService } from './custom-recipe-delivery.service';
 import { PlatformOptionsService } from '../platform-options/platform-options.service';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { CustomerMessageService } from '../message/customer-message.service';
@@ -65,6 +72,8 @@ export interface CustomRecipeAftersaleSelectedItem {
  */
 @Injectable()
 export class CustomRecipeAftersaleService {
+  private readonly logger = new Logger(CustomRecipeAftersaleService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: CustomRecipeConfigService,
@@ -80,6 +89,15 @@ export class CustomRecipeAftersaleService {
     /** 订阅消息（需求 2.5.8）—— 同样是可选依赖，发不出去不影响处理结果 */
     @Optional()
     private readonly wechatService?: WechatService,
+    /**
+     * 交付服务（2026-11-24）：售后改稿的「重新交付给顾客」。
+     *
+     * 放参数表最后并 `@Optional`：既有测试按位置构造这个服务，
+     * 插在中间会让它们全部错位（交付服务那边踩过同一个坑）。
+     * 真没接上时由方法里的守卫报 503，不会静默跳过交付。
+     */
+    @Optional()
+    private readonly deliveryService?: CustomRecipeDeliveryService,
   ) {}
 
   /**
@@ -980,6 +998,183 @@ export class CustomRecipeAftersaleService {
     }
 
     return { status: 'RESOLVED' };
+  }
+
+  /**
+   * 售后改稿：一键重新交付并完成售后（2026-11-24）。
+   *
+   * 后台「上线检查」里的「重新交付给顾客」走这里，一次做完三件事：
+   *   ① 用当前**已入仓**的版本重新生成交付快照（`redeliverBatchItems`）；
+   *   ② 把这份设计槽位标回 DELIVERED，并清掉售后改稿标记；
+   *   ③ 用一句默认说明把售后结掉（顾客在售后记录 / 消息中心能看到）。
+   *
+   * 为什么不交给前端串三步：任何一步失败都要能说清楚失败在哪 —
+   * 「交付成功但售后没结」和「什么都没发生」对处理人是两回事。
+   */
+  async redeliverAftersaleRevision(input: {
+    aftersaleId: string;
+    handlerId: string;
+    /** 不传就用默认说明（带上下单时写的调整说明） */
+    handleNote?: string;
+    now?: Date;
+  }): Promise<{
+    orderId: string;
+    batchId: string;
+    version: number;
+    recipeCount: number;
+    selectedRecipes: Array<{
+      deliveryItemId: string;
+      recipeId: string;
+      recipeName: string;
+      itemCodes: string[];
+    }>;
+    handleNote: string;
+    resolved: boolean;
+    resolveError?: string;
+  }> {
+    const now = input.now ?? new Date();
+    const aftersale = await this.prisma.customRecipeAftersale.findUnique({
+      where: { id: input.aftersaleId },
+      select: {
+        id: true,
+        orderId: true,
+        type: true,
+        status: true,
+        source: true,
+        description: true,
+        deliveryItemIds: true,
+      },
+    });
+    if (!aftersale) {
+      throw new NotFoundException('售后单不存在');
+    }
+    if (String(aftersale.type) !== 'ADJUST_RECIPE') {
+      throw new BadRequestException('只有「调整食谱」类的售后才能重新交付');
+    }
+    if (!['ACCEPTED', 'PROCESSING'].includes(aftersale.status)) {
+      throw new BadRequestException(
+        '这条售后还没受理或已经处理完，不能重新交付',
+      );
+    }
+
+    const deliveryItemIds = (aftersale.deliveryItemIds ?? []).filter(Boolean);
+    if (deliveryItemIds.length === 0) {
+      throw new BadRequestException(
+        '这条售后没有关联要调整的食谱，请回订单页重新发起调整',
+      );
+    }
+
+    /**
+     * 必须找到「这次改稿」对应的槽位，且它已经重新入仓。
+     *
+     * 只认就绪（READY）：`redeliverBatchItems` 取的是槽位当前指向的食谱行，
+     * 还没入仓时它指向的是**旧版本** —— 那样交出去顾客看到的还是老配方。
+     */
+    const slot = await this.prisma.orderRecipeDesign.findFirst({
+      where: {
+        orderId: aftersale.orderId,
+        revisionDeliveryItemId: { in: deliveryItemIds },
+      },
+      select: {
+        id: true,
+        status: true,
+        recipeId: true,
+        stagedContentRevision: true,
+        designDraft: { select: { contentRevision: true } },
+      },
+    });
+    if (!slot) {
+      throw new BadRequestException(
+        '这次改稿没有对应的设计记录，请从售后「修改食谱」重新打开',
+      );
+    }
+    if (slot.status !== OrderRecipeDesignStatus.READY || !slot.recipeId) {
+      throw new BadRequestException(
+        '请先在上线检查里「加入本单待提交」，再重新交付给顾客',
+      );
+    }
+    if (
+      slot.stagedContentRevision !== null &&
+      slot.designDraft?.contentRevision !== undefined &&
+      slot.stagedContentRevision !== slot.designDraft.contentRevision
+    ) {
+      throw new BadRequestException(
+        '这份食谱在加入待提交之后又改过，请重新加入待提交再交付',
+      );
+    }
+
+    if (!this.deliveryService) {
+      throw new ServiceUnavailableException('交付服务暂不可用，请稍后重试');
+    }
+
+    const result = await this.deliveryService.redeliverBatchItems({
+      orderIdOrId: aftersale.orderId,
+      deliveryItemIds,
+      deliveredBy: input.handlerId,
+      now,
+    });
+
+    await this.prisma.orderRecipeDesign.update({
+      where: { id: slot.id },
+      data: {
+        status: OrderRecipeDesignStatus.DELIVERED,
+        revisionDeliveryItemId: null,
+      },
+    });
+
+    const handleNote = this.resolveAftersaleRedeliverNote(
+      input.handleNote,
+      aftersale.description,
+    );
+
+    try {
+      await this.resolve({
+        aftersaleId: aftersale.id,
+        handlerId: input.handlerId,
+        handleNote,
+        linkedDeliveryId: result.batchId,
+      });
+      return {
+        ...result,
+        handleNote,
+        resolved: true,
+      };
+    } catch (error) {
+      /**
+       * 交付已经成功，不能把整次操作报成失败 —— 处理人重试会撞上
+       * "找不到改稿槽位"。售后单留在待办里，用「处理完成」补掉即可。
+       */
+      const message =
+        error instanceof Error ? error.message : '售后状态更新失败';
+      this.logger.error(
+        `[Aftersale] 重新交付成功但售后未结单：${aftersale.id} ${message}`,
+      );
+      return {
+        ...result,
+        handleNote,
+        resolved: false,
+        resolveError: message,
+      };
+    }
+  }
+
+  /**
+   * 给顾客看的默认说明。
+   *
+   * 带上这次调整的说明（员工发起时写的那句话），顾客才知道新版本差在哪；
+   * 没写说明就退化成一句通用话。
+   */
+  private resolveAftersaleRedeliverNote(
+    handleNote: string | undefined,
+    description: string | null | undefined,
+  ): string {
+    const explicit = (handleNote ?? '').trim();
+    if (explicit) return explicit.slice(0, 1000);
+    const summary = (description ?? '').trim();
+    const note = summary
+      ? `已按这次调整重新交付了一版食谱：${summary}。请在小程序里查看最新版本。`
+      : '已按这次调整重新交付了一版食谱，请在小程序里查看最新版本。';
+    return note.slice(0, 1000);
   }
 
   /** 驳回（原因必填，顾客要知道为什么） */

@@ -57,6 +57,8 @@ describe('OrderRecipeDesignService', () => {
     },
     customRecipeAftersale: {
       findUnique: jest.fn(),
+      /** 工作台要找出「正在改稿的调整单」（2026-11-24） */
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     customRecipeDeliveryItem: {
       findUnique: jest.fn(),
@@ -222,6 +224,8 @@ describe('OrderRecipeDesignService', () => {
         dogName: 'Foxy',
         quantity: 2,
         readyCount: 1,
+        orderStatus: 'IN_PROGRESS',
+        openAftersaleId: null,
         slots: [
           {
             designId: 'design-1',

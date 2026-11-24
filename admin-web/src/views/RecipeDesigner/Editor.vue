@@ -423,8 +423,11 @@
       :order-id="orderId"
       :design-id="designId"
       :series-id="seriesId"
+      :aftersale-id="aftersaleIdForDrawer"
+      :slot-status="currentOrderSlot?.status || ''"
       @published="handleStagePublished"
       @staged="handleOrderStaged"
+      @redelivered="handleAftersaleRedelivered"
       @go-to-series-list="goToSeriesListFromCheck"
     />
 
@@ -535,6 +538,20 @@ const currentOrderSlot = computed<OrderDesignWorkspaceSlot | null>(() => {
       (slot) => slot.designId === designId
     ) ?? null
   )
+})
+
+/**
+ * 上线检查用的「这次改稿是哪条调整单」（2026-11-24）。
+ *
+ * 工作台已经加载时以后端为准 —— 交付成功后它会把 id 收回去，
+ * 免得同一标签页里再点一次「重新交付」；还没加载时先用地址上的
+ * `aftersaleId`（代客发起调整跳转时带上），避免抢在加载前就显示成普通流程。
+ */
+const aftersaleIdForDrawer = computed(() => {
+  if (orderDesignWorkspace.value) {
+    return String(orderDesignWorkspace.value.openAftersaleId || '')
+  }
+  return String(route.query.aftersaleId || '')
 })
 
 async function loadOrderDesignWorkspace() {
@@ -2019,6 +2036,17 @@ async function handleOrderStaged() {
   if (orderId) {
     await router.push(`/order-design/${encodeURIComponent(orderId)}`)
   }
+}
+
+/**
+ * 售后改稿交付完成（2026-11-24）。
+ *
+ * 和普通「加入待提交」不同：交付已经做完，不把人带回工作台，
+ * 只刷新本单状态（顶部横幅那份会变成「已交付」）。
+ */
+async function handleAftersaleRedelivered() {
+  launchReadinessVisible.value = false
+  await loadOrderDesignWorkspace()
 }
 
 function handleStagePublished() {

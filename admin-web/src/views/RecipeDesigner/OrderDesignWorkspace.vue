@@ -230,6 +230,19 @@
         </p>
       </template>
 
+      <!--
+        已交付订单上的售后改稿（2026-11-24）：
+        这份槽位是重新打开的改稿，仍会出现在「已就绪」里，
+        但已交付订单不能从工作台再交一次 —— 入口在上线检查的「重新交付给顾客」。
+      -->
+      <template v-else-if="isOrderDelivered">
+        <div class="submit-title">本单已经交付过</div>
+        <p class="submit-desc">
+          这一份是售后改稿：请打开它的编辑器，在「上线检查」里点
+          「重新交付给顾客」完成交付；已交付的订单不能从工作台再次提交。
+        </p>
+      </template>
+
       <template v-else-if="progress.ready === progress.total">
         <div class="submit-title">本单 {{ progress.total }} 份已全部就绪</div>
         <el-alert
@@ -340,8 +353,19 @@ const activeCount = computed(() => countActiveSlots(slots.value))
 const isDelivered = computed(
   () => progress.value.delivered > 0 && progress.value.delivered >= progress.value.total,
 )
+/**
+ * 订单本身已交付 / 已完成（2026-11-24）。
+ *
+ * 与 `isDelivered`（按槽位算）不同：售后改稿会把槽位从 DELIVERED 改回
+ * EDITING/READY，此时槽位进度回到 0，但订单其实早就交付过了。
+ */
+const isOrderDelivered = computed(() => {
+  const status = String(workspace.value?.orderStatus || '')
+  return status === 'DELIVERED' || status === 'COMPLETED'
+})
 const canAddSlot = computed(() =>
   !isDelivered.value &&
+  !isOrderDelivered.value &&
   canAddOrderDesignSlot(progress.value.total, activeCount.value),
 )
 

@@ -85,6 +85,15 @@ export interface OrderDesignWorkspace {
   quantity: number
   /** 已就绪份数（status = READY） */
   readyCount: number
+  /** 订单当前状态（2026-11-24；老后端没有这个字段） */
+  orderStatus?: string
+  /**
+   * 本单进行中的调整单 id（2026-11-24）。
+   *
+   * 只有售后已经打开改稿（槽位带改稿标记）才有值；
+   * 上线检查据此显示「重新交付给顾客」，不必再去售后待办。
+   */
+  openAftersaleId?: string | null
   slots: OrderDesignWorkspaceSlot[]
 }
 

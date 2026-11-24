@@ -287,6 +287,21 @@ export interface RedeliverBatchResult {
   status: string
 }
 
+/**
+ * 售后改稿「重新交付给顾客」的结果（2026-11-24）。
+ *
+ * 交付本身与 `RedeliverBatchResult` 同口径，额外带上给顾客的说明
+ * 与售后是否已经跟着结掉（`resolved=false` 时要去售后待办补一次）。
+ */
+export interface RedeliverAftersaleRevisionResult extends RedeliverBatchResult {
+  /** 这次发给顾客的处理说明 */
+  handleNote: string
+  /** 售后是否已经自动结单 */
+  resolved: boolean
+  /** 交付成功但结单失败时后端给的原因 */
+  resolveError?: string
+}
+
 export interface CustomRecipeOrderListResult {
   orders: CustomRecipeOrderDetail[]
   total: number
@@ -1054,6 +1069,22 @@ export const customRecipeApi = {
 
   rejectAftersale: (id: string, payload: { reason: string }) =>
     api.post(`/admin/custom-recipe/aftersales/${id}/reject`, payload),
+
+  /**
+   * 售后改稿：一键重新交付并完成售后（2026-11-24）。
+   *
+   * 后台「上线检查」里点「重新交付给顾客」调它：后端一次做完
+   * 定版快照 → 标槽位已交付 → 用默认说明结单；控制器补发交付通知。
+   * 不走售后待办那条「先重新交付、再单独结单」的两步。
+   */
+  redeliverAftersaleRevision: (
+    aftersaleId: string,
+    payload?: { handleNote?: string },
+  ): Promise<RedeliverAftersaleRevisionResult> =>
+    api.post(
+      `/admin/custom-recipe/aftersales/${aftersaleId}/redeliver`,
+      payload ?? {},
+    ),
 
   /**
    * 代客发起调整（2026-10-27）。

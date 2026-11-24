@@ -62,6 +62,20 @@ export interface OrderDesignWorkspace {
   quantity: number;
   /** 已就绪份数（status = READY） */
   readyCount: number;
+  /**
+   * 订单当前状态（2026-11-24）。
+   *
+   * 编辑器 / 工作台要据此区分「首次交付」与「售后改稿重新交付」：
+   * 已交付（含已完成）的订单不能走「最终提交并交付」。
+   */
+  orderStatus: CustomRecipeStatus;
+  /**
+   * 本单正在进行的调整单 id（2026-11-24）。
+   *
+   * 只有**已经打开改稿**（槽位带 `revisionDeliveryItemId`）且售后仍是
+   * 受理中 / 处理中时才返回；上线检查据此给出「重新交付给顾客」。
+   */
+  openAftersaleId: string | null;
   slots: OrderDesignWorkspaceSlot[];
 }
 
@@ -158,6 +172,29 @@ export class OrderRecipeDesignService {
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     });
 
+    /**
+     * 售后改稿的进行中调整单（2026-11-24）。
+     *
+     * 只有**已经打开改稿**的槽位（`revisionDeliveryItemId` 有值）才去找：
+     * 老订单 / 顾客没打开设计器的调整单没有槽位可改，不该在上线检查里
+     * 给出「重新交付」——那种单仍走售后待办的老路。
+     */
+    const revisionItemId =
+      slots.find((slot) => slot.revisionDeliveryItemId)
+        ?.revisionDeliveryItemId ?? null;
+    const openAftersale = revisionItemId
+      ? await this.prisma.customRecipeAftersale.findFirst({
+          where: {
+            orderId: order.id,
+            type: 'ADJUST_RECIPE',
+            status: { in: ['ACCEPTED', 'PROCESSING'] },
+            deliveryItemIds: { has: revisionItemId },
+          },
+          select: { id: true },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+
     return {
       orderId: order.orderId,
       dogId: order.dogId,
@@ -166,6 +203,8 @@ export class OrderRecipeDesignService {
       readyCount: slots.filter(
         (slot) => slot.status === OrderRecipeDesignStatus.READY,
       ).length,
+      orderStatus: order.status,
+      openAftersaleId: openAftersale?.id ?? null,
       slots: slots.map((slot) => ({
         designId: slot.id,
         seriesId: slot.seriesId,
@@ -526,9 +565,23 @@ export class OrderRecipeDesignService {
       },
     });
     const normalizedSlot = this.assertSlotBelongsToOrder(slot, order.id);
-    // 售后改稿：已交付订单只有在槽位被明确改回 EDITING 后才允许重新入仓。
+    /**
+     * 售后改稿（2026-11-24 修）：已交付订单上的改稿槽位也允许重新入仓。
+     *
+     * 原来的写法是「只要槽位不是 EDITING 就按正常设计单校验订单状态」，
+     * 于是一旦售后改稿已经加入过待提交（READY），再改配方就再也入不了仓 ——
+     * 报「订单已交付，不能再设计食谱」，而那条售后还在进行中。
+     *
+     * 口径：槽位带 `revisionDeliveryItemId` = 这是售后打开的改稿，
+     * 只要订单没取消就允许（重新）入仓；其余槽位仍按原规则拦。
+     */
+    const isAftersaleRevision = Boolean(normalizedSlot.revisionDeliveryItemId);
     if (normalizedSlot.status !== OrderRecipeDesignStatus.EDITING) {
-      this.assertOrderAllowsDesign(order);
+      if (!isAftersaleRevision) {
+        this.assertOrderAllowsDesign(order);
+      } else if (order.status === CustomRecipeStatus.CANCELLED) {
+        throw new BadRequestException('订单已取消，不能再设计食谱');
+      }
     }
     if (normalizedSlot.status === OrderRecipeDesignStatus.DELIVERED) {
       throw new BadRequestException('该份食谱已交付，不能重复加入待提交');

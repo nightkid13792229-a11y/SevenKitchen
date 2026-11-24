@@ -421,15 +421,39 @@
           v-if="readiness.designMode === 'ORDER'"
           class="launch-readiness__publish"
         >
-          <div class="launch-readiness__publish-hint">
-            加入后顾客还看不到；管理员最终提交时才会一次性交付。
-          </div>
-          <el-button
-            type="success"
-            :loading="staging"
-            :disabled="!canStageOrder"
-            @click="stageOrder"
-          >加入本单待提交</el-button>
+          <!--
+            售后改稿（2026-11-24）：改完就地交付，不再要求回售后待办
+            再点一次「重新交付并完成」。按钮一次做完 定版 → 交付 → 结单。
+          -->
+          <template v-if="isSlotDelivered">
+            <div class="launch-readiness__publish-hint">
+              这一份已经交付给顾客了。如需再改，请从订单详情的「代客发起调整」
+              重新打开改稿，改完再交付。
+            </div>
+          </template>
+          <template v-else-if="isAftersaleRedelivery">
+            <div class="launch-readiness__publish-hint">
+              这是售后改稿：点一次就把当前配方交付给顾客，并把这条售后标记完成；
+              顾客会收到一条新的交付通知。
+            </div>
+            <el-button
+              type="success"
+              :loading="redelivering"
+              :disabled="!canStageOrder"
+              @click="redeliverToCustomer"
+            >重新交付给顾客</el-button>
+          </template>
+          <template v-else>
+            <div class="launch-readiness__publish-hint">
+              加入后顾客还看不到；管理员最终提交时才会一次性交付。
+            </div>
+            <el-button
+              type="success"
+              :loading="staging"
+              :disabled="!canStageOrder"
+              @click="stageOrder"
+            >加入本单待提交</el-button>
+          </template>
         </div>
 
         <div
@@ -480,6 +504,7 @@ import { recipeDesignerApi } from '@/api/recipeDesigner'
 import AiNameField from './AiNameField.vue'
 import { useUserStore } from '@/store/user'
 import { orderRecipeDesignApi } from '@/api/orderRecipeDesign'
+import { customRecipeApi } from '@/api/customRecipe'
 import ProductionStepsEditor from './ProductionStepsEditor.vue'
 import NutritionReportDrawer from './NutritionReportDrawer.vue'
 import PresentationPanel from './PresentationPanel.vue'
@@ -508,12 +533,22 @@ const props = defineProps<{
   orderId?: string
   designId?: string
   seriesId?: string
+  /**
+   * 本单进行中的调整单 id（2026-11-24）。
+   *
+   * 有值 = 这次是在给售后改稿：交付按钮换成「重新交付给顾客」，
+   * 点一次就交付并结单。空值 = 普通设计流程，行为不变。
+   */
+  aftersaleId?: string
+  /** 本单槽位当前状态（EDITING / READY / DELIVERED）；已交付时不给入仓按钮 */
+  slotStatus?: string
 }>()
 
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'published'): void
   (e: 'staged'): void
+  (e: 'redelivered'): void
   (e: 'go-to-series-list'): void
 }>()
 
@@ -545,6 +580,8 @@ const stepsExpanded = ref<string[]>([])
 const stepsDirty = ref(false)
 const publishing = ref(false)
 const staging = ref(false)
+/** 售后改稿「重新交付给顾客」正在进行（2026-11-24） */
+const redelivering = ref(false)
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.userInfo?.role === 'ADMIN')
 const presentationDirty = ref(false)
@@ -600,8 +637,17 @@ const canStageOrder = computed(
     !presentationDirty.value &&
     !stepsDirty.value &&
     !staging.value &&
+    !redelivering.value &&
     isAdmin.value &&
     Boolean(props.orderId && props.designId)
+)
+
+/** 这次是售后改稿吗：只有带调整单 id 时才换成「重新交付给顾客」 */
+const isAftersaleRedelivery = computed(() => Boolean(props.aftersaleId))
+
+/** 这一份已经交付：不再提供入仓按钮（点了后端也只会报错） */
+const isSlotDelivered = computed(
+  () => String(props.slotStatus ?? '').toUpperCase() === 'DELIVERED'
 )
 
 const canPublishStage = computed(
@@ -756,22 +802,29 @@ async function retryNutritionReport(): Promise<void> {
   await openNutritionReport()
 }
 
-async function stageOrder(): Promise<void> {
-  if (!readiness.value || readiness.value.designMode !== 'ORDER') return
+/**
+ * 定版：把当前草稿加入本单待提交（不弹确认、不提示成功）。
+ *
+ * 售后改稿的「重新交付」也要先走这一步 —— 交付取的是**入仓那一版**，
+ * 少了它顾客拿到的还是旧配方。返回 true 表示当前版本已经就绪。
+ */
+async function stageCurrentDraft(): Promise<boolean> {
   if (!canStageOrder.value || !props.orderId || !props.designId) {
     ElMessage.warning('上线检查未通过或本单信息不完整，暂时不能加入待提交')
-    return
+    return false
   }
   let reviewNote: string | undefined
   if (
-    readiness.value.warnings.some((warning) => warning.code === 'REVIEW_REQUIRED')
+    readiness.value?.warnings.some(
+      (warning) => warning.code === 'REVIEW_REQUIRED'
+    )
   ) {
     try {
       const result = await ElMessageBox.prompt(
         '配方未完全合规，请填写审核说明',
         '审核说明',
         {
-          confirmButtonText: '继续加入待提交',
+          confirmButtonText: '继续',
           cancelButtonText: '取消',
           inputType: 'textarea',
           inputValidator: (value) =>
@@ -780,17 +833,7 @@ async function stageOrder(): Promise<void> {
       )
       reviewNote = String(result.value ?? '').trim()
     } catch {
-      return
-    }
-  } else {
-    try {
-      await ElMessageBox.confirm(
-        `确认把「${props.draftName || '当前设计'}」加入本单待提交吗？加入后顾客还看不到，管理员最终提交时才交付。`,
-        '加入本单待提交',
-        { type: 'warning', confirmButtonText: '加入待提交', cancelButtonText: '取消' }
-      )
-    } catch {
-      return
+      return false
     }
   }
   staging.value = true
@@ -800,12 +843,91 @@ async function stageOrder(): Promise<void> {
       props.designId,
       reviewNote
     )
+    return true
+  } catch {
+    // API 拦截器提示
+    return false
+  } finally {
+    staging.value = false
+  }
+}
+
+async function stageOrder(): Promise<void> {
+  if (!readiness.value || readiness.value.designMode !== 'ORDER') return
+  if (!canStageOrder.value || !props.orderId || !props.designId) {
+    ElMessage.warning('上线检查未通过或本单信息不完整，暂时不能加入待提交')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认把「${props.draftName || '当前设计'}」加入本单待提交吗？加入后顾客还看不到，管理员最终提交时才交付。`,
+      '加入本单待提交',
+      { type: 'warning', confirmButtonText: '加入待提交', cancelButtonText: '取消' }
+    )
+  } catch {
+    return
+  }
+  if (await stageCurrentDraft()) {
     ElMessage.success('已加入本单待提交')
+    // 普通流程：加入待提交后回工作台继续下一份 / 最终提交
     emit('staged')
+  }
+}
+
+/**
+ * 售后改稿：一键重新交付给顾客（2026-11-24）。
+ *
+ * 顺序不能反：先定版（markReady），再让后端按入仓那一版重新生成交付快照。
+ * 只确认一次 —— 给顾客的处理说明由后端用默认话术生成（带上下单时写的
+ * 调整说明），不再让处理人每次再改一遍。
+ */
+async function redeliverToCustomer(): Promise<void> {
+  if (!props.aftersaleId) return
+  if (!readiness.value || readiness.value.designMode !== 'ORDER') return
+  if (!canStageOrder.value || !props.orderId || !props.designId) {
+    ElMessage.warning('上线检查未通过或本单信息不完整，暂时不能交付')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      `确认把「${props.draftName || '当前设计'}」交付给顾客吗？顾客会收到一条新的交付通知，这条售后会同时标记完成。`,
+      '重新交付给顾客',
+      {
+        type: 'warning',
+        confirmButtonText: '确认交付',
+        cancelButtonText: '再看看',
+      }
+    )
+  } catch {
+    return
+  }
+
+  try {
+    /**
+     * 先定版再进入「交付中」：`canStageOrder` 会把 `redelivering` 算进去，
+     * 先置 true 会让 `stageCurrentDraft` 自己把自己挡在门外。
+     */
+    if (!(await stageCurrentDraft())) return
+    redelivering.value = true
+    const result = await customRecipeApi.redeliverAftersaleRevision(
+      props.aftersaleId
+    )
+    if (result.resolved) {
+      ElMessage.success(
+        `已重新交付给顾客（第 ${result.version} 版），售后已完成`
+      )
+    } else {
+      ElMessage.warning(
+        '已交付给顾客，但售后单没自动结掉，请到「售后与退款 → 售后待办」点「处理完成」'
+      )
+    }
+    // 先刷新检查结果，再让父页面关抽屉、刷新本单状态
+    await loadReadiness()
+    emit('redelivered')
   } catch {
     // API 拦截器提示
   } finally {
-    staging.value = false
+    redelivering.value = false
   }
 }
 

@@ -240,6 +240,43 @@ export interface AgentNutritionProfileRead {
   defaultSupplementTargets?: Prisma.JsonValue | null;
 }
 
+/** Agent 读同订单其它食谱时的一份摘要（不含当前草稿）。 */
+export interface AgentOrderRecipeSummary {
+  /** READY = 已加入待提交；DELIVERED = 已交付。 */
+  status: 'READY' | 'DELIVERED';
+  statusLabel: string;
+  name: string;
+  /** 生命阶段代码，如 ADULT / ADULT_SENIOR。 */
+  lifeStage: string | null;
+  applicableLifeStages: string[];
+  /** 加入待提交/交付的时间（取槽位更新时间）。 */
+  submittedAt: string | null;
+  /** 入仓后草稿又改过；说明这里看到的是当时提交的版本。 */
+  hasNewerEdits: boolean;
+  /** 对外食谱编号（Recipe.recipeId），不是数据库行 id。 */
+  recipeCode: string;
+  version: number;
+  totalWeightG: number;
+  energyDensityKcalPerKg: number | null;
+  items: Array<{
+    name: string;
+    type: string | null;
+    weightG: number | null;
+    ratioPercent: number | null;
+    preparationMethod: string | null;
+    nutritionProfileName: string | null;
+    nutritionPreparationState: string | null;
+  }>;
+  steps: string[];
+}
+
+export interface AgentOrderRecipesContext {
+  orderNo: string | null;
+  orderQuantity: number | null;
+  recipes: AgentOrderRecipeSummary[];
+  note?: string;
+}
+
 /** 「最近吃过的食材」时间窗口（天）允许范围 */
 const RECENT_EATEN_WINDOW_MIN_DAYS = 7;
 const RECENT_EATEN_WINDOW_MAX_DAYS = 365;
@@ -13115,6 +13152,164 @@ export class RecipeDesignerService {
     };
   }
 
+  /**
+   * 给 Agent 看同订单里**其它**已加入待提交 / 已交付的食谱（2026-11-24）。
+   *
+   * 一单通常做多份，Agent 只能看到当前草稿时会不知道前面几份做了什么，
+   * 容易重复。这里只读同订单的槽位快照，不含当前草稿，也不含仍在编辑的草稿；
+   * 返回配方名称、状态、阶段、原料与克数、步骤摘要，供 Agent 做差异化。
+   */
+  async getOrderRecipesForAgent(
+    draftId: string,
+    access: RecipeDesignerAccessInput,
+  ): Promise<AgentOrderRecipesContext> {
+    const draft = (await this.getDraft(draftId, access)) as any;
+    const orderUuid = draft?.series?.orderId ?? null;
+    if (!orderUuid) {
+      return {
+        orderNo: null,
+        orderQuantity: null,
+        recipes: [],
+        note: '当前不是订单定制设计，本单没有同订单食谱。',
+      };
+    }
+
+    const [order, slots] = await Promise.all([
+      this.prisma.customRecipeOrder.findUnique({
+        where: { id: orderUuid },
+        select: { orderId: true, recipeQuantity: true },
+      }),
+      this.prisma.orderRecipeDesign.findMany({
+        where: {
+          orderId: orderUuid,
+          designDraftId: { not: draftId },
+          status: {
+            in: [
+              OrderRecipeDesignStatus.READY,
+              OrderRecipeDesignStatus.DELIVERED,
+            ],
+          },
+        },
+        orderBy: { updatedAt: 'desc' },
+        take: 20,
+        select: {
+          status: true,
+          updatedAt: true,
+          designDraft: { select: { updatedAt: true } },
+          recipe: {
+            select: {
+              recipeId: true,
+              version: true,
+              name: true,
+              energyDensityKcalPerKg: true,
+              applicableLifeStages: true,
+              seriesLifeStage: true,
+              productionStepsJson: true,
+              items: {
+                orderBy: { sortOrder: 'asc' },
+                select: {
+                  exampleWeight: true,
+                  ratioPercent: true,
+                  preparationMethod: true,
+                  ingredient: { select: { name: true, type: true } },
+                  nutritionFood: {
+                    select: {
+                      displayNameZh: true,
+                      name: true,
+                      preparationStateLabel: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const recipes: AgentOrderRecipeSummary[] = [];
+    for (const slot of slots as any[]) {
+      const recipe = slot?.recipe;
+      if (!recipe) continue;
+
+      const items: AgentOrderRecipeSummary['items'] = (
+        Array.isArray(recipe.items) ? recipe.items : []
+      ).map((item: any) => {
+          const weight = Number(item?.exampleWeight);
+          const ratio = Number(item?.ratioPercent);
+          return {
+            name:
+              item?.nutritionFood?.displayNameZh ??
+              item?.nutritionFood?.name ??
+              item?.ingredient?.name ??
+              '未命名',
+            type: item?.ingredient?.type
+              ? String(item.ingredient.type)
+              : null,
+            weightG: Number.isFinite(weight) ? round2(weight) : null,
+            ratioPercent: Number.isFinite(ratio) ? round2(ratio) : null,
+            preparationMethod: item?.preparationMethod ?? null,
+            nutritionProfileName:
+              item?.nutritionFood?.displayNameZh ??
+              item?.nutritionFood?.name ??
+              null,
+            nutritionPreparationState:
+              item?.nutritionFood?.preparationStateLabel ?? null,
+          };
+        },
+      );
+      const totalWeightG = items.reduce(
+        (sum, item) => sum + (item.weightG ?? 0),
+        0,
+      );
+      const steps = this.readDraftProductionSteps(recipe.productionStepsJson)
+        .map((step) => String(step.instruction ?? '').trim())
+        .filter(Boolean)
+        .slice(0, 12);
+      const updatedAt = slot.updatedAt ? new Date(slot.updatedAt) : null;
+      const draftUpdatedAt = slot.designDraft?.updatedAt
+        ? new Date(slot.designDraft.updatedAt)
+        : null;
+      const energyDensity = Number(recipe.energyDensityKcalPerKg);
+
+      recipes.push({
+        status:
+          slot.status === OrderRecipeDesignStatus.DELIVERED
+            ? 'DELIVERED'
+            : 'READY',
+        statusLabel:
+          slot.status === OrderRecipeDesignStatus.DELIVERED
+            ? '已交付'
+            : '已加入待提交',
+        name: String(recipe.name ?? '未命名食谱'),
+        lifeStage: recipe.seriesLifeStage
+          ? String(recipe.seriesLifeStage)
+          : null,
+        applicableLifeStages: Array.isArray(recipe.applicableLifeStages)
+          ? recipe.applicableLifeStages.map((value: unknown) => String(value))
+          : [],
+        submittedAt: toIsoDateTimeText(updatedAt),
+        hasNewerEdits: Boolean(
+          updatedAt && draftUpdatedAt && draftUpdatedAt > updatedAt,
+        ),
+        recipeCode: String(recipe.recipeId ?? ''),
+        version: Number(recipe.version ?? 1),
+        totalWeightG: round2(totalWeightG),
+        energyDensityKcalPerKg: Number.isFinite(energyDensity)
+          ? energyDensity
+          : null,
+        items,
+        steps,
+      });
+    }
+
+    return {
+      orderNo: order?.orderId ?? null,
+      orderQuantity: order?.recipeQuantity ?? null,
+      recipes,
+    };
+  }
+
   async updateDogDesignNotes(
     dogId: string,
     dto: UpdateDogDesignNotesDto,
@@ -13651,6 +13846,12 @@ function monthsSince(
     (now.getMonth() - date.getMonth());
   if (now.getDate() < date.getDate()) months -= 1;
   return Math.max(0, months);
+}
+
+/** 重量/配比保留两位小数，避免长浮点进模型上下文。 */
+function round2(value: number): number {
+  if (!Number.isFinite(value)) return value;
+  return Math.round(value * 100) / 100;
 }
 
 /** 营养值最多保留 6 位小数，避免 0.020000000000000018 这类噪声进上下文。 */

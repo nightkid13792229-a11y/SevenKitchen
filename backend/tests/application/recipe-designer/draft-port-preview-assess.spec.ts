@@ -100,6 +100,26 @@ describe('RecipeDraftPort · previewAssessment', () => {
     expect(assessNutritionItemsForAgent).not.toHaveBeenCalled();
   });
 
+  it('readOrderRecipes 直接委托服务取同订单食谱', async () => {
+    const getOrderRecipesForAgent = jest.fn().mockResolvedValue({
+      orderNo: 'CR1',
+      orderQuantity: 2,
+      recipes: [{ name: '鸡肉餐' }],
+    });
+    const port = new RecipeDraftPort(
+      { getOrderRecipesForAgent } as any,
+      { userId: 'u1' } as any,
+      'draft-1',
+    );
+
+    const result = await port.readOrderRecipes();
+
+    expect(getOrderRecipesForAgent).toHaveBeenCalledWith('draft-1', {
+      userId: 'u1',
+    });
+    expect(result.recipes).toHaveLength(1);
+  });
+
   it('readNutritionProfiles 直接委托服务，不在端口里二次加工', async () => {
     const readNutritionProfilesForAgent = jest
       .fn()

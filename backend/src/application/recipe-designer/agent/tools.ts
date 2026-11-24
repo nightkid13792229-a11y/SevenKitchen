@@ -181,6 +181,15 @@ export const AGENT_TOOLS: DeepSeekToolDefinition[] = [
   {
     type: 'function',
     function: {
+      name: 'read_order_recipes',
+      description:
+        '读本单其它已提交/已交付的食谱（不含当前草稿）：名称、状态、生命阶段、总重量、能量密度、原料与克数、步骤摘要。一单做多份时先看它，避免重复；只读，不改草稿。',
+      parameters: NO_ARGS,
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'preview_assessment',
       description:
         '不改草稿，用候选食材 + 克数试算营养评估：返回过没过、缺口、缺数据与能量。选材阶段还没有正式克数，用一份试算批次（如总量 1000g）估算比例；配方阶段可先比较两三个方案再落地。只算营养，不含过敏/忌口；补剂不支持试算，补剂请加进配方后用 assess 验证。',
@@ -539,6 +548,25 @@ export async function executeTool(
             ? '没有读到营养档案'
             : `读到 ${profiles.length} 份营养档案。${summary}`,
         );
+      }
+
+      case 'read_order_recipes': {
+        const orderRecipes = await context.port.readOrderRecipes();
+        const recipes = Array.isArray(orderRecipes?.recipes)
+          ? orderRecipes.recipes
+          : [];
+        const summary =
+          recipes.length === 0
+            ? orderRecipes?.note || '本单还没有其它已提交/已交付的食谱'
+            : `本单已有 ${recipes.length} 份：${recipes
+                .map((recipe) => {
+                  const stage = recipe.lifeStage
+                    ? ` · ${recipe.lifeStage}`
+                    : '';
+                  return `${recipe.name}（${recipe.statusLabel}${stage}）`;
+                })
+                .join('、')}`;
+        return ok(orderRecipes, summary);
       }
 
       case 'preview_assessment': {

@@ -7,7 +7,10 @@
  */
 import { Injectable } from '@nestjs/common';
 import { RecipeDesignerService } from '../recipe-designer.service';
-import type { AgentNutritionProfileRead } from '../recipe-designer.service';
+import type {
+  AgentNutritionProfileRead,
+  AgentOrderRecipesContext,
+} from '../recipe-designer.service';
 import { AgentToolError, type RecipeEditOp } from './agent-types';
 import type {
   AssessmentTargetOverride,
@@ -720,6 +723,11 @@ export class RecipeDraftPort {
       resolution.overrides,
       resolution.unsupported,
     );
+  }
+
+  /** 读本单其它已提交/已交付的食谱（只读，不含当前草稿）。 */
+  async readOrderRecipes(): Promise<AgentOrderRecipesContext> {
+    return this.designer.getOrderRecipesForAgent(this.draftId, this.access);
   }
 
   /** 读原料营养档案（只读，已验证）；支持按档案 id 或原料 id。 */

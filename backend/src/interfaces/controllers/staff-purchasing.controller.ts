@@ -910,13 +910,16 @@ export class StaffPurchasingController {
       `Fetching purchase lists with filters: status=${status}, userId=${userId}, role=${userRole}`,
     );
 
-    // 管理员可以看到所有采购清单，员工只能看到自己创建的
-    const createdById = userRole === 'ADMIN' ? undefined : userId;
-
+    // 2026-11-25 改成团队共享：采购清单不再按「谁建的」过滤。
+    //
+    // 老板的话：「我在小程序里生成的日采清单，员工看不到。」原来员工只看得到
+    // 自己创建的单，于是老板先建了那天的日采清单之后，员工这一天的活全堵死：
+    // 列表里没有这张单（点进去空的）、他自己点生成会被 409「该日期已存在待
+    // 采购清单」拦住、要排产又被「请先完成采购任务」拦住。
+    // 采购是团队一起干的活，所以清单（含补货记录）对管理员和员工一律可见。
     const result = await this.purchasingService.getPurchaseLists({
       status,
       kind,
-      createdById,
       startDate,
       endDate,
       page: page ? parseInt(page) : 1,
@@ -1138,10 +1141,15 @@ export class StaffPurchasingController {
   async deletePurchaseList(
     @Param('id') id: string,
     @UserId() userId: string,
+    @UserRole() userRole?: string,
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Deleting purchase list ${id}`);
 
-    const result = await this.purchasingService.deletePurchaseList(id, userId);
+    const result = await this.purchasingService.deletePurchaseList(
+      id,
+      userId,
+      userRole,
+    );
 
     return ApiResponseDto.success(result, '删除采购清单成功');
   }

@@ -10,6 +10,7 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -3845,6 +3846,7 @@ export class PurchasingService {
   async deletePurchaseList(
     purchaseListId: string,
     operatorId: string,
+    operatorRole?: string,
   ): Promise<{
     deletedId: string;
     restoredOrdersCount: number;
@@ -3856,6 +3858,19 @@ export class PurchasingService {
 
     if (!purchaseList) {
       throw new BadRequestException('采购清单不存在');
+    }
+
+    // 2026-11-25：清单改成团队共享之后，删单不再是谁都能做。
+    // 别人可能正拿着这张单在超市里采购，删掉会把订单状态退回「已付款」、
+    // 他手上那条采购记录就悬空了。所以只有创建人自己和管理员能删。
+    if (
+      operatorRole &&
+      operatorRole !== 'ADMIN' &&
+      purchaseList.createdById !== operatorId
+    ) {
+      throw new ForbiddenException(
+        '只有创建这张清单的人或管理员可以删除，请找创建人处理',
+      );
     }
 
     // 检查是否已关联报销单

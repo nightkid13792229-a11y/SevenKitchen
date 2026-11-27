@@ -33,10 +33,6 @@ import { SupplementInventoryService } from './supplement-inventory.service';
 import { SupplementPackagingService } from './supplement-packaging.service';
 import { SupplementSnapshotService } from './supplement-snapshot.service';
 import { SupplementNotificationService } from './supplement-notification.service';
-import {
-  SupplementCandidateService,
-  type SupplementCandidateItem,
-} from './supplement-candidate.service';
 import { SupplementPlanService } from './supplement-plan.service';
 import { computeSheetTotalWeightG } from './supplement-sheet-weight.util';
 import { perBaseUnitCost } from '../../domain/ingredient/unit-price';
@@ -293,8 +289,6 @@ export class SupplementOrderService {
     private readonly snapshotService?: SupplementSnapshotService,
     @Optional()
     private readonly notificationService?: SupplementNotificationService,
-    @Optional()
-    private readonly candidateService?: SupplementCandidateService,
     @Optional()
     private readonly supplementPackagingService?: SupplementPackagingService,
     /** 发货硬锁（2026-11-10）：小程序来的发货要求先验存根；缺失时 fail closed */

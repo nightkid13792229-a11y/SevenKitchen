@@ -37,7 +37,6 @@ describe('SupplementOrderService · repack pool validation', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       planService,
     );
     return { service, planService };

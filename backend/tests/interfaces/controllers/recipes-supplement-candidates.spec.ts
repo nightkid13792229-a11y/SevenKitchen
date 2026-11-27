@@ -31,7 +31,6 @@ describe('RecipesController.getSupplementCandidates', () => {
       {} as any, // orderService
       {} as any, // allergenVocabulary
       {} as any, // deliveryService
-      {} as any, // supplementCandidateService
       planService as any, // supplementPlanService
       {} as any, // recipeCoverImageService
       {} as any, // recipeService

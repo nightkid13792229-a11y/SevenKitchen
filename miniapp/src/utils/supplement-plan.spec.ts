@@ -107,6 +107,18 @@ describe('buildSupplementPlanRows · 自购口径', () => {
     expect(switched[0].amount).toBe(5.13)
   })
 
+  it('添加时机以中文标签为准，不被食谱行的历史字段抢走', () => {
+    // 2026-11-28：后端 addTimingLabel 是「随餐」这类中文；
+    // preparationMethod 是食谱行的历史字段，不能盖在时机列上。
+    const rows = buildSupplementPlanRows({
+      items: [item({ addTimingLabel: '随餐', preparationMethod: 'CHOPPED' })],
+    })
+    expect(rows[0].preparationMethod).toBe('随餐')
+
+    const legacy = buildSupplementPlanRows({ items: [item()] })
+    expect(legacy[0].preparationMethod).toBe('充分搅拌')
+  })
+
   it('没链接的自购款也出现，只是 purchaseLink 为空', () => {
     const rows = buildSupplementPlanRows({
       items: [

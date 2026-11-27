@@ -148,7 +148,9 @@ describe('diy sheet layout regressions', () => {
     expect(templateSource).toContain('犬营养标准')
     expect(source).toContain('const standardExplainVisible = ref(false)')
     expect(source).toContain('const nutritionStandardExplain = computed')
-    expect(source).toContain("import { getNutritionStandardExplain } from '../../utils/label-mapping'")
+    expect(source).toContain(
+      "import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'",
+    )
   })
 
   it('uses one compact storage/cooking section instead of the old advice cards', () => {

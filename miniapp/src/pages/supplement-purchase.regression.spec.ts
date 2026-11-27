@@ -208,10 +208,11 @@ describe('supplement purchase regressions', () => {
     })
 
     it('把品牌规格带进购买草稿，供下单页小字展示', () => {
-      // 2026-10-26：购买行改由 supplement-candidates 生成，行内不带 amount
+      // 2026-10-26：购买行改由共享的 supplement-plan 生成，行内不带 amount
+      // 2026-11-28：原先的 supplement-candidates 已无人引用，删除后指向唯一实现
       expect(source).toContain('buildSupplementPurchaseLines(')
       const helper = readFileSync(
-        resolve(process.cwd(), 'src/pages/diy-sheet/supplement-candidates.ts'),
+        resolve(process.cwd(), 'src/utils/supplement-plan.ts'),
         'utf-8',
       )
       expect(helper).toContain('specText:')

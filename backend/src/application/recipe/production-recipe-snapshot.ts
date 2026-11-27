@@ -155,10 +155,10 @@ export function buildProductionRecipeSnapshot(
         nutrition_food_name: ri.nutritionFood?.name ?? undefined,
         nutrition_state:
           ri.nutritionState ?? ri.nutritionFood?.preparationState ?? undefined,
+        // 2026-11-28：快照里的展示标签只认中文；状态码单独放在 nutrition_state。
         nutrition_state_label:
           ri.nutritionStateLabel ??
           ri.nutritionFood?.preparationStateLabel ??
-          ri.nutritionFood?.preparationState ??
           undefined,
         ingredient_type: ingredient?.type,
         nutrient_target_key: ri.nutrientTargetKey ?? undefined,

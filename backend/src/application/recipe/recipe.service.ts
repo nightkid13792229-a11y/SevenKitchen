@@ -144,11 +144,9 @@ export class RecipeService {
   private resolveNutritionStateLabel(
     nutritionFood?: Record<string, any> | null,
   ) {
-    return (
-      nutritionFood?.preparationStateLabel ||
-      nutritionFood?.preparationState ||
-      undefined
-    );
+    // 2026-11-28：label 只认中文标签。以前兜底到 preparation_state（cooked/raw），
+    // 营养档案漏填标签时顾客会看到英文码。
+    return nutritionFood?.preparationStateLabel || undefined;
   }
 
   private mapNutritionFoodRef(nutritionFood?: Record<string, any> | null) {

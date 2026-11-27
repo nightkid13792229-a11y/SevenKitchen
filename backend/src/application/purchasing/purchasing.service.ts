@@ -20,6 +20,7 @@ import {
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from '../order/order.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import { resolveBaseUnitLabel } from '../../domain/ingredient/unit-label';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
@@ -2182,7 +2183,8 @@ export class PurchasingService {
           type: ingredient.type,
           procurementStrategy: ingredient.procurementStrategy,
           baseUnit: ingredient.baseUnit,
-          stockUnitLabel: ingredient.unitDisplayLabel || ingredient.baseUnit,
+          stockUnitLabel:
+            ingredient.unitDisplayLabel || resolveBaseUnitLabel(ingredient.baseUnit),
           purchaseUnit: profile.purchaseUnit,
           purchaseToBaseRatio: profile.purchaseToBaseRatio,
           unitDisplayLabel: profile.displayUnit || ingredient.unitDisplayLabel,

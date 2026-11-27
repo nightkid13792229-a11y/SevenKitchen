@@ -14,6 +14,7 @@ import {
 } from './supplement-dosage.service';
 import { computeSheetTotalWeightG } from './supplement-sheet-weight.util';
 import { RecipeStatus } from '../../domain/recipe/enums';
+import { resolveSupplementAddTimingLabel } from '../../domain/ingredient/supplement-add-timing';
 
 /**
  * 补剂三口径：参考产品 / 预分装产品 / DIY 推荐商品（2026-11-15）。
@@ -600,10 +601,13 @@ export class SupplementPlanService {
           sourceIngredientId: ingredient.id,
           name: ingredient.name,
           preparationMethod: item.preparationMethod ?? null,
+          // 2026-11-28：这里是**展示文案**，必须走词表翻译。
+          // 以前直接把 add_timing 的枚举码（BEFORE_MIXING）当 label 传，
+          // 制作单「建议添加时机」列就印出了英文码。
           addTimingLabel:
-            typeof (ingredient.properties as any)?.add_timing === 'string'
-              ? (ingredient.properties as any).add_timing
-              : null,
+            resolveSupplementAddTimingLabel(
+              (ingredient.properties as any)?.add_timing,
+            ) ?? null,
           sortOrder: Number(item.sortOrder ?? 0),
           reference: this.computeReference(
             ingredient,

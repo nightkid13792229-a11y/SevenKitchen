@@ -1245,7 +1245,8 @@ const form = reactive<RecipeForm>({
   description: undefined,
   sellingPoint: undefined,
   designSource: undefined,
-  nutritionStandard: NutritionStandard.FEDIAF_2021,
+  // 2026-11-28：营养标准统一到 FEDIAF 2025（小程序只认这一条背书）
+  nutritionStandard: NutritionStandard.FEDIAF_2025,
   energyDensityKcalPerKg: 1500,
   items: [],
   productionLossRate: 1.07,

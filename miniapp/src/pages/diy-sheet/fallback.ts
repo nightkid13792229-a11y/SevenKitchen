@@ -39,13 +39,11 @@ function isFoodRecipeItem(item: RecipeItemLike): boolean {
 }
 
 function getNutritionStateLabel(item: RecipeItemLike): string | null {
+  // 2026-11-28：只认中文标签，不再回退 preparationState（cooked/raw）。
   return (
     item.nutritionStateLabel ||
     item.nutrition_state_label ||
     item.nutritionFood?.preparationStateLabel ||
-    item.nutritionState ||
-    item.nutrition_state ||
-    item.nutritionFood?.preparationState ||
     null
   )
 }

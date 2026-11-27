@@ -32,6 +32,7 @@ import type { ProductionBatchRepository } from '../../domain/production/producti
 import { assertRejectNote, canEdit, isWithinTolerance } from './stocktake-rules';
 import { PackagingUnitStatus } from '../../domain/production/enums';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
+import { resolveBaseUnitLabel } from '../../domain/ingredient/unit-label';
 export interface PurchaseInboundRecord {
   id: string;
   ingredientId: string;
@@ -2029,8 +2030,7 @@ export class InventoryService {
         ingredientType: line.ingredient?.type ?? null,
         stockUnitLabel:
           line.ingredient?.unitDisplayLabel ||
-          line.ingredient?.baseUnit ||
-          'G',
+          resolveBaseUnitLabel(line.ingredient?.baseUnit),
         brand: line.ingredient?.brand ?? null,
         productModel: line.ingredient?.productModel ?? null,
         purchaseChannel: line.ingredient?.purchaseChannel ?? null,
@@ -2711,7 +2711,9 @@ export class InventoryService {
   private resolveStockUnitLabel(
     ingredient?: IngredientStockMeta | null,
   ): string {
-    return ingredient?.unitDisplayLabel || ingredient?.baseUnit || 'G';
+    return (
+      ingredient?.unitDisplayLabel || resolveBaseUnitLabel(ingredient?.baseUnit)
+    );
   }
 
   private resolveSourceLabel(sourceType: InventorySourceType): string {

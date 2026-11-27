@@ -258,6 +258,75 @@ describe('SupplementPlanService.resolveForRecipeRequest', () => {
     );
   });
 
+  it('添加时机返回中文文案，不把 add_timing 枚举码端给顾客', async () => {
+    // 2026-11-28：制作单「建议添加时机」列直接渲染 addTimingLabel。
+    // 以前这里塞的是 properties.add_timing 的枚举码（BEFORE_MEAL），顾客看到英文。
+    const row = recipeRow();
+    row.items[0].ingredient = powder({
+      properties: { add_timing: 'BEFORE_MEAL' },
+    });
+    const prisma: any = {
+      dIYSheet: {
+        findUnique: jest.fn().mockResolvedValue({
+          userId: 'u1',
+          recipeVersion: 6,
+          packagePlan: [{ packageSpecG: 88, packageCount: 14 }],
+        }),
+      },
+      recipe: { findUnique: jest.fn().mockResolvedValue(row) },
+      supplementShopConfig: {
+        findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: true }),
+      },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+
+    const plan = await service.resolveForRecipeRequest({
+      recipeId: 'recipe-1',
+      recipeVersion: 6,
+      totalWeightG: 1232,
+      diySheetId: 'sheet-1',
+      userId: 'u1',
+    });
+
+    expect(plan.items[0].addTimingLabel).toBe('随餐');
+    expect(plan.items[0].addTimingLabel).not.toMatch(/^[A-Z][A-Z0-9_]*$/);
+  });
+
+  it('添加时机缺失或不在词表里时给 null，不回退原始码', async () => {
+    const row = recipeRow();
+    row.items[0].ingredient = powder({
+      properties: { add_timing: 'SOMETHING_UNKNOWN' },
+    });
+    const prisma: any = {
+      dIYSheet: {
+        findUnique: jest.fn().mockResolvedValue({
+          userId: 'u1',
+          recipeVersion: 6,
+          packagePlan: [{ packageSpecG: 88, packageCount: 14 }],
+        }),
+      },
+      recipe: { findUnique: jest.fn().mockResolvedValue(row) },
+      supplementShopConfig: {
+        findUnique: jest.fn().mockResolvedValue({ equivalenceEnabled: true }),
+      },
+      supplementEquivalenceGroup: { findMany: jest.fn().mockResolvedValue([]) },
+      recommendedProduct: { findMany: jest.fn().mockResolvedValue([]) },
+    };
+    const service = createService(prisma);
+
+    const plan = await service.resolveForRecipeRequest({
+      recipeId: 'recipe-1',
+      recipeVersion: 6,
+      totalWeightG: 1232,
+      diySheetId: 'sheet-1',
+      userId: 'u1',
+    });
+
+    expect(plan.items[0].addTimingLabel).toBeNull();
+  });
+
   it('制作单不属于当前用户时拒绝', async () => {
     const prisma: any = {
       dIYSheet: {

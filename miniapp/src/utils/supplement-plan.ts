@@ -187,7 +187,9 @@ export function buildSupplementPlanRows(
         unit,
         displayUnit: selected?.displayUnit || item.reference.displayUnit,
         targets: item.reference.targets || [],
-        preparationMethod: item.preparationMethod || item.addTimingLabel || '',
+        // 2026-11-28：这一列是「建议添加时机」，以 addTimingLabel（中文）为准；
+        // preparationMethod 是食谱行的历史字段，只在没有时机标签时兜底。
+        preparationMethod: item.addTimingLabel || item.preparationMethod || '',
         targetSummary: (item.reference.targets || [])
           .map(
             (target) => `${target.label} ${target.targetValuePerKg}${target.unit}/kg`,

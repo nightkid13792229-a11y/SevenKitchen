@@ -99,8 +99,9 @@ const props = withDefaults(
 const standardLabel = computed(() => {
   const value = (props.standard || '').trim()
   if (!value) return ''
-  // 已经带年号的直接拼"犬营养标准"；未知编码原样回显，不猜
-  return `${getNutritionStandardLabel(value)} 犬营养标准`
+  // 2026-11-28：只有 FEDIAF 2025 有中文名；其他代码不展示（也不回显原码）。
+  const label = getNutritionStandardLabel(value)
+  return label ? `${label} 犬营养标准` : ''
 })
 
 /**

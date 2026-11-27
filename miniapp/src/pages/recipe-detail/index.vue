@@ -203,17 +203,24 @@
     </view>
 
     <!-- 营养标准背书（结论式 + 可展开说明） -->
-    <view class="standard-card" @tap="toggleStandardExplain">
+    <view
+      v-if="recipeNutritionStandardLabel"
+      class="standard-card"
+      @tap="toggleStandardExplain"
+    >
       <view class="standard-main">
         <text class="standard-badge">✓</text>
         <view class="standard-copy">
-          <text class="standard-title">符合 {{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
+          <text class="standard-title">符合 {{ recipeNutritionStandardLabel }}</text>
           <text class="standard-sub">犬营养标准</text>
         </view>
       </view>
       <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
     </view>
-    <view v-if="standardExplainVisible" class="standard-explain">
+    <view
+      v-if="standardExplainVisible && nutritionStandardExplain"
+      class="standard-explain"
+    >
       <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
     </view>
 
@@ -480,7 +487,7 @@ import { normalizeImageUrl } from '../../utils/config'
 import { trackFunnelEvent } from '../../utils/funnel'
 import { buildDogCreateRoute, navigateToDogCreate } from '../../utils/dog-profile-entry'
 import { resolveCoverBadgeText } from '../../utils/cover-badge'
-import { getNutritionStandardExplain, getLifeStageLabel } from '../../utils/label-mapping'
+import { getNutritionStandardExplain, getNutritionStandardLabel, getLifeStageLabel } from '../../utils/label-mapping'
 import { buildSupplementNutrientRowsFromItems } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
@@ -1414,22 +1421,15 @@ function goSuitableRecipes() {
 
 
 // 营养标准的通俗解释（与订购配置页共用同一份文案，保证两页展示一致）
+const recipeNutritionStandardLabel = computed(() =>
+  getNutritionStandardLabel(recipe.value.nutritionStandard || ''),
+)
 const nutritionStandardExplain = computed(() =>
-  getNutritionStandardExplain(recipe.value.nutritionStandard),
+  getNutritionStandardExplain(recipe.value.nutritionStandard || ''),
 )
 
 function toggleStandardExplain() {
   standardExplainVisible.value = !standardExplainVisible.value
-}
-
-function getNutritionStandardLabel(standard: string): string {
-  const map: Record<string, string> = {
-    'FEDIAF_2021': 'FEDIAF 2021',
-    'FEDIAF_2025': 'FEDIAF 2025',
-    'AAFCO_2019': 'AAFCO 2019',
-    'GB_T_31216': '国标 GB/T 31216',
-  }
-  return map[standard] || standard
 }
 
 function formatFoodRatio(item: RecipeItem): string {

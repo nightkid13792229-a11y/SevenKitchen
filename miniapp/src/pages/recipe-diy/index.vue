@@ -33,7 +33,11 @@
           和内部系统名并列，看起来像一张开发参数表。
           现在改成可点开的背书卡（与食谱详情页 / 成品订购页同一展示方式）。
         -->
-        <view class="standard-card" @tap="toggleStandardExplain">
+        <view
+          v-if="recipeNutritionStandardLabel"
+          class="standard-card"
+          @tap="toggleStandardExplain"
+        >
           <view class="standard-main">
             <text class="standard-badge">✓</text>
             <view class="standard-copy">
@@ -43,7 +47,10 @@
           </view>
           <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
         </view>
-        <view v-if="standardExplainVisible" class="standard-explain">
+        <view
+          v-if="standardExplainVisible && nutritionStandardExplain"
+          class="standard-explain"
+        >
           <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
         </view>
       </view>
@@ -297,10 +304,10 @@ const recipe = ref<Recipe>({
 })
 // 营养标准背书卡（与食谱详情页 / 成品订购页同一展示方式）
 const recipeNutritionStandardLabel = computed(() =>
-  getNutritionStandardLabel(recipe.value.nutritionStandard || 'FEDIAF_2021')
+  getNutritionStandardLabel(recipe.value.nutritionStandard || '')
 )
 const nutritionStandardExplain = computed(() =>
-  getNutritionStandardExplain(recipe.value.nutritionStandard || 'FEDIAF_2021')
+  getNutritionStandardExplain(recipe.value.nutritionStandard || '')
 )
 const standardExplainVisible = ref(false)
 

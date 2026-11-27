@@ -545,7 +545,9 @@ describe('recipe-order phase one UI contract', () => {
 
   it('shows customer-facing recipe metadata without internal abbreviations or decimals', () => {
     // 营养标准改为结论式背书卡，解释文案与食谱详情页共用同一份
-    expect(source).toContain("import { getNutritionStandardExplain } from '../../utils/label-mapping'");
+    expect(source).toContain(
+      "import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'",
+    );
     expect(source).toContain('const nutritionStandardExplain = computed');
     expect(templateSource).toContain('符合 {{ recipeNutritionStandardLabel }}');
     expect(templateSource).toContain('犬营养标准');

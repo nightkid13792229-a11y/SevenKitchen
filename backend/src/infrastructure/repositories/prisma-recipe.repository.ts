@@ -1147,10 +1147,9 @@ export class PrismaRecipeRepository implements RecipeRepository {
           ingredientId: item.ingredientId,
           nutritionFoodId: item.nutritionFoodId,
           nutritionState: item.nutritionFood?.preparationState ?? null,
+          // 2026-11-28：只认中文标签，不再把状态码（COOKED/RAW）当标签兜底。
           nutritionStateLabel:
-            item.nutritionFood?.preparationStateLabel ??
-            item.nutritionFood?.preparationState ??
-            null,
+            item.nutritionFood?.preparationStateLabel ?? null,
           nutritionFood: item.nutritionFood
             ? {
                 id: item.nutritionFood.id,

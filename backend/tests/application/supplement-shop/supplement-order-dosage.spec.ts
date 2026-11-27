@@ -99,7 +99,6 @@ describe('SupplementOrderService · server dosage lines', () => {
       undefined,
       undefined,
       undefined,
-      undefined,
       planService as any,
     );
     return { service, prisma, planService };

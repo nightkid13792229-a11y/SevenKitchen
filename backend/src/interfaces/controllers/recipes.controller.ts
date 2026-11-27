@@ -69,7 +69,6 @@ import { pickCoverBadgeNames } from '../../domain/recipe-designer/cover-badge-po
 import { DiySheetService } from '../../application/recipe/diy-sheet.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CustomRecipeDeliveryService } from '../../application/custom-recipe/custom-recipe-delivery.service';
-import { SupplementCandidateService } from '../../application/supplement-shop/supplement-candidate.service';
 import { SupplementPlanService } from '../../application/supplement-shop/supplement-plan.service';
 import { computeSheetTotalWeightG } from '../../application/supplement-shop/supplement-sheet-weight.util';
 import { OrderService } from '../../application/order/order.service';
@@ -129,7 +128,6 @@ export class RecipesController {
     private readonly orderService: OrderService,
     private readonly allergenVocabulary: AllergenVocabularyService,
     private readonly deliveryService: CustomRecipeDeliveryService,
-    private readonly supplementCandidateService: SupplementCandidateService,
     private readonly supplementPlanService: SupplementPlanService,
     private readonly recipeCoverImageService: RecipeCoverImageService,
     private readonly recipeService: RecipeService,

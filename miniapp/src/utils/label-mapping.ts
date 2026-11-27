@@ -85,45 +85,29 @@ export function getLifeStageLabel(stage: string): string {
 
 /**
  * 获取营养标准中文名称
+ *
+ * 2026-11-28：营养标准只用 FEDIAF 2025（老板定）。
+ * 其他代码一律不翻译、也不回退原值 —— 返回空串，调用方据此不展示背书卡，
+ * 免得把 AAFCO_2022 这类内部码当文案印给顾客。
+ *
  * @param standard - 营养标准代码
- * @returns 中文名称
+ * @returns 中文名称；不是 FEDIAF 2025 时为空串
  */
 export function getNutritionStandardLabel(standard: string): string {
-  const map: Record<string, string> = {
-    'FEDIAF_2021': 'FEDIAF 2021',
-    'FEDIAF_2025': 'FEDIAF 2025',
-    'AAFCO_2019': 'AAFCO 2019',
-    'GB_T_31216': '国标 GB/T 31216',
-  };
-  return map[standard] || standard;
+  return standard === 'FEDIAF_2025' ? 'FEDIAF 2025' : '';
 }
 
 /**
  * 获取营养标准的通俗解释（用于"符合 XX 犬营养标准"背书卡的展开说明）
+ *
+ * 与 label 同一口径：只对 FEDIAF 2025 给说明。
+ *
  * @param standard - 营养标准代码
- * @returns 通俗解释文案
+ * @returns 通俗解释文案；不是 FEDIAF 2025 时为空串
  */
 export function getNutritionStandardExplain(standard: string): string {
-  const map: Record<string, string> = {
-    'FEDIAF_2021':
-      'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
-    'FEDIAF_2025':
-      'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。',
-    'AAFCO_2019':
-      'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
-    'AAFCO_2021':
-      'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
-    'AAFCO_2022':
-      'AAFCO（美国饲料管理官方协会）制定的犬营养标准，是北美宠物食品的通行依据。',
-    'NRC_2006':
-      'NRC（美国国家科学研究委员会）发布的犬营养需要量，是动物营养学研究的权威参考。',
-    'GB_T_31216':
-      'GB/T 31216 是中国国家标准《全价宠物食品 犬粮》，规定了全价犬粮的营养指标要求。',
-  }
-  return (
-    map[standard] ||
-    '该食谱按所选营养标准设计，覆盖对应生命阶段的必需营养素。'
-  );
+  if (standard !== 'FEDIAF_2025') return '';
+  return 'FEDIAF（欧洲宠物食品工业联合会）制定的犬营养标准，规定了幼犬、成犬、老年犬等各生命阶段必需营养素的最低与最高限量。';
 }
 
 /**
@@ -138,4 +122,19 @@ export function getIngredientTypeLabel(type: string): string {
     'PACKAGING': '包材',
   };
   return map[type] || type;
+}
+
+/**
+ * 食谱状态中文名称
+ *
+ * 2026-11-28：员工客服页以前直接渲染 `recipe.status`，看到的是
+ * PUBLIC / DRAFT / PRIVATE_CUSTOM。状态是内部码，界面只给中文。
+ */
+export function getRecipeStatusLabel(status?: string | null): string {
+  const map: Record<string, string> = {
+    DRAFT: '草稿',
+    PUBLIC: '公开',
+    PRIVATE_CUSTOM: '私密定制',
+  };
+  return map[String(status ?? '')] || '-';
 }

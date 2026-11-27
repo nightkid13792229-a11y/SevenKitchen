@@ -21,7 +21,11 @@
           营养标准背书卡：与 DIY 配置页同一展示方式。
           原来这里是两行平铺的参数（含内部系统名），顾客用不到，现已收敛为一张背书卡。
         -->
-        <view class="standard-card" @tap="toggleStandardExplain">
+        <view
+          v-if="recipeNutritionStandardLabel"
+          class="standard-card"
+          @tap="toggleStandardExplain"
+        >
           <view class="standard-main">
             <text class="standard-badge">✓</text>
             <view class="standard-copy">
@@ -31,7 +35,10 @@
           </view>
           <text class="standard-toggle">{{ standardExplainVisible ? '收起' : '说明' }}</text>
         </view>
-        <view v-if="standardExplainVisible" class="standard-explain">
+        <view
+          v-if="standardExplainVisible && nutritionStandardExplain"
+          class="standard-explain"
+        >
           <text class="standard-explain-text">{{ nutritionStandardExplain }}</text>
         </view>
       </view>
@@ -645,7 +652,7 @@ import { buildFinishedFoodOrderUrl } from '../../utils/custom-recipe-delivery'
 import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import { getPackagePlanTotal, type PackagePlanItem } from '../../utils/order-package-plan'
-import { getNutritionStandardExplain } from '../../utils/label-mapping'
+import { getNutritionStandardExplain, getNutritionStandardLabel } from '../../utils/label-mapping'
 import {
   formatSupplementTargets
 } from '../../utils/supplement-nutrients'
@@ -824,7 +831,7 @@ const recipeNutritionStandardLabel = computed(() =>
   getNutritionStandardLabel(recipe.value.nutritionStandard)
 )
 const nutritionStandardExplain = computed(() =>
-  getNutritionStandardExplain(recipe.value.nutritionStandard || 'FEDIAF_2021')
+  getNutritionStandardExplain(recipe.value.nutritionStandard || '')
 )
 const standardExplainVisible = ref(false)
 
@@ -2220,13 +2227,12 @@ function handlePurchase(purchaseLink: any, productName: string) {
 }
 
 function formatNutritionStateForDisplay(item: any): string {
+  // 2026-11-28：只认中文标签。以前回退到 preparationState（cooked/raw），
+  // 营养档案漏填标签时，顾客在食材名后面看到英文码。
   return (
     item?.nutritionStateLabel ||
     item?.nutrition_state_label ||
     item?.nutritionFood?.preparationStateLabel ||
-    item?.nutritionState ||
-    item?.nutrition_state ||
-    item?.nutritionFood?.preparationState ||
     ''
   )
 }
@@ -2289,16 +2295,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
   }
 
   return tagOrUuid
-}
-
-function getNutritionStandardLabel(standard: string): string {
-  const map: Record<string, string> = {
-    'FEDIAF_2021': 'FEDIAF 2021',
-    'FEDIAF_2025': 'FEDIAF 2025',
-    'AAFCO_2021': 'AAFCO 2021',
-    'NRC_2006': 'NRC 2006',
-  }
-  return map[standard] || standard
 }
 
 // 设备推荐相关处理函数

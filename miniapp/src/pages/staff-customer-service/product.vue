@@ -46,7 +46,7 @@
         </view>
         <view class="info-row">
           <text class="label">状态</text>
-          <text class="value">{{ recipe.status || '-' }}</text>
+          <text class="value">{{ getRecipeStatusLabel(recipe.status) }}</text>
         </view>
         <view class="info-row" v-if="recipe.description">
           <text class="label">说明</text>
@@ -63,6 +63,7 @@
 import { ref } from 'vue'
 import { onLoad, onPullDownRefresh } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { getRecipeStatusLabel } from '../../utils/label-mapping'
 
 const productId = ref('')
 const loading = ref(false)

@@ -57,7 +57,7 @@ export interface BuildProductionRecipeSnapshotParams {
   ingredientMap: Map<string, Ingredient>;
   /** 制备方法 ID → 名称 */
   prepMethodMap: Map<string, string>;
-  /** 营养标准口径，默认 FEDIAF_2021 */
+  /** 营养标准口径，默认 FEDIAF_2025 */
   nutritionStandard?: string;
 }
 
@@ -118,7 +118,7 @@ export function buildProductionRecipeSnapshot(
     name: recipe.name,
     production_loss_rate: recipe.productionLossRate,
     energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
-    nutrition_standard: params.nutritionStandard ?? 'FEDIAF_2021',
+    nutrition_standard: params.nutritionStandard ?? 'FEDIAF_2025',
     ...(recipe.seriesLifeStage
       ? {
           series_life_stage: recipe.seriesLifeStage,

@@ -1835,7 +1835,7 @@ export class RecipesController {
         seriesSelection?.availableLifeStageVersions ?? undefined,
       productionLossRate: recipe.productionLossRate,
       nutritionStandard: (recipe.nutritionStandard ||
-        NutritionStandard.FEDIAF_2021) as NutritionStandard,
+        NutritionStandard.FEDIAF_2025) as NutritionStandard,
       designSource: (recipe as any).designSource || undefined,
       targetHealthTags: (recipe as any).targetHealthTags || [],
       applicableLifeStages: (recipe as any).applicableLifeStages || [],

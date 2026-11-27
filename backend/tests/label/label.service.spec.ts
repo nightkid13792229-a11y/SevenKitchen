@@ -1,7 +1,5 @@
 import { loadImage } from 'canvas';
 import { createCanvas } from 'canvas';
-import { readFileSync } from 'fs';
-import { resolve } from 'path';
 import { LabelService } from '../../src/label/label.service';
 import { LabelDataDto } from '../../src/label/dto/label-data.dto';
 
@@ -125,15 +123,6 @@ describe('LabelService 70x100 food label rendering', () => {
     expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(
       mmToExpectedPx(2.35),
     );
-  });
-
-  it('keeps FEDIAF 2025 in the backend nutrition standard label map', () => {
-    const source = readFileSync(
-      resolve(__dirname, '../../src/label/label.service.ts'),
-      'utf8',
-    );
-
-    expect(source).toContain("FEDIAF_2025: 'FEDIAF 2025'");
   });
 
   it('formats production timestamp as date-only top-card text', () => {

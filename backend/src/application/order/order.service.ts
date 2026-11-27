@@ -1820,7 +1820,7 @@ export class OrderService {
           name: recipe.name,
           production_loss_rate: recipe.productionLossRate,
           energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
-          nutrition_standard: recipe.nutritionStandard || 'FEDIAF_2021',
+          nutrition_standard: recipe.nutritionStandard || 'FEDIAF_2025',
           items: [], // Simplified for cart orders
         },
         cartItem.totalGrams,

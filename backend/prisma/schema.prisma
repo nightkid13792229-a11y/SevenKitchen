@@ -699,7 +699,7 @@ model Recipe {
   favoriteCount          Int                         @default(0) @map("favorite_count")
   likeCount              Int                         @default(0) @map("like_count")
   nutritionDetailedData  Json?                       @map("nutrition_detailed_data")
-  nutritionStandard      String                      @default("FEDIAF_2021") @map("nutrition_standard")
+  nutritionStandard      String                      @default("FEDIAF_2025") @map("nutrition_standard")
   productionSteps        String?                     @map("production_steps")
   /// 结构化的制作步骤（顺序流程：操作说明 + 可选时间/温度/设备）
   productionStepsJson    Json?                       @map("production_steps_json")
